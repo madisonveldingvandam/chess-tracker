@@ -1,7 +1,5 @@
 from unittest.mock import patch, MagicMock
 import json
-import tempfile
-from pathlib import Path
 from chess_tracker.api import fetch_archives_index
 
 
