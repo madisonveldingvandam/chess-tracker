@@ -32,3 +32,5 @@ def test_opening_family_strips_move_suffix():
         "Queens Pawn Opening Zukertort Variation"
     assert opening_family("Italian-Game-Knight-Attack") == "Italian Game Knight Attack"
     assert opening_family("Caro-Kann-Defense-2...d5") == "Caro Kann Defense"
+    # Real-fixture form: move text glued to the family name with `...`
+    assert opening_family("Scotch-Game...4.Nxd4-Nxd4-5.Qxd4-d6") == "Scotch Game"

@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 import re
 
-_CLOCK_RE = re.compile(r"\[%clk (\d):(\d{2}):(\d{2}(?:\.\d+)?)\]")
+_CLOCK_RE = re.compile(r"\[%clk (\d+):(\d{2}):(\d{2}(?:\.\d+)?)\]")
 _ECO_URL_RE = re.compile(r'\[ECOUrl "https://www\.chess\.com/openings/([^"]+)"\]')
 _ECO_RE = re.compile(r'\[ECO "([^"]+)"\]')
 
@@ -34,10 +34,18 @@ def _parse_clocks(pgn: str) -> list[float]:
 
 
 def opening_family(slug: str) -> str:
-    """Strip trailing move-number tokens from an ECOUrl slug."""
+    """Strip trailing move-number tokens from an ECOUrl slug.
+
+    Chess.com slugs separate continuation move text with either a hyphen
+    (becomes whitespace after replace) or a literal triple-dot (e.g.
+    ``Scotch-Game...4.Nxd4-Nxd4``). Both separators must be honored so
+    that the move-number token is reached and the family ends cleanly.
+    """
     name = slug.replace("-", " ")
     parts = []
-    for tok in name.split():
+    for tok in re.split(r"\s+|\.{3}", name):
+        if not tok:
+            continue
         if re.match(r"^\d", tok):  # token starts with a digit → move number
             break
         parts.append(tok)
