@@ -15,7 +15,7 @@ Out of scope for v1: engine analysis, social/sharing features, mobile UI, format
 
 ## Constraints
 
-- macOS, Python 3.14 + Node already installed
+- macOS, Python 3.11+ (3.14 in dev), Node already installed
 - Chess.com public API (no auth required for public games)
 - Single user, single machine, runs offline after data refresh
 - No persistent server — refresh is an explicit script run
@@ -222,7 +222,7 @@ Idempotent. Cached archives skip re-fetch unless current-month.
 
 | Layer | Pick | Why |
 |---|---|---|
-| Pipeline | Python 3.14 stdlib only | No deps, fewer install steps |
+| Pipeline | Python 3.11+ stdlib only | No deps, fewer install steps |
 | HTTP | urllib | Stdlib; rate is low |
 | HTML rendering | Python f-string templates | Simple, no Jinja dep |
 | Tables | Tabulator.js (CDN) | Modern, sortable/filterable/sparklines, MIT |
