@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# Project data (regenerable / private)
+data/
+dashboard/index.html
+
+# OS
+.DS_Store
