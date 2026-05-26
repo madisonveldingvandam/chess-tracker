@@ -210,11 +210,13 @@ Open: file:///Users/madisonvelding-vandam/Developer/chess-tracker/dashboard/inde
 
 Idempotent. Cached archives skip re-fetch unless current-month.
 
-## Annotation editing flow (v1)
+## Annotation editing flow
 
-Browser-side: clicking the tag cell or "add note" button opens a modal. Saving constructs an updated `annotations.json` and triggers a download (browser cannot write disk without a server). User drops the file back into `data/annotations.json`. Hacky but zero-infrastructure.
+**v1: manual JSON edits.** `data/annotations.json` is human-readable and the schema is small. User edits the file directly with their text editor of choice. Re-running `refresh.py` picks up changes immediately.
 
-Alternative considered: tiny local Flask server for write-back. Rejected for v1 — adds a process to manage. Revisit if download-cycle is too annoying.
+**v1.1 (deferred):** browser-side modal that constructs an updated `annotations.json` and triggers a download. User drops the file back into `data/`. Zero-infrastructure but adds modal+download JS.
+
+**Rejected for both:** tiny local Flask server for write-back. Adds a process to manage and breaks the static-HTML guarantee.
 
 ## Technology choices
 
