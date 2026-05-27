@@ -32,5 +32,8 @@ def test_refresh_main_writes_computed_and_dashboard(tmp_path, monkeypatch):
         refresh.main(["--username", "m_v-v"])
 
     assert (tmp_path / "data" / "computed.json").exists()
-    out_html = (tmp_path / "dashboard" / "index.html").read_text()
-    assert "window.DATA" in out_html
+    for name in ["index", "leaks", "losses", "process", "sessions"]:
+        out = tmp_path / "dashboard" / f"{name}.html"
+        assert out.exists(), f"missing {name}.html"
+        html = out.read_text()
+        assert "window.DATA" in html
