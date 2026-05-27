@@ -30,3 +30,31 @@ RECORDS = [
     # Session 3: 1 game, 1W
     _r(1_700_006_000, "win", "timeout", "London System", my_rating=485),
 ]
+
+
+# Clock-rich records for process-metric tests.
+# Each clock list represents one side's per-ply clock readings.
+# For simplicity these games have 25 plies (~12 full moves).
+def _clocks(spent_per_ply: list[float]) -> list[float]:
+    """Convert per-ply seconds spent into running 60s-bullet clock readings."""
+    out = []
+    remaining = 60.0
+    for s in spent_per_ply:
+        remaining -= s
+        out.append(round(remaining, 1))
+    return out
+
+
+# Slow opener: spends 3s/move on first 8 plies, then 1s/move
+_SLOW_OPENING = _clocks([3.0] * 8 + [1.0] * 17)
+# Fast opener: 0.5s/move first 8 plies, then 1.5s/move
+_FAST_OPENING = _clocks([0.5] * 8 + [1.5] * 17)
+
+CLOCK_RECORDS = [
+    _r(1_700_010_000, "win", "timeout", "London System", side="white",
+       fullmoves=12, my_clocks=_FAST_OPENING, opp_clocks=_SLOW_OPENING),
+    _r(1_700_010_120, "timeout", "win", "London System", side="white",
+       fullmoves=12, my_clocks=_SLOW_OPENING, opp_clocks=_FAST_OPENING),
+    _r(1_700_010_240, "win", "timeout", "London System", side="white",
+       fullmoves=12, my_clocks=_FAST_OPENING, opp_clocks=_SLOW_OPENING),
+]

@@ -127,3 +127,115 @@ def compute_repertoire(records: list[GameRecord]) -> list[dict]:
         })
     out.sort(key=lambda x: (-x["games"], -x["win_pct"]))
     return out
+
+
+def _ply_clock(clocks: list[float], ply_index: int) -> float | None:
+    """Return clock at a specific 0-indexed ply, or None if game was shorter."""
+    if 0 <= ply_index < len(clocks):
+        return clocks[ply_index]
+    return None
+
+
+def _bucket_stats(recs: list[GameRecord]) -> dict:
+    n = len(recs)
+    if n == 0:
+        return {"games": 0, "win_pct": 0.0, "flag_pct": 0.0, "mate_pct": 0.0}
+    wins = sum(1 for r in recs if _is_win(r.result))
+    losses_recs = [r for r in recs if _is_loss(r.result)]
+    losses = len(losses_recs)
+    flag = sum(1 for r in losses_recs if r.result == "timeout")
+    mate = sum(1 for r in losses_recs if r.result == "checkmated")
+    return {
+        "games": n,
+        "win_pct": round(100 * wins / n, 1),
+        "flag_pct": round(100 * flag / losses, 1) if losses else 0.0,
+        "mate_pct": round(100 * mate / losses, 1) if losses else 0.0,
+    }
+
+
+def compute_process_metrics(records: list[GameRecord]) -> dict:
+    """Clock-behavior metrics — the bullet-specific process signals."""
+    if not records:
+        return {
+            "reserve_move_10_median": None,
+            "reserve_move_20_median": None,
+            "opening_velocity_median": None,
+            "time_burn_delta": None,
+            "outlasted_but_flagged_count": 0,
+        }
+
+    # Reserve at end of move 10 = clock at ply 19 (0-indexed)
+    res10 = [c for r in records if (c := _ply_clock(r.my_clocks, 19)) is not None]
+    res20 = [c for r in records if (c := _ply_clock(r.my_clocks, 39)) is not None]
+
+    # Opening velocity: seconds spent on first 8 plies = 60 - clock at ply 7
+    velocities = []
+    for r in records:
+        c = _ply_clock(r.my_clocks, 7)
+        if c is not None:
+            velocities.append(round(60.0 - c, 2))
+
+    # Time burn delta: mean s/move on plies 1-8 vs plies 9-20
+    early_rates = []
+    late_rates = []
+    for r in records:
+        if len(r.my_clocks) >= 8:
+            early_total = 60.0 - r.my_clocks[7]
+            early_rates.append(early_total / 8)
+        if len(r.my_clocks) >= 20:
+            late_total = r.my_clocks[7] - r.my_clocks[19]
+            late_rates.append(late_total / 12)
+
+    time_burn_delta = None
+    if early_rates and late_rates:
+        time_burn_delta = round(
+            statistics.mean(early_rates) - statistics.mean(late_rates), 2)
+
+    # "Outlasted but flagged": timeout-losses where at some recorded ply
+    # you had more time than opponent did at the same ply.
+    outlasted = 0
+    for r in records:
+        if r.result != "timeout":
+            continue
+        common = min(len(r.my_clocks), len(r.opp_clocks))
+        for i in range(common):
+            if r.my_clocks[i] > r.opp_clocks[i]:
+                outlasted += 1
+                break
+
+    return {
+        "reserve_move_10_median": round(statistics.median(res10), 1) if res10 else None,
+        "reserve_move_20_median": round(statistics.median(res20), 1) if res20 else None,
+        "opening_velocity_median": round(statistics.median(velocities), 2) if velocities else None,
+        "time_burn_delta": time_burn_delta,
+        "outlasted_but_flagged_count": outlasted,
+    }
+
+
+def _session_position_groups(records: list[GameRecord], gap_seconds: int = 600) -> dict[str, list[GameRecord]]:
+    if not records:
+        return {"1-5": [], "6-10": [], "11-20": [], "21+": []}
+    ordered = sorted(records, key=lambda r: r.end_time)
+    out: dict[str, list[GameRecord]] = {"1-5": [], "6-10": [], "11-20": [], "21+": []}
+    pos = 1
+    out["1-5"].append(ordered[0])
+    for prev, r in zip(ordered, ordered[1:]):
+        if r.end_time - prev.end_time > gap_seconds:
+            pos = 1
+        else:
+            pos += 1
+        if pos <= 5:
+            out["1-5"].append(r)
+        elif pos <= 10:
+            out["6-10"].append(r)
+        elif pos <= 20:
+            out["11-20"].append(r)
+        else:
+            out["21+"].append(r)
+    return out
+
+
+def compute_session_decay(records: list[GameRecord], gap_seconds: int = 600) -> list[dict]:
+    """Win/flag/mate stats bucketed by position within session."""
+    groups = _session_position_groups(records, gap_seconds)
+    return [{"bucket": b, **_bucket_stats(recs)} for b, recs in groups.items()]

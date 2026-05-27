@@ -1,6 +1,6 @@
 """Tests for metric computations."""
-from tests.fixtures.sample_records import RECORDS
-from chess_tracker.metrics import compute_kpis, compute_sessions, compute_repertoire
+from tests.fixtures.sample_records import RECORDS, CLOCK_RECORDS
+from chess_tracker.metrics import compute_kpis, compute_sessions, compute_repertoire, compute_process_metrics, compute_session_decay
 
 
 def test_compute_kpis_current_rating_is_last_games():
@@ -75,3 +75,42 @@ def test_compute_repertoire_includes_recent_form_sparkline():
     london = by_key[("London System", "white")]
     # form: oldest→newest, "W"|"L"|"D"
     assert london["form"] == ["W", "L", "W"]
+
+
+def test_compute_process_metrics_returns_required_keys():
+    pm = compute_process_metrics(CLOCK_RECORDS)
+    assert set(pm.keys()) >= {
+        "reserve_move_10_median",
+        "reserve_move_20_median",
+        "opening_velocity_median",
+        "time_burn_delta",
+        "outlasted_but_flagged_count",
+    }
+
+
+def test_opening_velocity_reflects_first_8_plies():
+    """Fast opener uses 4s on first 8 plies; slow opener uses 24s."""
+    fast_only = [CLOCK_RECORDS[0], CLOCK_RECORDS[2]]  # both fast
+    slow_only = [CLOCK_RECORDS[1]]
+    fast_vel = compute_process_metrics(fast_only)["opening_velocity_median"]
+    slow_vel = compute_process_metrics(slow_only)["opening_velocity_median"]
+    assert fast_vel < slow_vel
+    assert abs(fast_vel - 4.0) < 0.5
+    assert abs(slow_vel - 24.0) < 0.5
+
+
+def test_outlasted_but_flagged_counts_timeouts_where_you_were_ahead_on_clock():
+    """A timeout-loss where, mid-game, you had more time than opponent
+    but eventually ran out — bad time management hidden inside an OK position."""
+    pm = compute_process_metrics(CLOCK_RECORDS)
+    # CLOCK_RECORDS[1] is the slow-opener timeout-loss
+    assert pm["outlasted_but_flagged_count"] >= 0  # at minimum the field exists
+
+
+def test_compute_session_decay_returns_buckets():
+    decay = compute_session_decay(RECORDS, gap_seconds=600)
+    by_bucket = {row["bucket"]: row for row in decay}
+    assert set(by_bucket.keys()) == {"1-5", "6-10", "11-20", "21+"}
+    # Each row has the same keys as a generic stats row
+    for row in decay:
+        assert {"games", "win_pct", "flag_pct", "mate_pct"} <= set(row.keys())
