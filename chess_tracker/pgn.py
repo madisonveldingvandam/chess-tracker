@@ -1,6 +1,7 @@
 """Parse a Chess.com game dict into a GameRecord."""
 from dataclasses import dataclass, field
 import re
+from chess_tracker.play_signature import play_signature as _compute_play_signature
 
 _CLOCK_RE = re.compile(r"\[%clk (\d+):(\d{2}):(\d{2}(?:\.\d+)?)\]")
 _ECO_URL_RE = re.compile(r'\[ECOUrl "https://www\.chess\.com/openings/([^"]+)"\]')
@@ -23,6 +24,7 @@ class GameRecord:
     eco: str | None          # ECO code, e.g. "C42"
     my_clocks: list[float] = field(default_factory=list)
     opp_clocks: list[float] = field(default_factory=list)
+    play_signature: str | None = None  # 8-ply canonical FEN signature
 
 
 def _parse_clocks(pgn: str) -> list[float]:
@@ -86,4 +88,5 @@ def parse_game(g: dict, username: str) -> GameRecord:
         eco=eco,
         my_clocks=w_clocks if me_white else b_clocks,
         opp_clocks=b_clocks if me_white else w_clocks,
+        play_signature=_compute_play_signature(pgn),
     )

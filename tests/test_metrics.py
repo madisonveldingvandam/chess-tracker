@@ -186,17 +186,17 @@ def test_compute_all_has_new_panel_keys():
         "username", "format", "generated_at",
         "kpis", "leak_summary", "next_session_rule",
         "recent_losses", "process_metrics",
-        "opening_outcomes", "sessions", "error_log",
+        "play_signatures", "sessions", "error_log",
     }
     assert expected <= set(payload.keys())
 
 
-def test_compute_all_opening_outcomes_has_low_confidence_flag():
+def test_compute_all_play_signatures_has_low_confidence_flag():
     annotations = {"openings": {}, "games": {}, "error_log": []}
     payload = compute_all(RECORDS, annotations, username="m_v-v")
-    for row in payload["opening_outcomes"]:
+    for row in payload["play_signatures"]:
         assert "low_confidence" in row
-        assert row["low_confidence"] == (row["games"] < 10)
+        assert row["low_confidence"] == (row["games"] < 15)
 
 
 def test_compute_all_merges_opening_annotations():
@@ -205,7 +205,7 @@ def test_compute_all_merges_opening_annotations():
         "games": {}, "error_log": [],
     }
     payload = compute_all(RECORDS, annotations, username="m_v-v")
-    london = next(r for r in payload["opening_outcomes"]
-                  if r["opening"] == "London System")
+    london = next(r for r in payload["play_signatures"]
+                  if r["display_name"] == "London System")
     assert london["tag"] == "in_repertoire"
     assert london["note"] == "main d4"

@@ -25,6 +25,10 @@ def test_parse_game_returns_record_with_required_fields():
     # Final clocks should be non-negative
     if rec.my_clocks:
         assert rec.my_clocks[-1] >= 0
+    # Real bullet games are >= 8 plies so signature should populate
+    if rec.plies >= 8:
+        assert isinstance(rec.play_signature, str)
+        assert "/" in rec.play_signature
 
 
 def test_opening_family_strips_move_suffix():

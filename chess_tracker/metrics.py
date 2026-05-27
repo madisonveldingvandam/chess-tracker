@@ -387,14 +387,64 @@ def recent_losses_with_suggestions(records: list[GameRecord], limit: int = 20) -
     return out
 
 
+def compute_play_signatures(records: list[GameRecord]) -> list[dict]:
+    """Group records by (play_signature, color). Records without a
+    play_signature (game < 8 plies) are skipped. Each row carries
+    display_name = most common opening label among the group's games.
+    """
+    groups: dict[tuple[str, str], list[GameRecord]] = {}
+    for r in records:
+        if r.play_signature is None:
+            continue
+        key = (r.play_signature, r.side)
+        groups.setdefault(key, []).append(r)
+
+    out = []
+    for (sig, color), recs in groups.items():
+        recs = sorted(recs, key=lambda r: r.end_time)
+        name_counts = Counter(r.opening for r in recs if r.opening)
+        display_name = name_counts.most_common(1)[0][0] if name_counts else "Unnamed"
+        n = len(recs)
+        wins = sum(1 for r in recs if _is_win(r.result))
+        losses_recs = [r for r in recs if _is_loss(r.result)]
+        losses = len(losses_recs)
+        draws = n - wins - losses
+        flag = sum(1 for r in losses_recs if r.result == "timeout")
+        mate = sum(1 for r in losses_recs if r.result == "checkmated")
+        med_len = statistics.median([r.fullmoves for r in recs])
+        avg_opp = round(statistics.mean([r.opp_rating for r in recs]), 0)
+        rating_gap = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
+        eco_counts = Counter(r.eco for r in recs if r.eco)
+        eco_top = eco_counts.most_common(1)[0][0] if eco_counts else None
+        out.append({
+            "play_signature": sig,
+            "display_name": display_name,
+            "color": color,
+            "eco": eco_top,
+            "games": n,
+            "wins": wins,
+            "losses": losses,
+            "draws": draws,
+            "win_pct": round(100 * wins / n, 1),
+            "flag_pct": round(100 * flag / losses, 1) if losses else 0.0,
+            "mate_pct": round(100 * mate / losses, 1) if losses else 0.0,
+            "med_len": med_len,
+            "avg_opp_rating": int(avg_opp),
+            "rating_gap": int(rating_gap),
+            "form": [_result_letter(r) for r in recs[-10:]],
+        })
+    out.sort(key=lambda x: (-x["games"], -x["win_pct"]))
+    return out
+
+
 def compute_all(records: list[GameRecord], annotations: dict,
                 username: str, format: str = "bullet",
-                low_confidence_threshold: int = 10) -> dict:
+                low_confidence_threshold: int = 15) -> dict:
     """Top-level dashboard payload. All panel data merged + annotations applied."""
-    opening_outcomes = compute_repertoire(records)
+    play_signatures = compute_play_signatures(records)
     opening_notes = annotations.get("openings", {})
-    for row in opening_outcomes:
-        ann = opening_notes.get(row["opening"], {})
+    for row in play_signatures:
+        ann = opening_notes.get(row["display_name"], {})
         row["tag"] = ann.get("tag", "")
         row["note"] = ann.get("note", "")
         row["low_confidence"] = row["games"] < low_confidence_threshold
@@ -411,7 +461,7 @@ def compute_all(records: list[GameRecord], annotations: dict,
             **compute_process_metrics(records),
             "session_decay": compute_session_decay(records),
         },
-        "opening_outcomes": opening_outcomes,
+        "play_signatures": play_signatures,
         "sessions": compute_sessions(records),
         "error_log": annotations.get("error_log", []),
     }
