@@ -58,7 +58,10 @@ def main(argv=None) -> int:
     print("[5/5] Rendering dashboard...")
     render_dashboard(template_path=template, output_path=output, payload=payload)
 
-    print(f"\nDone. Open: file://{output.resolve()}")
+    print(f"\nDone. Rendered to: {output.resolve()}")
+    print(f"  Browsers block file:// subresources; serve over HTTP instead:")
+    print(f"    python3 -m http.server 8000")
+    print(f"  Then open: http://localhost:8000/{output}")
     return 0
 
 
