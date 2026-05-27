@@ -157,7 +157,7 @@
         {title: "Tag", field: "tag", width: 100, headerFilter: "input"},
         {title: "Note", field: "note", widthGrow: 2},
         {title: "Board@8", field: "play_signature", formatter: boardCell,
-         width: 128, headerSort: false},
+         width: 136, headerSort: false},
       ],
       initialSort: [
         {column: "low_confidence", dir: "asc"},
