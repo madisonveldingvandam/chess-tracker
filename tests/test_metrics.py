@@ -1,5 +1,5 @@
 """Tests for metric computations."""
-from tests.fixtures.sample_records import RECORDS, CLOCK_RECORDS
+from tests.fixtures.sample_records import RECORDS, CLOCK_RECORDS, OUTLASTED_THEN_FLAG_RECORD
 from chess_tracker.metrics import compute_kpis, compute_sessions, compute_repertoire, compute_process_metrics, compute_session_decay
 
 
@@ -89,7 +89,7 @@ def test_compute_process_metrics_returns_required_keys():
 
 
 def test_opening_velocity_reflects_first_8_plies():
-    """Fast opener uses 4s on first 8 plies; slow opener uses 24s."""
+    """Fast opener uses 4s on first 8 of-my-moves; slow opener uses 24s."""
     fast_only = [CLOCK_RECORDS[0], CLOCK_RECORDS[2]]  # both fast
     slow_only = [CLOCK_RECORDS[1]]
     fast_vel = compute_process_metrics(fast_only)["opening_velocity_median"]
@@ -99,12 +99,31 @@ def test_opening_velocity_reflects_first_8_plies():
     assert abs(slow_vel - 24.0) < 0.5
 
 
-def test_outlasted_but_flagged_counts_timeouts_where_you_were_ahead_on_clock():
-    """A timeout-loss where, mid-game, you had more time than opponent
-    but eventually ran out — bad time management hidden inside an OK position."""
-    pm = compute_process_metrics(CLOCK_RECORDS)
-    # CLOCK_RECORDS[1] is the slow-opener timeout-loss
-    assert pm["outlasted_but_flagged_count"] >= 0  # at minimum the field exists
+def test_outlasted_but_flagged_counts_a_timeout_where_you_were_ahead_at_some_ply():
+    """Timeout-loss where you had more time than opponent at some recorded ply."""
+    pm = compute_process_metrics([OUTLASTED_THEN_FLAG_RECORD])
+    assert pm["outlasted_but_flagged_count"] == 1
+
+
+def test_outlasted_but_flagged_excludes_timeouts_where_you_were_always_behind():
+    """Slow-opener timeout where opp had more time at every ply — not outlasted."""
+    # CLOCK_RECORDS[1] is the slow-opener-mine vs fast-opener-opp timeout
+    pm = compute_process_metrics([CLOCK_RECORDS[1]])
+    assert pm["outlasted_but_flagged_count"] == 0
+
+
+def test_time_burn_delta_is_positive_when_slow_opening():
+    """Slow opener: 3s/move early, 1s/move late → delta ≈ +2.0."""
+    pm = compute_process_metrics([CLOCK_RECORDS[1]])
+    assert pm["time_burn_delta"] is not None
+    assert pm["time_burn_delta"] > 1.5
+
+
+def test_time_burn_delta_is_negative_when_fast_opening():
+    """Fast opener: 0.5s/move early, 1.5s/move late → delta ≈ -1.0."""
+    pm = compute_process_metrics([CLOCK_RECORDS[0]])
+    assert pm["time_burn_delta"] is not None
+    assert pm["time_burn_delta"] < -0.5
 
 
 def test_compute_session_decay_returns_buckets():

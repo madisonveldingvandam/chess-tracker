@@ -33,8 +33,9 @@ RECORDS = [
 
 
 # Clock-rich records for process-metric tests.
-# Each clock list represents one side's per-ply clock readings.
-# For simplicity these games have 25 plies (~12 full moves).
+# Each clock list represents ONE side's per-MY-MOVE clock readings.
+# (i.e. my_clocks[i] is my clock after MY (i+1)-th move; opp_clocks similar.)
+# For simplicity these games have 25 of-my-moves each (~25 fullmoves of game).
 def _clocks(spent_per_ply: list[float]) -> list[float]:
     """Convert per-ply seconds spent into running 60s-bullet clock readings."""
     out = []
@@ -58,3 +59,16 @@ CLOCK_RECORDS = [
     _r(1_700_010_240, "win", "timeout", "London System", side="white",
        fullmoves=12, my_clocks=_FAST_OPENING, opp_clocks=_SLOW_OPENING),
 ]
+
+
+# Designed for outlasted-but-flagged test: I was ahead on time at every recorded
+# ply, then ran out anyway. Bad pacing hidden behind an OK position.
+_OUTLASTED_THEN_FLAG_MINE = [55.0, 50.0, 45.0, 35.0, 25.0, 15.0, 5.0, 0.0]
+_OPP_BEHIND_BUT_SAFE     = [50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0]
+
+OUTLASTED_THEN_FLAG_RECORD = _r(
+    1_700_011_000, "timeout", "win", "London System", side="white",
+    fullmoves=8,
+    my_clocks=_OUTLASTED_THEN_FLAG_MINE,
+    opp_clocks=_OPP_BEHIND_BUT_SAFE,
+)

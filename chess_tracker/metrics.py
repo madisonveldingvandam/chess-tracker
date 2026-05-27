@@ -164,18 +164,18 @@ def compute_process_metrics(records: list[GameRecord]) -> dict:
             "outlasted_but_flagged_count": 0,
         }
 
-    # Reserve at end of move 10 = clock at ply 19 (0-indexed)
-    res10 = [c for r in records if (c := _ply_clock(r.my_clocks, 19)) is not None]
-    res20 = [c for r in records if (c := _ply_clock(r.my_clocks, 39)) is not None]
+    # Reserve at end of move 10 = my_clocks[9] (one entry per my-move; 0-indexed)
+    res10 = [c for r in records if (c := _ply_clock(r.my_clocks, 9)) is not None]
+    res20 = [c for r in records if (c := _ply_clock(r.my_clocks, 19)) is not None]
 
-    # Opening velocity: seconds spent on first 8 plies = 60 - clock at ply 7
+    # Opening velocity: seconds spent on my first 8 moves = 60 - my_clocks[7]
     velocities = []
     for r in records:
         c = _ply_clock(r.my_clocks, 7)
         if c is not None:
             velocities.append(round(60.0 - c, 2))
 
-    # Time burn delta: mean s/move on plies 1-8 vs plies 9-20
+    # Time burn delta: mean s/move across my moves 1-8 vs my moves 9-20
     early_rates = []
     late_rates = []
     for r in records:

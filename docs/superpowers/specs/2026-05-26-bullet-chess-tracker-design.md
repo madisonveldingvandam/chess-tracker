@@ -195,12 +195,14 @@ The bullet-specific behavior numbers the research said matter most:
 
 | Metric | Definition |
 |---|---|
-| Reserve after move 10 | median(my_clocks[19]) across games (ply 19 = end of move 10) |
-| Reserve after move 20 | median(my_clocks[39]) across games |
-| Opening velocity | median(60 - my_clocks[15]) — seconds spent on first 8 plies |
+| Reserve after move 10 | median(my_clocks[9]) across games |
+| Reserve after move 20 | median(my_clocks[19]) across games |
+| Opening velocity | median(60 - my_clocks[7]) — seconds spent on my first 8 moves |
 | Time burn delta | (mean seconds/move in moves 1–8) − (mean seconds/move in moves 9–20) |
 | Session-position decay | per-bucket win/flag/mate: games 1–5, 6–10, 11–20, 21+ |
-| "Outlasted but flagged" count | timeout-losses where opponent's penultimate clock < mine at same ply (you were ahead on time, then ran out anyway) |
+| "Outlasted but flagged" count | timeout-losses where, at some recorded my-move, you had more time than opponent did at the same of-my-move index (you were ahead on time, then ran out anyway) |
+
+**Note on `my_clocks`:** `my_clocks` holds **one entry per move that I played**, not per ply of the game. So `my_clocks[9]` is my clock reading after my 10th move (= end of fullmove 10), and `my_clocks[19]` is end of fullmove 20.
 
 Each metric: current value, 7-day trend arrow (▲ improving, ▼ worsening, → flat).
 
