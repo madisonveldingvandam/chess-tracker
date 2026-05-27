@@ -35,6 +35,7 @@ def main(argv=None) -> int:
 
     print(f"[2/5] Fetching archives (force={args.force})...")
     all_games = []
+    # Assumes /archives returns months chronologically, oldest first (Chess.com behaviour).
     current_month_url = archives[-1] if archives else None
     for url in archives:
         force_this = args.force or (url == current_month_url)
