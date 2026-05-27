@@ -77,3 +77,53 @@ def compute_sessions(records: list[GameRecord], gap_seconds: int = 600) -> list[
             "tilt_flag": delta <= -50,
         })
     return out
+
+
+def _result_letter(r: GameRecord) -> str:
+    if _is_win(r.result): return "W"
+    if _is_draw(r.result): return "D"
+    return "L"
+
+
+def compute_repertoire(records: list[GameRecord]) -> list[dict]:
+    groups: dict[tuple[str, str], list[GameRecord]] = {}
+    for r in records:
+        if r.opening is None:
+            continue
+        key = (r.opening, r.side)
+        groups.setdefault(key, []).append(r)
+
+    out = []
+    for (opening, color), recs in groups.items():
+        recs = sorted(recs, key=lambda r: r.end_time)
+        n = len(recs)
+        wins = sum(1 for r in recs if _is_win(r.result))
+        losses_recs = [r for r in recs if _is_loss(r.result)]
+        losses = len(losses_recs)
+        draws = n - wins - losses
+        flag = sum(1 for r in losses_recs if r.result == "timeout")
+        mate = sum(1 for r in losses_recs if r.result == "checkmated")
+        med_len = statistics.median([r.fullmoves for r in recs])
+        avg_opp = round(statistics.mean([r.opp_rating for r in recs]), 0)
+        delta_yours = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
+        # ECO mode
+        eco_counts = Counter(r.eco for r in recs if r.eco)
+        eco_top = eco_counts.most_common(1)[0][0] if eco_counts else None
+        out.append({
+            "opening": opening,
+            "color": color,
+            "eco": eco_top,
+            "games": n,
+            "wins": wins,
+            "losses": losses,
+            "draws": draws,
+            "win_pct": round(100 * wins / n, 1),
+            "flag_pct": round(100 * flag / losses, 1) if losses else 0.0,
+            "mate_pct": round(100 * mate / losses, 1) if losses else 0.0,
+            "med_len": med_len,
+            "avg_opp_rating": int(avg_opp),
+            "rating_delta": int(delta_yours),
+            "form": [_result_letter(r) for r in recs[-10:]],
+        })
+    out.sort(key=lambda x: (-x["games"], -x["win_pct"]))
+    return out
