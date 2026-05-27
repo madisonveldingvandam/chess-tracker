@@ -6,7 +6,7 @@ __pycache__/
 
 # Project data (regenerable / private)
 data/
-dashboard/index.html
+dashboard/*.html
 
 # OS
 .DS_Store
