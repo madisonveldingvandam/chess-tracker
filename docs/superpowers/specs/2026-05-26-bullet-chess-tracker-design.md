@@ -6,16 +6,18 @@
 
 ## Purpose
 
-A local, single-user dashboard that turns a Chess.com bullet history into a *ranked repertoire view* and an *actionable metrics panel*. Built to answer two questions every refresh:
+A local, single-user **bullet behavior recorder + feedback loop** built from a Chess.com bullet history. Not a chess-strength diagnostic; bullet stats can't measure that. The dashboard surfaces *what just happened*, *what to stop doing*, and *what rule to set for the next session* — in that order. Every refresh should answer:
 
-1. **Which openings should I keep playing, drop, or experiment with next?**
-2. **What process metric is leaking rating right now (time mgmt, tilt, opening velocity, etc.)?**
+1. **What is leaking rating right now?** (clock burn, session length, recurring tactical pattern)
+2. **What is the next-session rule?** (game cap, opening time target, stop signal)
+3. **Which recent losses are worth filing in the error log?** (auto-suggested entries the user can promote)
+4. **Which play signatures are producing outcomes worth investigating?** (the 8-ply position reached, not the ECO label — Chess.com's ECO labels fragment the same play system into many buckets keyed on the opponent's response shape; sample sizes are still too small to rank)
 
-Out of scope for v1: engine analysis, social/sharing features, mobile UI, formats other than bullet.
+Out of scope for v1: engine analysis (ACPL/CAPS) beyond what Chess.com already provides, social/sharing, mobile, non-bullet formats, drill mode.
 
 ## Constraints
 
-- macOS, Python 3.14 + Node already installed
+- macOS, Python 3.11+ (3.14 in dev), Node already installed
 - Chess.com public API (no auth required for public games)
 - Single user, single machine, runs offline after data refresh
 - No persistent server — refresh is an explicit script run
@@ -43,7 +45,7 @@ Two components only: a Python pipeline (`refresh.py`) and a static HTML dashboar
 
 - **No server** — the user opens an HTML file. No port, no process to keep alive.
 - **Static output** — re-running the refresh script regenerates the page in place.
-- **Annotations as JSON** — human-readable, git-trackable, easy to back up.
+- **Annotations as JSON** — human-readable, git-trackable, easy to back up. JSON sidecar is good *storage*; the dashboard generates **copy-pasteable starter entries** so the user isn't building error-log entries from scratch in a text editor.
 
 ## File layout
 
@@ -56,6 +58,7 @@ chess-tracker/
 │   ├── pgn.py              # PGN + clock parsing
 │   ├── metrics.py          # all metric computations
 │   ├── render.py           # HTML rendering (template + JSON injection)
+│   ├── templates/          # HTML template files (read by render.py)
 │   └── annotations.py      # read/write annotations.json
 ├── data/
 │   ├── raw/                # cached monthly archive JSON from Chess.com
@@ -85,12 +88,18 @@ Single JSON object produced fresh on every refresh. Top-level shape:
   "username": "M_V-V",
   "format": "bullet",
   "kpis": { ... },
-  "repertoire": [ { opening_row }, ... ],
-  "conditions": { "hour_of_day": [...], "session_position": [...], "opp_rating_bucket": [...] },
-  "sessions": [ { session_row }, ... ],
-  "games": [ { game_row }, ... ]
+  "leak_summary": [ { leak_row }, ... ],
+  "next_session_rule": { "game_cap": 30, "move_10_target_seconds": 45,
+                         "stop_if_rating_drops": 50, "narrative": "..." },
+  "recent_losses": [ { loss_row, suggested_error_entry } , ... ],
+  "process_metrics": { "reserve": {...}, "opening_velocity": {...},
+                       "session_decay": [...] },
+  "play_signatures": [ { row, "play_signature": str, "display_name": str, "low_confidence": bool }, ... ],
+  "sessions": [ { session_row }, ... ]
 }
 ```
+
+Hour-of-day and opponent-rating buckets are **deferred** — lower-value than clock behavior for a player learning the format. Can come back as a "raw conditions" appendix later.
 
 ### `data/annotations.json`
 
@@ -135,65 +144,120 @@ All computed from PGN + clock annotations. No engine.
 | 7-day Δ | rating_now – rating_7d_ago |
 | Games today | count(games with end_time today) |
 | Win% today | wins_today / games_today |
-| Tilt status | 🟢 if win% of last 5 ≥ 60%, 🟡 if 40 ≤ win% < 60, 🔴 if win% < 40 |
+| Tilt indicator | 🔴 if any session in last 24h had rating Δ ≤ -50; else neutral. (Session-level signal, not 5-game noise.) |
 
-### Repertoire table (rows = opening families)
+### Leak summary (panel 1 — the lead)
 
-Opening family = ECO opening name with trailing move-number tokens stripped (e.g., `Queens Pawn Opening Zukertort Chigorin Variation 3.Bf4` → `Queens Pawn Opening Zukertort Chigorin Variation`).
+Rule-based detection over the recent window. Each leak is a `{name, severity, evidence, suggested_action}` row.
 
-| Column | Definition |
+| Leak | Trigger | Suggested action |
+|---|---|---|
+| Time burn in opening | median(seconds spent on my first 8 moves) > 8s in last 30 games | "Move 8 with ≥50s left; pre-pick first 6 moves before sit-down" |
+| Mid-session decay | win% in games 21+ within a session < win% in games 1–5 by ≥10pts (matches existing session-decay buckets 1-5, 6-10, 11-20, 21+) | "Cap sessions at N games (computed below)" |
+| Flag-loss dominant | flag% of losses ≥ 60 in last 30 games | "Reserve at move 20 too low; try 1+1 to convert" |
+| Mate-loss dominant | mate% of losses ≥ 55 in last 30 games | "Middlegame tactics — file recurring patterns in error log" |
+| Tilt sessions | ≥1 session in last 24h with rating Δ ≤ -50 | "Stop-rule: leave the desk after -50 in 30 min" |
+
+This panel is the *first* thing the user sees after KPIs. It changes every refresh.
+
+### Next session rule (panel 2)
+
+A single computed recommendation block:
+
+```
+Next session
+  Game cap:          N        (= session-position where win% first drops <40)
+  Move-10 target:    Ss left  (= median reserve in winning games – 5s)
+  Stop if:           rating drops 50 in 30 min
+```
+
+Plain English narrative below the numbers so it can be screenshot-ed and pinned.
+
+### Recent losses → error-log suggestions (panel 3)
+
+Last ~20 losses, each with auto-generated suggested error-log entry the user can copy-paste (or, in v1.1, accept with a button). Shape per loss:
+
+| Field | Source |
 |---|---|
-| Opening | Family name |
-| ECO | Most common ECO code in this family |
-| Color | white / black |
-| N | Games played |
-| Win% | wins / N |
-| Flag% | timeout-losses / losses |
-| Mate% | checkmated-losses / losses |
-| MedLen | median full-moves in this opening |
-| Form | sparkline of last 10 results (W=up, L=down) |
-| AvgOppRating | mean opponent rating |
-| Δ-yours | mean(my_rating – opp_rating) |
-| Tag | from annotations: 📌 / 🧪 / 🗑 |
+| Game URL | `g.url` |
+| Opening + ECO | from PGN |
+| Loss type | "flagged" / "checkmated" / "resigned" |
+| Final clock | my_clocks[-1] |
+| Move count | fullmoves |
+| Opp rating diff | opp_rating - my_rating |
+| Suggested entry title | rule-derived, e.g. `"Flagged at move 12 in {opening}"` or `"Mated by move 18 in {opening}"` |
+| Suggested pattern | derived from loss type + move count + clock |
 
-Conditional formatting: Win% cell green ≥60%, red ≤35%. Flag%/Mate% red if ≥60% (signals leak).
+Top of panel: a "Copy starter error_log entries" button that produces JSON snippets the user pastes into `annotations.json`.
 
-### Conditions table (rows = buckets)
+### Process metrics (panel 4)
 
-Three sub-tables, each with `Bucket · N · Win% · Mate% · Flag%`:
+The bullet-specific behavior numbers the research said matter most:
 
-- **Hour-of-day** (00–23, local time)
-- **Session position** (game 1–5, 6–10, 11–20, 21+)
-- **Opponent rating delta** (5 buckets, with respect to your current rating: < –150, –150 to –50, –50 to +50, +50 to +150, > +150)
+| Metric | Definition |
+|---|---|
+| Reserve after move 10 | median(my_clocks[9]) across games |
+| Reserve after move 20 | median(my_clocks[19]) across games |
+| Opening velocity | median(60 - my_clocks[7]) — seconds spent on my first 8 moves |
+| Time burn delta | (mean seconds/move in moves 1–8) − (mean seconds/move in moves 9–20) |
+| Session-position decay | per-bucket win/flag/mate: games 1–5, 6–10, 11–20, 21+ |
+| "Outlasted but flagged" count | timeout-losses where, at some recorded my-move, you had more time than opponent did at the same of-my-move index (you were ahead on time, then ran out anyway) |
 
-### Sessions table (rows = sessions)
+**Note on `my_clocks`:** `my_clocks` holds **one entry per move that I played**, not per ply of the game. So `my_clocks[9]` is my clock reading after my 10th move (= end of fullmove 10), and `my_clocks[19]` is end of fullmove 20.
+
+Each metric: current value, 7-day trend arrow (▲ improving, ▼ worsening, → flat).
+
+### Play signatures (panel 5 — demoted; was opening leaderboard)
+
+**Renamed from "Opening Outcomes" → "Play signatures."** Chess.com's ECO labels split the same play system into many buckets keyed on the opponent's response shape (e.g., five separate "Queen's Pawn Opening Zukertort \*" rows that play identically through move 8). The previous "Opening Outcomes" panel was therefore an artifact of opponent choice. Instead, group rows by an 8-ply **play signature**: the canonical FEN (placement + side-to-move + castling + en-passant target) of the position reached after the first 8 plies of the game. `python-chess` produces the FEN, so different move orders reaching the same position collapse into a single signature. Each row carries the most common ECO/opening label that appeared with that signature as its `display_name`, so users still see familiar names in the table; the raw `play_signature` string is preserved in the JSON for users who want to drill in via a board viewer.
+
+Rows include all the prior columns plus:
+
+| New column | Definition |
+|---|---|
+| display_name | Most-common ECO/opening label among games sharing this `play_signature` (fallback: "Unnamed"). Renders in the visible "Opening" cell of the table. |
+| play_signature | Canonical FEN at ply 8 (string). Stable across transpositions. Hidden by default; shown on row expand. |
+| Confidence | 🟢 N ≥ 20, 🟡 N 15–19, ⚪ N < 15 (low-confidence — treat as sampling noise). Threshold raised from N<10 with the play_signature pivot: collapsing transpositions means each signature attracts more games than the per-label rows did, but the table is also shorter, so the bar to be "worth looking at" rises with it. |
+| Type | "chooser" if color=white, "responder" if color=black (heuristic; both useful, semantically different) |
+
+Default sort: confidence DESC then games DESC. Rows with `low_confidence = true` rendered dimmer.
+
+Annotation lookup (per-opening tag/note from `annotations.json.openings`) is keyed on `display_name`, so existing notes the user has written against opening names still attach correctly. Games with fewer than 8 plies (rare — usually pre-move resignations) have `play_signature = null` and are excluded from this panel.
+
+**Known limitation:** if the same `play_signature` group has games under multiple ECO labels (e.g. 3 games labelled "London System" and 2 labelled "Queen's Pawn Opening Zukertort"), `display_name` resolves to the most common label only. An `annotations.json.openings` entry keyed on the *minority* label silently does not render against that signature's row. Workaround: rewrite the annotation key to match the majority label, or accept the trade-off until v1.1 adds a multi-label lookup.
+
+### Sessions table (panel 6 — raw data)
 
 Session = consecutive games with no 10-min gap.
 
 | Column | Definition |
 |---|---|
-| Start | local datetime |
+| Start | local datetime with offset |
 | Games | count |
-| Duration | minutes |
+| Span (min) | end-of-first to end-of-last (renamed from "duration_minutes" for honesty) |
 | Rating Δ | end_rating – start_rating |
 | W-L-D | tuple |
 | Tilt flag | 🔴 if Δ ≤ –50 |
 
-### Error log table (rows = entries)
+### Error log table (panel 3 footer)
 
-Reads `annotations.json.error_log`. Columns: Title · Pattern · # of linked games · Created. Clicking expands to show linked game URLs.
+Reads `annotations.json.error_log`. Columns: Title · Pattern · # of linked games · Created. The auto-suggestions feature in panel 3 generates entries; user promotes them by editing `annotations.json` directly (v1) or accepting in modal (v1.1).
 
-## The four-table layout
+## The six-panel layout (the feedback loop)
 
-Single-page scroll, in this order:
+Single-page scroll, top-down:
 
 1. **KPI strip** (sticky on scroll)
-2. **Repertoire** (tabs: White / Black / All)
-3. **Conditions** (3 sub-tables side-by-side)
-4. **Sessions** (latest first)
-5. **Error log** (last)
+2. **Leak summary** — what's bleeding rating right now
+3. **Next session rule** — what to do about it
+4. **Recent losses + error log** — what to file from this batch
+5. **Process metrics** — clock and session behavior numbers with trends
+6. **Play signatures** — demoted; sortable, with confidence gates (display_name shown; raw FEN preserved)
+7. **Sessions** — raw chronological list
 
-All tables use Tabulator.js: sortable by any column, filterable via header inputs, exportable to CSV.
+The order embodies the product thesis: *act*, then *file*, then *analyze*. Spreadsheets last, recommendations first.
+
+All tables use Tabulator.js: sortable, filterable, exportable. **Tabulator is vendored locally** in `dashboard/vendor/` (not CDN) so the dashboard works offline.
 
 ## Refresh flow
 
@@ -222,10 +286,10 @@ Idempotent. Cached archives skip re-fetch unless current-month.
 
 | Layer | Pick | Why |
 |---|---|---|
-| Pipeline | Python 3.14 stdlib only | No deps, fewer install steps |
+| Pipeline | Python 3.11+ stdlib + `python-chess` | One runtime dep: `python-chess` produces the canonical 8-ply FEN used as the `play_signature` key. Everything else (urllib, json, statistics, datetime) is stdlib. |
 | HTTP | urllib | Stdlib; rate is low |
 | HTML rendering | Python f-string templates | Simple, no Jinja dep |
-| Tables | Tabulator.js (CDN) | Modern, sortable/filterable/sparklines, MIT |
+| Tables | Tabulator.js (vendored in `dashboard/vendor/`) | Modern, sortable/filterable/sparklines, MIT. NOT loaded via CDN — the dashboard must work offline. |
 | Charts | Inline SVG sparklines | No chart lib needed for v1 |
 | Styles | Vanilla CSS, dark theme | Matches user's chess.com theme |
 
@@ -238,11 +302,14 @@ Idempotent. Cached archives skip re-fetch unless current-month.
 
 ## What's deliberately NOT in v1
 
-- Engine analysis / ACPL / CAPS (Tier 2 in the brainstorm). Requires running Stockfish or scraping Chess.com Game Review. Future hook: a `engine.py` module that reads Game Review HTML.
+- Engine analysis / ACPL / CAPS beyond Chess.com's existing `accuracies` field if present. No Stockfish, no Game-Review scraping. Future hook: a `engine.py` module.
 - Daily / Rapid formats. Data model is format-tagged so adding them later = new tab + filter, no refactor.
+- Hour-of-day and opponent-rating bucket conditions. Lower value than clock behavior for a player learning the format. Revisit once Process Metrics are populated.
 - Live updates / web sockets / push notifications.
 - Multi-user / accounts.
-- Opening trainer / drill mode.
+- Opening trainer / drill mode. Only meaningful after the dashboard can identify actual leaks (panels 2-3 first).
+- Browser-side annotation editing modal (v1.1 — see "Annotation editing flow").
+- Confidence intervals / Bayesian shrinkage on play_signatures. Replaced for v1 by the simpler 🟢🟡⚪ confidence badge.
 
 ## Open questions for the reviewer (you)
 

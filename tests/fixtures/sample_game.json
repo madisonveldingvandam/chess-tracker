@@ -1,0 +1,28 @@
+{
+  "url": "https://www.chess.com/game/live/168770333394",
+  "pgn": "[Event \"Live Chess\"]\n[Site \"Chess.com\"]\n[Date \"2026.05.16\"]\n[Round \"-\"]\n[White \"hehemaddy\"]\n[Black \"M_V-V\"]\n[Result \"1-0\"]\n[CurrentPosition \"1k1r3r/1b3Bp1/3p3p/pNp5/1p2PP1P/3Q3q/PPP2R1P/4R1K1 b - - 0 22\"]\n[Timezone \"UTC\"]\n[ECO \"C45\"]\n[ECOUrl \"https://www.chess.com/openings/Scotch-Game...4.Nxd4-Nxd4-5.Qxd4-d6\"]\n[UTCDate \"2026.05.16\"]\n[UTCTime \"02:16:22\"]\n[WhiteElo \"415\"]\n[BlackElo \"785\"]\n[TimeControl \"60\"]\n[Termination \"hehemaddy won on time\"]\n[StartTime \"02:16:22\"]\n[EndDate \"2026.05.16\"]\n[EndTime \"02:18:19\"]\n[Link \"https://www.chess.com/game/live/168770333394\"]\n\n1. e4 {[%clk 0:01:00]} 1... e5 {[%clk 0:01:00]} 2. Nf3 {[%clk 0:00:58.8]} 2... Nc6 {[%clk 0:00:58.1]} 3. d4 {[%clk 0:00:57.2]} 3... exd4 {[%clk 0:00:56.6]} 4. Nxd4 {[%clk 0:00:56.3]} 4... Nxd4 {[%clk 0:00:55.4]} 5. Qxd4 {[%clk 0:00:55.3]} 5... d6 {[%clk 0:00:51.5]} 6. Nc3 {[%clk 0:00:54.3]} 6... Qd7 {[%clk 0:00:42.4]} 7. Bb5 {[%clk 0:00:49.3]} 7... c6 {[%clk 0:00:37.5]} 8. Ba4 {[%clk 0:00:47.4]} 8... b5 {[%clk 0:00:35.3]} 9. Bb3 {[%clk 0:00:43.8]} 9... a5 {[%clk 0:00:33.1]} 10. O-O {[%clk 0:00:42.1]} 10... Nf6 {[%clk 0:00:30.3]} 11. Bg5 {[%clk 0:00:40.4]} 11... h6 {[%clk 0:00:28.4]} 12. Bh4 {[%clk 0:00:38.3]} 12... Be7 {[%clk 0:00:23.4]} 13. Rae1 {[%clk 0:00:36]} 13... Bb7 {[%clk 0:00:16]} 14. g3 {[%clk 0:00:33.4]} 14... O-O-O {[%clk 0:00:14.5]} 15. f4 {[%clk 0:00:30.6]} 15... c5 {[%clk 0:00:13.5]} 16. Qd3 {[%clk 0:00:28.5]} 16... b4 {[%clk 0:00:12.3]} 17. Nb5 {[%clk 0:00:24]} 17... Qh3 {[%clk 0:00:10]} 18. Na7+ {[%clk 0:00:19]} 18... Kb8 {[%clk 0:00:07.6]} 19. Nb5 {[%clk 0:00:16.8]} 19... Ng4 {[%clk 0:00:05]} 20. Bxf7 {[%clk 0:00:14.6]} 20... Nf2 {[%clk 0:00:03.2]} 21. Rxf2 {[%clk 0:00:12.9]} 21... Bxh4 {[%clk 0:00:00.1]} 22. gxh4 {[%clk 0:00:11]} 1-0\n",
+  "time_control": "60",
+  "end_time": 1778897899,
+  "rated": false,
+  "tcn": "mC0Kgv5QlBKBvBQBdBZRbs7ZfHYQHyXHyrWGeg!TcM3VMF90ae6Xow86nDQIBtHzsHZxHW65WHTEr1Enfn0FwF",
+  "uuid": "3b82c69f-50cd-11f1-acc4-7be18901000f",
+  "initial_setup": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+  "fen": "1k1r3r/1b3Bp1/3p3p/pNp5/1p2PP1P/3Q3q/PPP2R1P/4R1K1 b - - 0 22",
+  "time_class": "bullet",
+  "rules": "chess",
+  "white": {
+    "rating": 415,
+    "result": "win",
+    "@id": "https://api.chess.com/pub/player/hehemaddy",
+    "username": "hehemaddy",
+    "uuid": "d7e8dc46-552b-11ef-a475-7d1c0f196cb6"
+  },
+  "black": {
+    "rating": 785,
+    "result": "timeout",
+    "@id": "https://api.chess.com/pub/player/m_v-v",
+    "username": "M_V-V",
+    "uuid": "8847615c-0e4c-11ee-9036-b150537a8cb9"
+  },
+  "eco": "https://www.chess.com/openings/Scotch-Game...4.Nxd4-Nxd4-5.Qxd4-d6"
+}
