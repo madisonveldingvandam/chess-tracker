@@ -169,3 +169,43 @@ def test_recent_losses_includes_suggested_entry():
         assert "suggested_entry" in L
         # Suggested entry is a dict that maps onto annotations.json error_log shape
         assert {"title", "pattern", "game_refs"} <= set(L["suggested_entry"].keys())
+
+
+from chess_tracker.metrics import compute_all
+
+
+def test_compute_all_has_new_panel_keys():
+    annotations = {
+        "openings": {"London System": {"tag": "in_repertoire", "note": "main"}},
+        "games": {},
+        "error_log": [],
+    }
+    payload = compute_all(RECORDS + CLOCK_RECORDS, annotations,
+                          username="m_v-v", format="bullet")
+    expected = {
+        "username", "format", "generated_at",
+        "kpis", "leak_summary", "next_session_rule",
+        "recent_losses", "process_metrics",
+        "opening_outcomes", "sessions", "error_log",
+    }
+    assert expected <= set(payload.keys())
+
+
+def test_compute_all_opening_outcomes_has_low_confidence_flag():
+    annotations = {"openings": {}, "games": {}, "error_log": []}
+    payload = compute_all(RECORDS, annotations, username="m_v-v")
+    for row in payload["opening_outcomes"]:
+        assert "low_confidence" in row
+        assert row["low_confidence"] == (row["games"] < 10)
+
+
+def test_compute_all_merges_opening_annotations():
+    annotations = {
+        "openings": {"London System": {"tag": "in_repertoire", "note": "main d4"}},
+        "games": {}, "error_log": [],
+    }
+    payload = compute_all(RECORDS, annotations, username="m_v-v")
+    london = next(r for r in payload["opening_outcomes"]
+                  if r["opening"] == "London System")
+    assert london["tag"] == "in_repertoire"
+    assert london["note"] == "main d4"

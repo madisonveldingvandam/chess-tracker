@@ -385,3 +385,33 @@ def recent_losses_with_suggestions(records: list[GameRecord], limit: int = 20) -
             },
         })
     return out
+
+
+def compute_all(records: list[GameRecord], annotations: dict,
+                username: str, format: str = "bullet",
+                low_confidence_threshold: int = 10) -> dict:
+    """Top-level dashboard payload. All panel data merged + annotations applied."""
+    opening_outcomes = compute_repertoire(records)
+    opening_notes = annotations.get("openings", {})
+    for row in opening_outcomes:
+        ann = opening_notes.get(row["opening"], {})
+        row["tag"] = ann.get("tag", "")
+        row["note"] = ann.get("note", "")
+        row["low_confidence"] = row["games"] < low_confidence_threshold
+
+    return {
+        "username": username,
+        "format": format,
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "kpis": compute_kpis(records),
+        "leak_summary": detect_leaks(records),
+        "next_session_rule": next_session_rule(records),
+        "recent_losses": recent_losses_with_suggestions(records),
+        "process_metrics": {
+            **compute_process_metrics(records),
+            "session_decay": compute_session_decay(records),
+        },
+        "opening_outcomes": opening_outcomes,
+        "sessions": compute_sessions(records),
+        "error_log": annotations.get("error_log", []),
+    }
