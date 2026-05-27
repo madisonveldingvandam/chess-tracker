@@ -1,0 +1,39 @@
+<!-- chess_tracker/templates/index.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Chess Tracker — {{USERNAME}}</title>
+  <link rel="stylesheet" href="vendor/tabulator_midnight.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="kpi-strip"></header>
+  <main>
+    <section id="leak-section"><h2>Leak summary</h2><div id="leak-list"></div></section>
+    <section id="rule-section"><h2>Next session rule</h2><div id="next-rule"></div></section>
+    <section id="losses-section">
+      <h2>Recent losses → error log</h2>
+      <div id="losses-table"></div>
+      <button id="copy-suggestions">Copy starter entries</button>
+      <h3>Error log</h3>
+      <div id="error-log-table"></div>
+    </section>
+    <section id="process-section"><h2>Process metrics</h2>
+      <div id="process-block"></div>
+      <h3>Session-position decay</h3>
+      <div id="session-decay-table"></div>
+    </section>
+    <section id="outcomes-section">
+      <h2>Opening outcomes <small>(sample sizes are small — treat low-N rows as exploratory)</small></h2>
+      <div id="opening-outcomes-table"></div>
+    </section>
+    <section id="sessions-section"><h2>Sessions</h2><div id="sessions-table"></div></section>
+  </main>
+  <script src="vendor/tabulator.min.js"></script>
+  <script>
+    /* DATA_INJECTION_POINT */
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>

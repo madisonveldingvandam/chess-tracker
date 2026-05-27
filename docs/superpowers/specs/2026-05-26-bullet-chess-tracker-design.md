@@ -58,6 +58,7 @@ chess-tracker/
 │   ├── pgn.py              # PGN + clock parsing
 │   ├── metrics.py          # all metric computations
 │   ├── render.py           # HTML rendering (template + JSON injection)
+│   ├── templates/          # HTML template files (read by render.py)
 │   └── annotations.py      # read/write annotations.json
 ├── data/
 │   ├── raw/                # cached monthly archive JSON from Chess.com
