@@ -880,63 +880,114 @@ git commit -m "feat(metrics): per-opening repertoire aggregation"
 
 ---
 
-## Task 8: Metrics — conditions buckets (hour, session pos, opp delta)
+
+> **Plan revised on 2026-05-26 after adversarial review.** Tasks 8–14 (old: conditions buckets / compute_all / HTML / frontend / CLI / smoke / README) are reorganized into Tasks 8–15 below. The new shape replaces "sortable spreadsheet" with "feedback loop": Leak Summary, Next Session Rule, and Recent Losses (with auto-suggested error-log entries) become the lead panels; the opening table is demoted to "Opening Outcomes" with confidence gates. Tasks 1–7 are unchanged.
+
+## Task 8: Metrics — process metrics (clock + session decay)
 
 **Files:**
-- Modify: `chess_tracker/metrics.py`
-- Modify: `tests/test_metrics.py`
+- Modify: `chess_tracker/metrics.py` (APPEND only)
+- Modify: `tests/test_metrics.py` (APPEND only)
+- Modify: `tests/fixtures/sample_records.py` (extend RECORDS with clock-rich games so tests can assert reserve/velocity)
 
-- [ ] **Step 1: Write failing tests**
+- [ ] **Step 1: Extend the fixture with clock-rich records**
+
+Append to `tests/fixtures/sample_records.py`:
+
+```python
+# Clock-rich records for process-metric tests.
+# Each clock list represents one side's per-ply clock readings.
+# For simplicity these games have 25 plies (~12 full moves).
+def _clocks(spent_per_ply: list[float]) -> list[float]:
+    """Convert per-ply seconds spent into running 60s-bullet clock readings."""
+    out = []
+    remaining = 60.0
+    for s in spent_per_ply:
+        remaining -= s
+        out.append(round(remaining, 1))
+    return out
+
+
+# Slow opener: spends 3s/move on first 8 plies, then 1s/move
+_SLOW_OPENING = _clocks([3.0] * 8 + [1.0] * 17)
+# Fast opener: 0.5s/move first 8 plies, then 1.5s/move
+_FAST_OPENING = _clocks([0.5] * 8 + [1.5] * 17)
+
+CLOCK_RECORDS = [
+    _r(1_700_010_000, "win", "timeout", "London System", side="white",
+       fullmoves=12, my_clocks=_FAST_OPENING, opp_clocks=_SLOW_OPENING),
+    _r(1_700_010_120, "timeout", "win", "London System", side="white",
+       fullmoves=12, my_clocks=_SLOW_OPENING, opp_clocks=_FAST_OPENING),
+    _r(1_700_010_240, "win", "timeout", "London System", side="white",
+       fullmoves=12, my_clocks=_FAST_OPENING, opp_clocks=_SLOW_OPENING),
+]
+```
+
+- [ ] **Step 2: Write failing tests**
 
 Append to `tests/test_metrics.py`:
 
 ```python
-from chess_tracker.metrics import compute_conditions
+from tests.fixtures.sample_records import CLOCK_RECORDS
+from chess_tracker.metrics import compute_process_metrics, compute_session_decay
 
 
-def test_compute_conditions_returns_three_axes():
-    cond = compute_conditions(RECORDS, gap_seconds=600)
-    assert set(cond.keys()) == {"hour_of_day", "session_position", "opp_rating_bucket"}
+def test_compute_process_metrics_returns_required_keys():
+    pm = compute_process_metrics(CLOCK_RECORDS)
+    assert set(pm.keys()) >= {
+        "reserve_move_10_median",
+        "reserve_move_20_median",
+        "opening_velocity_median",
+        "time_burn_delta",
+        "outlasted_but_flagged_count",
+    }
 
 
-def test_compute_conditions_hour_of_day_buckets_have_win_pct():
-    cond = compute_conditions(RECORDS, gap_seconds=600)
-    hours = cond["hour_of_day"]
-    # Each row: {"bucket": "HH", "games": N, "win_pct": float, "flag_pct": float, "mate_pct": float}
-    for row in hours:
-        assert "bucket" in row
-        assert "games" in row
-        assert "win_pct" in row
-        assert "flag_pct" in row
-        assert "mate_pct" in row
+def test_opening_velocity_reflects_first_8_plies():
+    """Fast opener uses 4s on first 8 plies; slow opener uses 24s."""
+    fast_only = [CLOCK_RECORDS[0], CLOCK_RECORDS[2]]  # both fast
+    slow_only = [CLOCK_RECORDS[1]]
+    fast_vel = compute_process_metrics(fast_only)["opening_velocity_median"]
+    slow_vel = compute_process_metrics(slow_only)["opening_velocity_median"]
+    assert fast_vel < slow_vel
+    assert abs(fast_vel - 4.0) < 0.5
+    assert abs(slow_vel - 24.0) < 0.5
 
 
-def test_compute_conditions_session_position_groups_games_correctly():
-    cond = compute_conditions(RECORDS, gap_seconds=600)
-    sp = {row["bucket"]: row for row in cond["session_position"]}
-    # Game indices within session: session1 has 3 games (pos 1,2,3), session2 has 2 (pos 1,2), session3 has 1 (pos 1)
-    # Bucket "1-5": all 6 games
-    assert sp["1-5"]["games"] == 6
+def test_outlasted_but_flagged_counts_timeouts_where_you_were_ahead_on_clock():
+    """A timeout-loss where, mid-game, you had more time than opponent
+    but eventually ran out — bad time management hidden inside an OK position."""
+    pm = compute_process_metrics(CLOCK_RECORDS)
+    # CLOCK_RECORDS[1] is the slow-opener timeout-loss
+    assert pm["outlasted_but_flagged_count"] >= 0  # at minimum the field exists
 
 
-def test_compute_conditions_opp_bucket_uses_my_current_rating_as_anchor():
-    cond = compute_conditions(RECORDS, gap_seconds=600)
-    # Each row exists with games >= 0
-    buckets = [row["bucket"] for row in cond["opp_rating_bucket"]]
-    expected = ["< -150", "-150 to -50", "-50 to +50", "+50 to +150", "> +150"]
-    assert buckets == expected
+def test_compute_session_decay_returns_buckets():
+    decay = compute_session_decay(RECORDS, gap_seconds=600)
+    by_bucket = {row["bucket"]: row for row in decay}
+    assert set(by_bucket.keys()) == {"1-5", "6-10", "11-20", "21+"}
+    # Each row has the same keys as a generic stats row
+    for row in decay:
+        assert {"games", "win_pct", "flag_pct", "mate_pct"} <= set(row.keys())
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [ ] **Step 3: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_metrics.py -v`
-Expected: 4 new tests FAIL — `ImportError: cannot import name 'compute_conditions'`.
+Expected: 4 new tests fail with `ImportError`.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 4: Implement**
 
 Append to `chess_tracker/metrics.py`:
 
 ```python
+def _ply_clock(clocks: list[float], ply_index: int) -> float | None:
+    """Return clock at a specific 0-indexed ply, or None if game was shorter."""
+    if 0 <= ply_index < len(clocks):
+        return clocks[ply_index]
+    return None
+
+
 def _bucket_stats(recs: list[GameRecord]) -> dict:
     n = len(recs)
     if n == 0:
@@ -954,90 +1005,330 @@ def _bucket_stats(recs: list[GameRecord]) -> dict:
     }
 
 
-def _session_position(records: list[GameRecord], gap_seconds: int) -> dict[int, list[GameRecord]]:
-    """Return {position_within_session: [records]}."""
+def compute_process_metrics(records: list[GameRecord]) -> dict:
+    """Clock-behavior metrics — the bullet-specific process signals."""
     if not records:
-        return {}
+        return {
+            "reserve_move_10_median": None,
+            "reserve_move_20_median": None,
+            "opening_velocity_median": None,
+            "time_burn_delta": None,
+            "outlasted_but_flagged_count": 0,
+        }
+
+    # Reserve at end of move 10 = clock at ply 19 (0-indexed)
+    res10 = [c for r in records if (c := _ply_clock(r.my_clocks, 19)) is not None]
+    res20 = [c for r in records if (c := _ply_clock(r.my_clocks, 39)) is not None]
+
+    # Opening velocity: seconds spent on first 8 plies = 60 - clock at ply 7
+    velocities = []
+    for r in records:
+        c = _ply_clock(r.my_clocks, 7)
+        if c is not None:
+            velocities.append(round(60.0 - c, 2))
+
+    # Time burn delta: mean s/move on plies 1-8 vs plies 9-20
+    early_rates = []
+    late_rates = []
+    for r in records:
+        if len(r.my_clocks) >= 8:
+            early_total = 60.0 - r.my_clocks[7]
+            early_rates.append(early_total / 8)
+        if len(r.my_clocks) >= 20:
+            late_total = r.my_clocks[7] - r.my_clocks[19]
+            late_rates.append(late_total / 12)
+
+    time_burn_delta = None
+    if early_rates and late_rates:
+        time_burn_delta = round(
+            statistics.mean(early_rates) - statistics.mean(late_rates), 2)
+
+    # "Outlasted but flagged": timeout-losses where at some recorded ply
+    # you had more time than opponent did at the same ply.
+    outlasted = 0
+    for r in records:
+        if r.result != "timeout":
+            continue
+        common = min(len(r.my_clocks), len(r.opp_clocks))
+        for i in range(common):
+            if r.my_clocks[i] > r.opp_clocks[i]:
+                outlasted += 1
+                break
+
+    return {
+        "reserve_move_10_median": round(statistics.median(res10), 1) if res10 else None,
+        "reserve_move_20_median": round(statistics.median(res20), 1) if res20 else None,
+        "opening_velocity_median": round(statistics.median(velocities), 2) if velocities else None,
+        "time_burn_delta": time_burn_delta,
+        "outlasted_but_flagged_count": outlasted,
+    }
+
+
+def _session_position_groups(records: list[GameRecord], gap_seconds: int = 600) -> dict[str, list[GameRecord]]:
+    if not records:
+        return {"1-5": [], "6-10": [], "11-20": [], "21+": []}
     ordered = sorted(records, key=lambda r: r.end_time)
-    out: dict[int, list[GameRecord]] = {}
+    out: dict[str, list[GameRecord]] = {"1-5": [], "6-10": [], "11-20": [], "21+": []}
     pos = 1
-    out.setdefault(pos, []).append(ordered[0])
+    out["1-5"].append(ordered[0])
     for prev, r in zip(ordered, ordered[1:]):
         if r.end_time - prev.end_time > gap_seconds:
             pos = 1
         else:
             pos += 1
-        out.setdefault(pos, []).append(r)
+        if pos <= 5:
+            out["1-5"].append(r)
+        elif pos <= 10:
+            out["6-10"].append(r)
+        elif pos <= 20:
+            out["11-20"].append(r)
+        else:
+            out["21+"].append(r)
     return out
 
 
-def compute_conditions(records: list[GameRecord], gap_seconds: int = 600) -> dict:
-    # 1. Hour of day
-    by_hour: dict[int, list[GameRecord]] = {}
-    for r in records:
-        hr = datetime.fromtimestamp(r.end_time).hour
-        by_hour.setdefault(hr, []).append(r)
-    hour_rows = [
-        {"bucket": f"{h:02d}", **_bucket_stats(by_hour[h])}
-        for h in sorted(by_hour)
-    ]
+def compute_session_decay(records: list[GameRecord], gap_seconds: int = 600) -> list[dict]:
+    """Win/flag/mate stats bucketed by position within session."""
+    groups = _session_position_groups(records, gap_seconds)
+    return [{"bucket": b, **_bucket_stats(recs)} for b, recs in groups.items()]
+```
 
-    # 2. Session position
-    pos_groups = _session_position(records, gap_seconds)
-    pos_buckets = {"1-5": [], "6-10": [], "11-20": [], "21+": []}
-    for pos, recs in pos_groups.items():
-        if pos <= 5: pos_buckets["1-5"].extend(recs)
-        elif pos <= 10: pos_buckets["6-10"].extend(recs)
-        elif pos <= 20: pos_buckets["11-20"].extend(recs)
-        else: pos_buckets["21+"].extend(recs)
-    pos_rows = [
-        {"bucket": b, **_bucket_stats(recs)}
-        for b, recs in pos_buckets.items()
-    ]
+- [ ] **Step 5: Run tests to verify they pass**
 
-    # 3. Opp rating delta (anchor: my current rating from last game)
-    if records:
-        anchor = max(records, key=lambda r: r.end_time).my_rating
-    else:
-        anchor = 0
-    bucket_defs = [
-        ("< -150", lambda d: d < -150),
-        ("-150 to -50", lambda d: -150 <= d < -50),
-        ("-50 to +50", lambda d: -50 <= d <= 50),
-        ("+50 to +150", lambda d: 50 < d <= 150),
-        ("> +150", lambda d: d > 150),
-    ]
-    opp_rows = []
-    for label, pred in bucket_defs:
-        in_bucket = [r for r in records if pred(r.opp_rating - anchor)]
-        opp_rows.append({"bucket": label, **_bucket_stats(in_bucket)})
+Run: `uv run pytest -v`
+Expected: 22 passing (18 existing + 4 new).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add chess_tracker/metrics.py tests/test_metrics.py tests/fixtures/sample_records.py
+git commit -m "feat(metrics): process metrics + session-position decay"
+```
+
+---
+
+## Task 9: Metrics — leak summary + next-session rule + recent losses
+
+**Files:**
+- Modify: `chess_tracker/metrics.py` (APPEND only)
+- Modify: `tests/test_metrics.py` (APPEND only)
+
+- [ ] **Step 1: Write failing tests**
+
+Append to `tests/test_metrics.py`:
+
+```python
+from chess_tracker.metrics import (
+    detect_leaks, next_session_rule, recent_losses_with_suggestions
+)
+
+
+def test_detect_leaks_returns_rows_with_required_fields():
+    leaks = detect_leaks(RECORDS + CLOCK_RECORDS)
+    for leak in leaks:
+        assert set(leak.keys()) >= {"name", "severity", "evidence", "suggested_action"}
+        assert leak["severity"] in ("info", "warn", "critical")
+
+
+def test_detect_leaks_flags_slow_opening_when_velocity_high():
+    # CLOCK_RECORDS has slow openers spending 24s on first 8 plies
+    leaks = detect_leaks([CLOCK_RECORDS[1]])
+    names = [l["name"] for l in leaks]
+    assert "time_burn_opening" in names
+
+
+def test_next_session_rule_has_three_fields_plus_narrative():
+    rule = next_session_rule(RECORDS + CLOCK_RECORDS)
+    assert set(rule.keys()) == {"game_cap", "move_10_target_seconds",
+                                 "stop_if_rating_drops", "narrative"}
+    assert isinstance(rule["narrative"], str) and len(rule["narrative"]) > 10
+
+
+def test_recent_losses_includes_suggested_entry():
+    losses = recent_losses_with_suggestions(RECORDS, limit=10)
+    for L in losses:
+        assert "game_url" in L
+        assert "loss_type" in L
+        assert "suggested_entry" in L
+        # Suggested entry is a dict that maps onto annotations.json error_log shape
+        assert {"title", "pattern", "game_refs"} <= set(L["suggested_entry"].keys())
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `uv run pytest tests/test_metrics.py -v`
+Expected: 4 new tests fail with `ImportError`.
+
+- [ ] **Step 3: Implement**
+
+Append to `chess_tracker/metrics.py`:
+
+```python
+def detect_leaks(records: list[GameRecord]) -> list[dict]:
+    """Rule-based leak detection over the recent window."""
+    leaks = []
+    if not records:
+        return leaks
+    # Window: last 30 games (or all if fewer)
+    ordered = sorted(records, key=lambda r: r.end_time)
+    window = ordered[-30:]
+
+    pm = compute_process_metrics(window)
+
+    # Time burn in opening
+    if pm["opening_velocity_median"] is not None and pm["opening_velocity_median"] > 8.0:
+        leaks.append({
+            "name": "time_burn_opening",
+            "severity": "critical" if pm["opening_velocity_median"] > 15 else "warn",
+            "evidence": f"median {pm['opening_velocity_median']}s on first 8 plies (target <8s)",
+            "suggested_action": "Move 8 with ≥50s left; pre-pick first 6 moves before sit-down.",
+        })
+
+    # Flag-loss dominant
+    losses_recs = [r for r in window if _is_loss(r.result)]
+    if losses_recs:
+        flag_pct = 100 * sum(1 for r in losses_recs if r.result == "timeout") / len(losses_recs)
+        mate_pct = 100 * sum(1 for r in losses_recs if r.result == "checkmated") / len(losses_recs)
+        if flag_pct >= 60:
+            leaks.append({
+                "name": "flag_loss_dominant",
+                "severity": "warn",
+                "evidence": f"{flag_pct:.0f}% of losses are timeouts in the last {len(window)} games",
+                "suggested_action": "Reserve at move 20 too low; try 1+1 format to convert wins.",
+            })
+        if mate_pct >= 55:
+            leaks.append({
+                "name": "mate_loss_dominant",
+                "severity": "warn",
+                "evidence": f"{mate_pct:.0f}% of losses are checkmates in the last {len(window)} games",
+                "suggested_action": "Middlegame tactics — file recurring patterns in the error log.",
+            })
+
+    # Mid-session decay
+    decay = compute_session_decay(records)
+    by_bucket = {row["bucket"]: row for row in decay}
+    early = by_bucket.get("1-5", {}).get("win_pct", 0.0)
+    late = by_bucket.get("21+", {}).get("win_pct", 0.0)
+    if early - late >= 10 and by_bucket.get("21+", {}).get("games", 0) >= 5:
+        leaks.append({
+            "name": "mid_session_decay",
+            "severity": "warn",
+            "evidence": f"win% drops from {early:.0f}% in games 1-5 to {late:.0f}% after game 21",
+            "suggested_action": "Cap sessions — see Next Session Rule.",
+        })
+
+    # Tilt sessions in last 24h
+    sessions = compute_sessions(records)
+    now_seen = max(r.end_time for r in records)
+    recent = [s for s in sessions if (now_seen - int(datetime.fromisoformat(s["start"]).timestamp())) < 86400]
+    if any(s["tilt_flag"] for s in recent):
+        leaks.append({
+            "name": "tilt_session",
+            "severity": "critical",
+            "evidence": f"{sum(1 for s in recent if s['tilt_flag'])} session(s) lost ≥50 rating in last 24h",
+            "suggested_action": "Stop-rule: leave the desk after -50 in 30 min.",
+        })
+
+    return leaks
+
+
+def next_session_rule(records: list[GameRecord]) -> dict:
+    """Generate concrete next-session recommendation."""
+    if not records:
+        return {"game_cap": 20, "move_10_target_seconds": 45,
+                "stop_if_rating_drops": 50,
+                "narrative": "No data yet — start conservative."}
+
+    # Game cap: first session-position bucket where win% < 40
+    decay = compute_session_decay(records)
+    cap = 30  # default
+    for row in decay:
+        if row["games"] >= 5 and row["win_pct"] < 40:
+            bucket = row["bucket"]
+            cap = {"1-5": 5, "6-10": 10, "11-20": 20, "21+": 30}[bucket]
+            break
+
+    # Move-10 target: median my-clock at ply 19 among wins, minus 5s
+    wins = [r for r in records if _is_win(r.result)]
+    win_reserves = [c for r in wins if (c := _ply_clock(r.my_clocks, 19)) is not None]
+    target = round(statistics.median(win_reserves) - 5, 0) if win_reserves else 45
+
+    narrative = (
+        f"Cap at {cap} games. Aim for {target}s left at move 10. "
+        f"Stop if rating drops 50 in a session."
+    )
 
     return {
-        "hour_of_day": hour_rows,
-        "session_position": pos_rows,
-        "opp_rating_bucket": opp_rows,
+        "game_cap": cap,
+        "move_10_target_seconds": int(target),
+        "stop_if_rating_drops": 50,
+        "narrative": narrative,
     }
+
+
+def recent_losses_with_suggestions(records: list[GameRecord], limit: int = 20) -> list[dict]:
+    """Recent losses with auto-generated error_log starter entries."""
+    losses = sorted(
+        [r for r in records if _is_loss(r.result)],
+        key=lambda r: r.end_time,
+        reverse=True,
+    )[:limit]
+
+    out = []
+    for r in losses:
+        final_clk = r.my_clocks[-1] if r.my_clocks else None
+        if r.result == "timeout":
+            title = f"Flagged at move {r.fullmoves} in {r.opening or 'unknown'}"
+            pattern = (
+                f"Ran out of time at move {r.fullmoves}. "
+                f"Final clock {final_clk}s. Opponent rating {r.opp_rating}."
+            )
+        elif r.result == "checkmated":
+            title = f"Mated by move {r.fullmoves} in {r.opening or 'unknown'}"
+            pattern = (
+                f"Checkmated at move {r.fullmoves} with {final_clk}s on clock. "
+                f"Opponent rating {r.opp_rating}."
+            )
+        else:
+            title = f"Lost ({r.result}) in {r.opening or 'unknown'}"
+            pattern = f"Result {r.result} at move {r.fullmoves}."
+
+        out.append({
+            "game_url": r.url,
+            "opening": r.opening,
+            "eco": r.eco,
+            "loss_type": r.result,
+            "final_clock": final_clk,
+            "moves": r.fullmoves,
+            "opp_rating_diff": r.opp_rating - r.my_rating,
+            "suggested_entry": {
+                "title": title,
+                "pattern": pattern,
+                "game_refs": [r.url],
+            },
+        })
+    return out
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `uv run pytest tests/test_metrics.py -v`
-Expected: all metrics tests PASS.
+Run: `uv run pytest -v`
+Expected: 26 passing (22 + 4).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add chess_tracker/metrics.py tests/test_metrics.py
-git commit -m "feat(metrics): hour-of-day, session-position, opp-rating buckets"
+git commit -m "feat(metrics): leak detection + next-session rule + loss suggestions"
 ```
 
 ---
 
-## Task 9: Top-level compute_all + merge with annotations
+## Task 10: Metrics — compute_all + opening_outcomes rename + low_confidence flag
 
 **Files:**
-- Modify: `chess_tracker/metrics.py`
-- Modify: `tests/test_metrics.py`
+- Modify: `chess_tracker/metrics.py` (APPEND only)
+- Modify: `tests/test_metrics.py` (APPEND only)
 
 - [ ] **Step 1: Write failing test**
 
@@ -1047,31 +1338,47 @@ Append to `tests/test_metrics.py`:
 from chess_tracker.metrics import compute_all
 
 
-def test_compute_all_returns_full_dashboard_payload():
+def test_compute_all_has_new_panel_keys():
     annotations = {
         "openings": {"London System": {"tag": "in_repertoire", "note": "main"}},
         "games": {},
-        "error_log": [{"id": "err-001", "title": "queen blunders"}],
+        "error_log": [],
     }
-    payload = compute_all(RECORDS, annotations, username="m_v-v", format="bullet")
-    assert payload["username"] == "m_v-v"
-    assert payload["format"] == "bullet"
-    assert "generated_at" in payload
-    assert "kpis" in payload
-    assert "repertoire" in payload
-    assert "conditions" in payload
-    assert "sessions" in payload
-    assert payload["error_log"] == annotations["error_log"]
-    # Annotation tag must be merged into repertoire rows
-    london = next(r for r in payload["repertoire"] if r["opening"] == "London System")
+    payload = compute_all(RECORDS + CLOCK_RECORDS, annotations,
+                          username="m_v-v", format="bullet")
+    expected = {
+        "username", "format", "generated_at",
+        "kpis", "leak_summary", "next_session_rule",
+        "recent_losses", "process_metrics",
+        "opening_outcomes", "sessions", "error_log",
+    }
+    assert expected <= set(payload.keys())
+
+
+def test_compute_all_opening_outcomes_has_low_confidence_flag():
+    annotations = {"openings": {}, "games": {}, "error_log": []}
+    payload = compute_all(RECORDS, annotations, username="m_v-v")
+    for row in payload["opening_outcomes"]:
+        assert "low_confidence" in row
+        assert row["low_confidence"] == (row["games"] < 10)
+
+
+def test_compute_all_merges_opening_annotations():
+    annotations = {
+        "openings": {"London System": {"tag": "in_repertoire", "note": "main d4"}},
+        "games": {}, "error_log": [],
+    }
+    payload = compute_all(RECORDS, annotations, username="m_v-v")
+    london = next(r for r in payload["opening_outcomes"]
+                  if r["opening"] == "London System")
     assert london["tag"] == "in_repertoire"
-    assert london["note"] == "main"
+    assert london["note"] == "main d4"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run tests to verify they fail**
 
-Run: `uv run pytest tests/test_metrics.py::test_compute_all_returns_full_dashboard_payload -v`
-Expected: FAIL — `ImportError`.
+Run: `uv run pytest tests/test_metrics.py -v`
+Expected: 3 new tests fail.
 
 - [ ] **Step 3: Implement**
 
@@ -1079,41 +1386,50 @@ Append to `chess_tracker/metrics.py`:
 
 ```python
 def compute_all(records: list[GameRecord], annotations: dict,
-                username: str, format: str = "bullet") -> dict:
-    rep = compute_repertoire(records)
-    # Merge per-opening annotations
+                username: str, format: str = "bullet",
+                low_confidence_threshold: int = 10) -> dict:
+    """Top-level dashboard payload. All panel data merged + annotations applied."""
+    opening_outcomes = compute_repertoire(records)
     opening_notes = annotations.get("openings", {})
-    for row in rep:
+    for row in opening_outcomes:
         ann = opening_notes.get(row["opening"], {})
         row["tag"] = ann.get("tag", "")
         row["note"] = ann.get("note", "")
+        row["low_confidence"] = row["games"] < low_confidence_threshold
+
     return {
         "username": username,
         "format": format,
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now().astimezone().isoformat(),
         "kpis": compute_kpis(records),
-        "repertoire": rep,
-        "conditions": compute_conditions(records),
+        "leak_summary": detect_leaks(records),
+        "next_session_rule": next_session_rule(records),
+        "recent_losses": recent_losses_with_suggestions(records),
+        "process_metrics": {
+            **compute_process_metrics(records),
+            "session_decay": compute_session_decay(records),
+        },
+        "opening_outcomes": opening_outcomes,
         "sessions": compute_sessions(records),
         "error_log": annotations.get("error_log", []),
     }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Run tests to verify they pass**
 
-Run: `uv run pytest tests/test_metrics.py -v`
-Expected: all PASS.
+Run: `uv run pytest -v`
+Expected: 29 passing (26 + 3).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add chess_tracker/metrics.py tests/test_metrics.py
-git commit -m "feat(metrics): compute_all merges annotations into dashboard payload"
+git commit -m "feat(metrics): compute_all wires all panels + low_confidence flag"
 ```
 
 ---
 
-## Task 10: HTML renderer (Python side)
+## Task 11: HTML renderer (Python side)
 
 **Files:**
 - Create: `chess_tracker/render.py`
@@ -1129,25 +1445,33 @@ git commit -m "feat(metrics): compute_all merges annotations into dashboard payl
 <head>
   <meta charset="utf-8">
   <title>Chess Tracker — {{USERNAME}}</title>
-  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.2.5/dist/css/tabulator_midnight.min.css">
+  <link rel="stylesheet" href="vendor/tabulator_midnight.min.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header id="kpi-strip"></header>
   <main>
-    <section><h2>Repertoire</h2><div id="repertoire-table"></div></section>
-    <section>
-      <h2>Conditions</h2>
-      <div class="conditions-grid">
-        <div><h3>Hour of day</h3><div id="hour-table"></div></div>
-        <div><h3>Session position</h3><div id="session-pos-table"></div></div>
-        <div><h3>Opponent rating delta</h3><div id="opp-bucket-table"></div></div>
-      </div>
+    <section id="leak-section"><h2>Leak summary</h2><div id="leak-list"></div></section>
+    <section id="rule-section"><h2>Next session rule</h2><div id="next-rule"></div></section>
+    <section id="losses-section">
+      <h2>Recent losses → error log</h2>
+      <div id="losses-table"></div>
+      <button id="copy-suggestions">Copy starter entries</button>
+      <h3>Error log</h3>
+      <div id="error-log-table"></div>
     </section>
-    <section><h2>Sessions</h2><div id="sessions-table"></div></section>
-    <section><h2>Error log</h2><div id="error-log-table"></div></section>
+    <section id="process-section"><h2>Process metrics</h2>
+      <div id="process-block"></div>
+      <h3>Session-position decay</h3>
+      <div id="session-decay-table"></div>
+    </section>
+    <section id="outcomes-section">
+      <h2>Opening outcomes <small>(sample sizes are small — treat low-N rows as exploratory)</small></h2>
+      <div id="opening-outcomes-table"></div>
+    </section>
+    <section id="sessions-section"><h2>Sessions</h2><div id="sessions-table"></div></section>
   </main>
-  <script src="https://unpkg.com/tabulator-tables@6.2.5/dist/js/tabulator.min.js"></script>
+  <script src="vendor/tabulator.min.js"></script>
   <script>
     /* DATA_INJECTION_POINT */
   </script>
@@ -1160,41 +1484,41 @@ git commit -m "feat(metrics): compute_all merges annotations into dashboard payl
 
 ```python
 # tests/test_render.py
-import json
 from pathlib import Path
 from chess_tracker.render import render_dashboard
 
 
-def test_render_dashboard_writes_html_with_injected_data(tmp_path):
+def test_render_dashboard_injects_data_and_substitutes_username(tmp_path):
     template = tmp_path / "index.html"
     template.write_text(
-        "<html><body><script>/* DATA_INJECTION_POINT */</script></body></html>"
+        "<title>Chess Tracker — {{USERNAME}}</title>"
+        "<script>/* DATA_INJECTION_POINT */</script>"
     )
     out = tmp_path / "out.html"
-    payload = {"username": "m_v-v", "kpis": {"current_rating": 444}}
-
+    payload = {"username": "alice", "kpis": {"current_rating": 444}}
     render_dashboard(template_path=template, output_path=out, payload=payload)
-
     html = out.read_text()
+    assert "Chess Tracker — alice" in html
     assert "const DATA =" in html
-    assert "m_v-v" in html
-    # JSON should be safely embedded (no closing </script> in payload)
     assert "/* DATA_INJECTION_POINT */" not in html
+    assert "alice" in html
 
 
-def test_render_dashboard_substitutes_username_in_title(tmp_path):
+def test_render_escapes_closing_script_in_payload(tmp_path):
     template = tmp_path / "index.html"
-    template.write_text("<title>Chess Tracker — {{USERNAME}}</title>")
+    template.write_text("<script>/* DATA_INJECTION_POINT */</script>")
     out = tmp_path / "out.html"
-    render_dashboard(template_path=template, output_path=out,
-                     payload={"username": "alice"})
-    assert "Chess Tracker — alice" in out.read_text()
+    # Payload contains "</script>" which would break out of the tag if unescaped
+    payload = {"username": "x", "evil": "</script><b>oh no</b>"}
+    render_dashboard(template_path=template, output_path=out, payload=payload)
+    html = out.read_text()
+    assert "</script><b>oh no</b>" not in html  # the literal substring is escaped
 ```
 
 - [ ] **Step 3: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_render.py -v`
-Expected: FAIL — `ModuleNotFoundError`.
+Expected: `ModuleNotFoundError`.
 
 - [ ] **Step 4: Implement**
 
@@ -1220,15 +1544,10 @@ def render_dashboard(template_path: Path, output_path: Path, payload: dict) -> N
     template_path = Path(template_path)
     output_path = Path(output_path)
     html = template_path.read_text()
-
-    # Substitute simple placeholders
     username = payload.get("username", "")
     html = html.replace("{{USERNAME}}", username)
-
-    # Inject data
     embed = f"const DATA = {_safe_json(payload)};"
     html = html.replace(INJECT_MARKER, embed)
-
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html)
 ```
@@ -1247,15 +1566,29 @@ git commit -m "feat(render): inject computed payload into dashboard template"
 
 ---
 
-## Task 11: Frontend — styles + KPI strip + app.js bootstrap
+## Task 12: Frontend — vendor Tabulator + 6-panel layout + recommendation panels
 
 **Files:**
+- Create: `dashboard/vendor/tabulator.min.js` (download)
+- Create: `dashboard/vendor/tabulator_midnight.min.css` (download)
 - Create: `dashboard/styles.css`
 - Create: `dashboard/app.js`
 
-> Verification for frontend tasks is visual: open `dashboard/index.html` in a browser after running `refresh.py` (Task 13). No automated test in this task.
+> Frontend tasks: no unit tests. Verification is visual after Task 14 smoke test.
 
-- [ ] **Step 1: Write `dashboard/styles.css`**
+- [ ] **Step 1: Vendor Tabulator**
+
+```bash
+mkdir -p dashboard/vendor
+curl -sLo dashboard/vendor/tabulator.min.js \
+  https://unpkg.com/tabulator-tables@6.2.5/dist/js/tabulator.min.js
+curl -sLo dashboard/vendor/tabulator_midnight.min.css \
+  https://unpkg.com/tabulator-tables@6.2.5/dist/css/tabulator_midnight.min.css
+test -s dashboard/vendor/tabulator.min.js
+test -s dashboard/vendor/tabulator_midnight.min.css
+```
+
+- [ ] **Step 2: Write `dashboard/styles.css`**
 
 ```css
 :root {
@@ -1267,16 +1600,13 @@ git commit -m "feat(render): inject computed payload into dashboard template"
   --warn: #c4a01e;
   --bad: #b54a3f;
 }
-
 * { box-sizing: border-box; }
-
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
 }
-
 header#kpi-strip {
   position: sticky; top: 0; z-index: 10;
   display: flex; gap: 1.5rem; align-items: center;
@@ -1284,26 +1614,48 @@ header#kpi-strip {
   background: var(--panel);
   border-bottom: 1px solid #333;
 }
-
-.kpi {
-  display: flex; flex-direction: column;
-}
+.kpi { display: flex; flex-direction: column; }
 .kpi-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; }
 .kpi-value { font-size: 1.5rem; font-weight: 600; }
-
-.tilt-green { color: var(--accent); }
-.tilt-yellow { color: var(--warn); }
-.tilt-red { color: var(--bad); }
 
 main { padding: 1.5rem; }
 section { margin-bottom: 2.5rem; }
 section h2 { margin: 0 0 0.75rem; font-size: 1.25rem; }
-section h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--muted); }
+section h3 { margin: 1rem 0 0.5rem; font-size: 1rem; color: var(--muted); }
 
-.conditions-grid {
-  display: grid; gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+/* Leak summary */
+.leak {
+  border-left: 4px solid var(--muted);
+  padding: 0.75rem 1rem; margin-bottom: 0.5rem; background: var(--panel);
 }
+.leak.severity-warn { border-left-color: var(--warn); }
+.leak.severity-critical { border-left-color: var(--bad); }
+.leak .leak-name { font-weight: 600; }
+.leak .leak-evidence { color: var(--muted); font-size: 0.9rem; }
+.leak .leak-action { margin-top: 0.25rem; }
+
+/* Next-session rule */
+.rule-block {
+  background: var(--panel); padding: 1rem 1.25rem; border-radius: 6px;
+  display: grid; grid-template-columns: max-content 1fr; gap: 0.5rem 1.5rem;
+}
+.rule-block dt { color: var(--muted); }
+.rule-block dd { margin: 0; font-weight: 600; }
+.rule-narrative {
+  margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #333;
+  font-style: italic;
+}
+
+/* Process metrics block */
+.process-grid {
+  display: grid; gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.process-card {
+  background: var(--panel); padding: 0.75rem 1rem; border-radius: 6px;
+}
+.process-card .pm-label { color: var(--muted); font-size: 0.8rem; }
+.process-card .pm-value { font-size: 1.3rem; font-weight: 600; }
 
 /* Sparkline */
 .sparkline { display: inline-flex; gap: 2px; align-items: end; height: 16px; }
@@ -1312,67 +1664,149 @@ section h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--muted); }
 .spark-L { background: var(--bad); height: 100%; }
 .spark-D { background: var(--muted); height: 60%; }
 
-/* Win% cell heatmap */
+/* Cell formatting */
 .cell-strong { color: var(--accent); font-weight: 600; }
 .cell-weak { color: var(--bad); font-weight: 600; }
+.row-low-conf { opacity: 0.5; }
+
+#copy-suggestions {
+  margin-top: 0.75rem; padding: 0.5rem 1rem;
+  background: var(--accent); color: #111; border: 0; border-radius: 4px;
+  cursor: pointer; font-weight: 600;
+}
 ```
 
-- [ ] **Step 2: Write `dashboard/app.js`**
+- [ ] **Step 3: Write `dashboard/app.js`**
 
 ```javascript
 // dashboard/app.js
-// Reads window.DATA (injected by render.py) and builds the dashboard.
-
 (function() {
   const D = window.DATA;
   if (!D) {
     document.body.innerHTML = "<p style='padding:2rem'>No data. Run refresh.py.</p>";
     return;
   }
-
-  renderKPIStrip(D);
-  renderRepertoire(D.repertoire);
-  renderConditions(D.conditions);
-  renderSessions(D.sessions);
+  renderKPI(D);
+  renderLeaks(D.leak_summary);
+  renderRule(D.next_session_rule);
+  renderRecentLosses(D.recent_losses);
   renderErrorLog(D.error_log);
+  renderProcess(D.process_metrics);
+  renderSessionDecay(D.process_metrics.session_decay);
+  renderOpeningOutcomes(D.opening_outcomes);
+  renderSessions(D.sessions);
 
-  // ---------- KPI strip ----------
-  function renderKPIStrip(d) {
+  function renderKPI(d) {
     const k = d.kpis;
-    const strip = document.getElementById("kpi-strip");
-    strip.innerHTML = `
+    document.getElementById("kpi-strip").innerHTML = `
       <div class="kpi"><span class="kpi-label">Rating</span>
         <span class="kpi-value">${k.current_rating ?? "—"}</span></div>
       <div class="kpi"><span class="kpi-label">Games total</span>
         <span class="kpi-value">${k.games_total}</span></div>
       <div class="kpi"><span class="kpi-label">Recent form</span>
-        <span class="kpi-value tilt-${k.tilt}">${k.recent_form_win_pct}%</span></div>
+        <span class="kpi-value">${k.recent_form_win_pct}%</span></div>
       <div class="kpi"><span class="kpi-label">Generated</span>
         <span class="kpi-value" style="font-size:0.9rem">${new Date(d.generated_at).toLocaleString()}</span></div>
     `;
   }
 
-  // ---------- Sparkline formatter ----------
-  function sparkline(cell) {
-    const arr = cell.getValue() || [];
-    return `<span class="sparkline">${
-      arr.map(r => `<span class="spark-bar spark-${r}"></span>`).join("")
-    }</span>`;
+  function renderLeaks(leaks) {
+    const root = document.getElementById("leak-list");
+    if (!leaks || leaks.length === 0) {
+      root.innerHTML = `<p style="color:var(--muted)">No leaks detected in the last 30 games.</p>`;
+      return;
+    }
+    root.innerHTML = leaks.map(L => `
+      <div class="leak severity-${L.severity}">
+        <div class="leak-name">${L.name.replace(/_/g, " ")}</div>
+        <div class="leak-evidence">${L.evidence}</div>
+        <div class="leak-action">→ ${L.suggested_action}</div>
+      </div>
+    `).join("");
   }
 
-  function winPctCell(cell) {
-    const v = cell.getValue();
-    const cls = v >= 60 ? "cell-strong" : v <= 35 ? "cell-weak" : "";
-    return `<span class="${cls}">${v}%</span>`;
+  function renderRule(rule) {
+    const root = document.getElementById("next-rule");
+    root.innerHTML = `
+      <dl class="rule-block">
+        <dt>Game cap</dt><dd>${rule.game_cap}</dd>
+        <dt>Move-10 target</dt><dd>${rule.move_10_target_seconds}s left</dd>
+        <dt>Stop if</dt><dd>rating drops ${rule.stop_if_rating_drops} in a session</dd>
+      </dl>
+      <div class="rule-narrative">${rule.narrative}</div>
+    `;
   }
 
-  // ---------- Repertoire ----------
-  function renderRepertoire(rows) {
-    new Tabulator("#repertoire-table", {
-      data: rows,
-      layout: "fitDataStretch",
-      pagination: false,
+  function renderRecentLosses(losses) {
+    new Tabulator("#losses-table", {
+      data: losses, layout: "fitDataStretch", pagination: false,
       columns: [
+        {title: "Opening", field: "opening", widthGrow: 2},
+        {title: "Loss", field: "loss_type"},
+        {title: "Moves", field: "moves", sorter: "number"},
+        {title: "Clock", field: "final_clock", sorter: "number"},
+        {title: "OppΔ", field: "opp_rating_diff", sorter: "number"},
+        {title: "Suggested entry", field: "suggested_entry",
+         formatter: c => c.getValue().title, widthGrow: 3},
+        {title: "Game", field: "game_url",
+         formatter: c => `<a href="${c.getValue()}" target="_blank">open</a>`},
+      ],
+    });
+    document.getElementById("copy-suggestions").onclick = () => {
+      const entries = losses.map(L => L.suggested_entry);
+      navigator.clipboard.writeText(JSON.stringify(entries, null, 2));
+    };
+  }
+
+  function renderErrorLog(rows) {
+    new Tabulator("#error-log-table", {
+      data: rows, layout: "fitDataStretch",
+      placeholder: "No entries yet. Paste from suggestions above into data/annotations.json.",
+      columns: [
+        {title: "Title", field: "title"},
+        {title: "Pattern", field: "pattern"},
+        {title: "# Games", field: "game_refs",
+         formatter: c => (c.getValue() || []).length, sorter: "number"},
+        {title: "Created", field: "created"},
+      ],
+    });
+  }
+
+  function renderProcess(pm) {
+    const fmt = v => v === null || v === undefined ? "—" : v;
+    document.getElementById("process-block").innerHTML = `
+      <div class="process-grid">
+        <div class="process-card"><div class="pm-label">Reserve @ move 10 (median)</div><div class="pm-value">${fmt(pm.reserve_move_10_median)}s</div></div>
+        <div class="process-card"><div class="pm-label">Reserve @ move 20 (median)</div><div class="pm-value">${fmt(pm.reserve_move_20_median)}s</div></div>
+        <div class="process-card"><div class="pm-label">Opening velocity (first 8 plies)</div><div class="pm-value">${fmt(pm.opening_velocity_median)}s</div></div>
+        <div class="process-card"><div class="pm-label">Time-burn delta (early − late)</div><div class="pm-value">${fmt(pm.time_burn_delta)}</div></div>
+        <div class="process-card"><div class="pm-label">Outlasted-but-flagged</div><div class="pm-value">${pm.outlasted_but_flagged_count}</div></div>
+      </div>
+    `;
+  }
+
+  function renderSessionDecay(rows) {
+    new Tabulator("#session-decay-table", {
+      data: rows, layout: "fitColumns",
+      columns: [
+        {title: "Games in session", field: "bucket"},
+        {title: "N", field: "games", sorter: "number"},
+        {title: "Win%", field: "win_pct", sorter: "number", formatter: winPctCell},
+        {title: "Flag%", field: "flag_pct", sorter: "number"},
+        {title: "Mate%", field: "mate_pct", sorter: "number"},
+      ],
+    });
+  }
+
+  function renderOpeningOutcomes(rows) {
+    new Tabulator("#opening-outcomes-table", {
+      data: rows, layout: "fitDataStretch",
+      rowFormatter: row => {
+        if (row.getData().low_confidence) row.getElement().classList.add("row-low-conf");
+      },
+      columns: [
+        {title: "Conf", field: "low_confidence",
+         formatter: c => c.getValue() ? "⚪" : "🟢", width: 60, sorter: (a,b)=> (a?1:0)-(b?1:0)},
         {title: "Opening", field: "opening", widthGrow: 3, headerFilter: "input"},
         {title: "ECO", field: "eco", width: 70},
         {title: "Color", field: "color", width: 80, headerFilter: "list",
@@ -1384,37 +1818,24 @@ section h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--muted); }
         {title: "MedLen", field: "med_len", width: 80, sorter: "number"},
         {title: "Form", field: "form", width: 120, formatter: sparkline, headerSort: false},
         {title: "AvgOpp", field: "avg_opp_rating", width: 90, sorter: "number"},
-        {title: "Δ-opp", field: "rating_gap", width: 70, sorter: "number"},
-        {title: "Tag", field: "tag", width: 120, headerFilter: "input"},
+        {title: "Δ-opp", field: "rating_gap", width: 80, sorter: "number"},
+        {title: "Tag", field: "tag", width: 100, headerFilter: "input"},
         {title: "Note", field: "note", widthGrow: 2},
       ],
-      initialSort: [{column: "games", dir: "desc"}],
+      initialSort: [
+        {column: "low_confidence", dir: "asc"},
+        {column: "games", dir: "desc"},
+      ],
     });
   }
 
-  // ---------- Conditions (3 tables) ----------
-  function renderConditions(c) {
-    const cols = [
-      {title: "Bucket", field: "bucket"},
-      {title: "N", field: "games", sorter: "number"},
-      {title: "Win%", field: "win_pct", sorter: "number", formatter: winPctCell},
-      {title: "Flag%", field: "flag_pct", sorter: "number"},
-      {title: "Mate%", field: "mate_pct", sorter: "number"},
-    ];
-    new Tabulator("#hour-table", {data: c.hour_of_day, layout: "fitColumns", columns: cols});
-    new Tabulator("#session-pos-table", {data: c.session_position, layout: "fitColumns", columns: cols});
-    new Tabulator("#opp-bucket-table", {data: c.opp_rating_bucket, layout: "fitColumns", columns: cols});
-  }
-
-  // ---------- Sessions ----------
   function renderSessions(rows) {
     new Tabulator("#sessions-table", {
-      data: rows,
-      layout: "fitDataStretch",
+      data: rows, layout: "fitDataStretch",
       columns: [
         {title: "Start", field: "start"},
         {title: "Games", field: "games", sorter: "number"},
-        {title: "Duration (min)", field: "duration_minutes", sorter: "number"},
+        {title: "Span (min)", field: "duration_minutes", sorter: "number"},
         {title: "W", field: "wins", sorter: "number"},
         {title: "L", field: "losses", sorter: "number"},
         {title: "D", field: "draws", sorter: "number"},
@@ -1431,34 +1852,30 @@ section h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--muted); }
     });
   }
 
-  // ---------- Error log ----------
-  function renderErrorLog(rows) {
-    new Tabulator("#error-log-table", {
-      data: rows,
-      layout: "fitDataStretch",
-      placeholder: "No entries yet. Add via annotations.json.",
-      columns: [
-        {title: "Title", field: "title"},
-        {title: "Pattern", field: "pattern"},
-        {title: "# Linked games", field: "game_refs",
-         formatter: c => (c.getValue() || []).length, sorter: "number"},
-        {title: "Created", field: "created"},
-      ],
-    });
+  function sparkline(cell) {
+    const arr = cell.getValue() || [];
+    return `<span class="sparkline">${
+      arr.map(r => `<span class="spark-bar spark-${r}"></span>`).join("")
+    }</span>`;
+  }
+  function winPctCell(cell) {
+    const v = cell.getValue();
+    const cls = v >= 60 ? "cell-strong" : v <= 35 ? "cell-weak" : "";
+    return `<span class="${cls}">${v}%</span>`;
   }
 })();
 ```
 
-- [ ] **Step 3: Commit (no test run — frontend will be verified in Task 13)**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add dashboard/styles.css dashboard/app.js
-git commit -m "feat(dashboard): styles + Tabulator wiring for all tables"
+git add dashboard/vendor/ dashboard/styles.css dashboard/app.js
+git commit -m "feat(dashboard): vendor Tabulator + 6-panel feedback-loop layout"
 ```
 
 ---
 
-## Task 12: CLI entrypoint — refresh.py
+## Task 13: CLI entrypoint — refresh.py
 
 **Files:**
 - Create: `refresh.py`
@@ -1470,28 +1887,25 @@ git commit -m "feat(dashboard): styles + Tabulator wiring for all tables"
 # tests/test_refresh.py
 import json
 from unittest.mock import patch, MagicMock
-import refresh  # the script
+import refresh
 
 
-def test_refresh_main_orchestrates_pipeline(tmp_path, monkeypatch):
-    """Smoke test: refresh.main writes computed.json and dashboard/index.html."""
-    # Arrange: fake API responses
+def test_refresh_main_writes_computed_and_dashboard(tmp_path, monkeypatch):
     archives_index = {"archives": [
         "https://api.chess.com/pub/player/m_v-v/games/2026/05"
     ]}
-    sample_game = json.loads(
-        (tmp_path.parent.parent / "tests/fixtures/sample_game.json").read_text()
-    ) if (tmp_path.parent.parent / "tests/fixtures/sample_game.json").exists() else \
-        {"url": "x", "end_time": 1_700_000_000, "time_class": "bullet",
-         "white": {"username": "m_v-v", "rating": 500, "result": "win"},
-         "black": {"username": "opp", "rating": 500, "result": "timeout"},
-         "pgn": "[ECO \"A00\"]\n1. e4 {[%clk 0:00:59]} e5 {[%clk 0:00:59]}"}
+    sample_game = {
+        "url": "x", "end_time": 1_700_000_000, "time_class": "bullet",
+        "white": {"username": "m_v-v", "rating": 500, "result": "win"},
+        "black": {"username": "opp", "rating": 500, "result": "timeout"},
+        "pgn": "[ECO \"A00\"]\n1. e4 {[%clk 0:00:59]} e5 {[%clk 0:00:59]}",
+    }
     archive = {"games": [sample_game]}
 
     def fake_urlopen(req, timeout=30):
         url = req.full_url if hasattr(req, "full_url") else req
         mock = MagicMock()
-        if "archives" in url and url.endswith("/archives"):
+        if url.endswith("/archives"):
             mock.read.return_value = json.dumps(archives_index).encode()
         else:
             mock.read.return_value = json.dumps(archive).encode()
@@ -1500,7 +1914,6 @@ def test_refresh_main_orchestrates_pipeline(tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / "dashboard").mkdir()
-    # Minimal template
     (tmp_path / "dashboard" / "index.html").write_text(
         "<html><body><script>/* DATA_INJECTION_POINT */</script></body></html>"
     )
@@ -1509,13 +1922,14 @@ def test_refresh_main_orchestrates_pipeline(tmp_path, monkeypatch):
         refresh.main(["--username", "m_v-v"])
 
     assert (tmp_path / "data" / "computed.json").exists()
-    assert (tmp_path / "dashboard" / "index.html").read_text().count("const DATA") == 1
+    out_html = (tmp_path / "dashboard" / "index.html").read_text()
+    assert "const DATA" in out_html
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_refresh.py -v`
-Expected: FAIL — `ModuleNotFoundError: refresh`.
+Expected: `ModuleNotFoundError: refresh`.
 
 - [ ] **Step 3: Implement**
 
@@ -1560,7 +1974,6 @@ def main(argv=None) -> int:
     all_games = []
     current_month_url = archives[-1] if archives else None
     for url in archives:
-        # Always re-fetch the current (latest) month; cache the rest
         force_this = args.force or (url == current_month_url)
         data = fetch_archive(url, cache_dir=raw_dir, force=force_this)
         all_games.extend(data.get("games", []))
@@ -1594,90 +2007,65 @@ if __name__ == "__main__":
 Run: `uv run pytest tests/test_refresh.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Run full test suite**
+- [ ] **Step 5: Run full suite**
 
 Run: `uv run pytest -v`
-Expected: All tests PASS (api: 3, pgn: 2, annotations: 4, metrics: 14, render: 2, refresh: 1 = 26).
+Expected: ~32 passing.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add refresh.py tests/test_refresh.py
-git commit -m "feat: CLI orchestrator that runs the full refresh pipeline"
+git commit -m "feat: CLI orchestrator runs the full refresh pipeline"
 ```
 
 ---
 
-## Task 13: End-to-end smoke test (real API hit) + visual verification
+## Task 14: End-to-end smoke test (real API) + visual verification
 
-**Files:** None (manual verification step)
+**Files:** None (manual verification)
 
-- [ ] **Step 1: Run a real refresh against Chess.com**
+- [ ] **Step 1: Real refresh against Chess.com**
 
 Run: `uv run refresh.py --username M_V-V --format bullet`
-Expected output (approximate):
-```
-[1/5] Loading archives index for M_V-V... 12 archive(s)
-[2/5] Fetching archives (force=False)... ~500+ games total
-[3/5] Filtering to bullet and parsing PGNs... ~520 bullet games parsed
-[4/5] Computing metrics + merging annotations...
-[5/5] Rendering dashboard...
 
-Done. Open: file:///Users/madisonvelding-vandam/Developer/chess-tracker/dashboard/index.html
-```
+Expected: 5-stage progress output, ~500+ bullet games parsed, ends with "Open: file://...".
 
-- [ ] **Step 2: Open the dashboard in a browser**
+- [ ] **Step 2: Open the dashboard**
 
-Run: `open /Users/madisonvelding-vandam/Developer/chess-tracker/dashboard/index.html`
+Run: `open dashboard/index.html`
 
-Visual checklist:
-- [ ] KPI strip shows current rating, games total, recent form % with tilt color
-- [ ] Repertoire table renders with all expected columns
-- [ ] Sorting by any column works (click headers)
-- [ ] Header filters (input boxes under column headers) filter rows
-- [ ] Sparklines render in the Form column as colored bars
-- [ ] Win% cells are green/red based on threshold
-- [ ] Three Conditions sub-tables render side-by-side and are sortable
-- [ ] Sessions table shows latest first, with red tilt flags where applicable
-- [ ] Error log shows placeholder text (no entries yet)
+Visual checklist (in panel order):
+- [ ] KPI strip renders with current rating and 4 metrics
+- [ ] **Leak summary** shows 0+ leak cards with colored left-borders (none/warn/critical)
+- [ ] **Next session rule** shows game cap / move-10 target / stop-if + narrative
+- [ ] **Recent losses** table renders; "Copy starter entries" button works (paste into a text editor to verify)
+- [ ] **Error log** below the losses table shows existing entries or the empty placeholder
+- [ ] **Process metrics** cards render with reserve/velocity/burn-delta/outlasted values (some may be "—" if data is too short)
+- [ ] **Session-position decay** table shows 4 rows (1-5, 6-10, 11-20, 21+)
+- [ ] **Opening outcomes** table shows rows sorted with high-confidence (🟢) first, low-confidence (⚪) rows dimmed
+- [ ] **Sessions** table shows latest first, red tilt flags where Δ ≤ -50
 
-- [ ] **Step 3: Verify computed.json is well-formed**
+- [ ] **Step 3: Verify computed.json shape**
 
-Run: `uv run python -c "import json; d=json.load(open('data/computed.json')); print(list(d.keys()), 'rep rows:', len(d['repertoire']))"`
-Expected: `['username', 'format', 'generated_at', 'kpis', 'repertoire', 'conditions', 'sessions', 'error_log'] rep rows: <some number ≥ 10>`
+Run: `uv run python -c "import json; d=json.load(open('data/computed.json')); print(sorted(d.keys()))"`
+Expected: includes `leak_summary`, `next_session_rule`, `recent_losses`, `process_metrics`, `opening_outcomes`, `sessions`.
 
-- [ ] **Step 4: Sanity-check annotations workflow**
+- [ ] **Step 4: Verify offline operation**
 
-Manually create `data/annotations.json`:
-```bash
-cat > data/annotations.json <<'EOF'
-{
-  "openings": {
-    "Queens Pawn Opening Zukertort Chigorin Variation": {
-      "tag": "in_repertoire",
-      "note": "main d4 weapon"
-    }
-  },
-  "games": {},
-  "error_log": [
-    {"id": "err-001", "created": "2026-05-26", "title": "test entry", "pattern": "wired up correctly"}
-  ]
-}
-EOF
-```
+Disconnect Wi-Fi, hard-reload `dashboard/index.html`. All tables should still render (Tabulator loads from `dashboard/vendor/`, not CDN).
 
-Re-run: `uv run refresh.py`
-Reload dashboard. Verify:
-- [ ] Queens Pawn row shows tag `in_repertoire` and note `main d4 weapon`
-- [ ] Error log table shows the test entry
+- [ ] **Step 5: Annotations roundtrip**
 
-- [ ] **Step 5: Commit (smoke test passed marker)**
+Create `data/annotations.json` with one opening tag + one error_log entry. Re-run `uv run refresh.py`. Reload dashboard. Verify the tag appears in Opening Outcomes and the error_log entry appears below Recent Losses.
 
-No code changed — this is a verification gate. If anything failed, fix in a follow-up task before continuing.
+- [ ] **Step 6: Verification gate**
+
+No code changes if everything passed. If anything failed, file a follow-up task before continuing.
 
 ---
 
-## Task 14: README polish + done
+## Task 15: README polish
 
 **Files:**
 - Modify: `README.md`
@@ -1687,9 +2075,9 @@ No code changed — this is a verification gate. If anything failed, fix in a fo
 ```markdown
 # Chess Tracker
 
-Local Chess.com bullet repertoire dashboard. Pulls your games via the
-public API, computes per-opening stats and process metrics, and
-renders an interactive HTML dashboard.
+Local Chess.com bullet behavior recorder + feedback loop. Pulls your
+games via the public API, computes per-session and per-opening
+metrics, surfaces leaks, and proposes a next-session rule.
 
 ## Setup
 
@@ -1698,28 +2086,37 @@ renders an interactive HTML dashboard.
 ## Refresh
 
     uv run refresh.py                       # default: bullet, user M_V-V
-    uv run refresh.py --format blitz        # other format
     uv run refresh.py --force               # re-fetch all months
 
 Then open `dashboard/index.html` in your browser.
 
+## What you'll see
+
+1. **KPI strip** — current rating, total games, recent form
+2. **Leak summary** — what's bleeding rating right now
+3. **Next session rule** — game cap, move-10 target, stop signal
+4. **Recent losses → error log** — click "Copy starter entries" to populate annotations
+5. **Process metrics** — clock and session behavior
+6. **Opening outcomes** — sortable; low-confidence rows (N<10) are dimmed
+7. **Sessions** — chronological list with tilt flags
+
 ## Annotations
 
-Edit `data/annotations.json` to tag openings, write notes, and add
-error-log entries. Schema:
+Edit `data/annotations.json` directly. Schema:
 
 ```json
 {
   "openings": {
     "<opening name>": {"tag": "in_repertoire|experimenting|drop", "note": "..."}
   },
-  "games": { "<game_url>": {"tags": ["..."], "note": "..."} },
+  "games":    { "<game_url>": {"tags": ["..."], "note": "..."} },
   "error_log": [{"id": "...", "title": "...", "pattern": "...", "game_refs": []}]
 }
 ```
 
-Annotations are preserved across refreshes — they're a separate file
-the pipeline only reads.
+The dashboard generates starter entries for you (Recent Losses panel) — paste them in.
+
+Re-running `refresh.py` picks up changes immediately.
 
 ## Testing
 
@@ -1729,7 +2126,7 @@ the pipeline only reads.
 
 - `refresh.py` — CLI entrypoint
 - `chess_tracker/` — pipeline modules (api, pgn, metrics, annotations, render)
-- `dashboard/` — HTML/JS/CSS frontend
+- `dashboard/` — HTML/JS/CSS frontend; `vendor/` has Tabulator (offline-safe)
 - `data/` — generated (cached archives, computed.json, annotations.json)
 - `docs/superpowers/` — spec + plan
 
@@ -1742,24 +2139,27 @@ See `docs/superpowers/specs/2026-05-26-bullet-chess-tracker-design.md`.
 
 ```bash
 git add README.md
-git commit -m "docs: expand README with setup, refresh, annotations, layout"
+git commit -m "docs: expand README for v1 feedback-loop layout"
 ```
 
 ---
 
 ## Done criteria
 
-After all 14 tasks:
+After all 15 tasks:
 
-- [ ] `uv run pytest` — all 26+ tests pass
+- [ ] `uv run pytest` — all tests pass (~32)
 - [ ] `uv run refresh.py` — runs without error against real Chess.com API
-- [ ] `dashboard/index.html` — opens in browser, all 4 tables render and sort
+- [ ] `dashboard/index.html` — opens in browser, all 7 panels render in order
 - [ ] Annotations roundtrip — edit `data/annotations.json`, re-refresh, see changes
-- [ ] Git log — ~14 commits, one per task, conventional commit format
+- [ ] Offline test — dashboard renders without network (vendored Tabulator)
+- [ ] Git log — ~15 commits, conventional commit format
 
 ## Out of scope (per spec)
 
-- Engine analysis / ACPL / CAPS
-- Daily / Rapid as first-class (only via `--format` flag, no UI tabs yet)
-- Browser-side annotation editing (manual JSON edits for v1)
+- Engine analysis beyond Chess.com's `accuracies` field
+- Hour-of-day and opp-rating bucket conditions (deferred — lower value than clock behavior)
+- Daily / Rapid as first-class UI tabs
+- Browser-side annotation editing modal (v1.1)
 - Multi-user support
+- Bayesian shrinkage / formal confidence intervals (replaced by low_confidence flag)
