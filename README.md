@@ -13,7 +13,11 @@ metrics, surfaces leaks, and proposes a next-session rule.
     uv run refresh.py                       # default: bullet, user M_V-V
     uv run refresh.py --force               # re-fetch all months
 
-Then open `dashboard/index.html` in your browser.
+Browsers block `file://` subresources, so view via a local HTTP server:
+
+    python3 -m http.server 8000
+
+Then open <http://localhost:8000/dashboard/index.html>.
 
 ## What you'll see
 
