@@ -1,5 +1,11 @@
 // dashboard/app.js
+// Trust boundary: leak.evidence, leak.suggested_action, rule.narrative,
+// and suggested_entry.title are server-constructed in metrics.py from
+// numeric inputs and hardcoded f-strings — safe to inline into HTML.
+// game_url comes from Chess.com's API — escape before inlining.
 (function() {
+  const escapeAttr = s => String(s).replace(/[&"<>]/g,
+    c => ({"&":"&amp;","\"":"&quot;","<":"&lt;",">":"&gt;"}[c]));
   const D = window.DATA;
   if (!D) {
     document.body.innerHTML = "<p style='padding:2rem'>No data. Run refresh.py.</p>";
@@ -68,12 +74,19 @@
         {title: "Suggested entry", field: "suggested_entry",
          formatter: c => c.getValue().title, widthGrow: 3},
         {title: "Game", field: "game_url",
-         formatter: c => `<a href="${c.getValue()}" target="_blank">open</a>`},
+         formatter: c => `<a href="${escapeAttr(c.getValue())}" target="_blank">open</a>`},
       ],
     });
-    document.getElementById("copy-suggestions").onclick = () => {
+    const copyBtn = document.getElementById("copy-suggestions");
+    if (losses.length === 0) {
+      copyBtn.style.display = "none";
+      return;
+    }
+    copyBtn.onclick = () => {
       const entries = losses.map(L => L.suggested_entry);
-      navigator.clipboard.writeText(JSON.stringify(entries, null, 2));
+      const payload = JSON.stringify(entries, null, 2);
+      navigator.clipboard.writeText(payload)
+        .catch(() => { console.log(payload); alert("Copy failed — payload logged to console."); });
     };
   }
 
