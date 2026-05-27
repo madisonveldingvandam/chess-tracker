@@ -29,7 +29,7 @@
       <div class="kpi"><span class="kpi-label">Games total</span>
         <span class="kpi-value">${k.games_total}</span></div>
       <div class="kpi"><span class="kpi-label">Recent form</span>
-        <span class="kpi-value">${k.recent_form_win_pct}%</span></div>
+        <span class="kpi-value${k.recent_form_win_pct >= 50 ? " accent" : ""}">${k.recent_form_win_pct}%</span></div>
       <div class="kpi"><span class="kpi-label">Generated</span>
         <span class="kpi-value" style="font-size:0.9rem">${new Date(d.generated_at).toLocaleString()}</span></div>
     `;
@@ -138,7 +138,10 @@
       },
       columns: [
         {title: "Conf", field: "low_confidence",
-         formatter: c => c.getValue() ? "⚪" : "🟢", width: 60, sorter: (a,b)=> (a?1:0)-(b?1:0)},
+         formatter: c => c.getValue()
+           ? `<span class="ind-off">○</span>`
+           : `<span class="ind-on">●</span>`,
+         width: 60, sorter: (a,b)=> (a?1:0)-(b?1:0)},
         {title: "Opening", field: "display_name", widthGrow: 3, headerFilter: "input"},
         {title: "ECO", field: "eco", width: 70},
         {title: "Color", field: "color", width: 80, headerFilter: "list",
@@ -154,7 +157,7 @@
         {title: "Tag", field: "tag", width: 100, headerFilter: "input"},
         {title: "Note", field: "note", widthGrow: 2},
         {title: "Board@8", field: "play_signature", formatter: boardCell,
-         width: 144, headerSort: false},
+         width: 136, headerSort: false},
       ],
       initialSort: [
         {column: "low_confidence", dir: "asc"},
@@ -180,7 +183,7 @@
            return `<span class="${cls}">${v >= 0 ? "+" : ""}${v}</span>`;
          }},
         {title: "Tilt", field: "tilt_flag", width: 80,
-         formatter: c => c.getValue() ? "🔴" : ""},
+         formatter: c => c.getValue() ? `<span class="ind-on">●</span>` : ""},
       ],
       initialSort: [{column: "start", dir: "desc"}],
     });

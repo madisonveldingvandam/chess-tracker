@@ -16,8 +16,7 @@ meaning where shape and weight alone are insufficient.
 | Token              | Hex       | Role                                                |
 |--------------------|-----------|-----------------------------------------------------|
 | `--bg`             | `#262624` | Page background                                     |
-| `--surface`        | `#2d2d2a` | Panels (leak rows, rule block, kpi strip)           |
-| `--surface-2`      | `#34342f` | Hover / elevated panel (currently unused; reserved) |
+| `--surface`        | `#2d2d2a` | Panels (leak rows, rule block, kpi strip); also row hover |
 | `--accent-bg`      | `#332e26` | Tinted background for critical-severity blocks      |
 | `--text`           | `#f0eee6` | Primary text                                        |
 | `--muted`          | `#8a8a82` | Secondary text, table headers, draw bars            |
