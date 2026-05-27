@@ -145,8 +145,13 @@
 
   function renderPlaySignatures(rows) {
     if (!document.getElementById("play-signatures-table")) return;
+    // Height matches the board panel (~360px) so internal scroll keeps the
+    // split block compact and the "Drill in" footer sits right under it.
+    // Trimmed to 7 essential columns so the table fits viewport width without
+    // horizontal scrolling; deeper stats can return to the board-meta panel
+    // or a future per-opening detail view.
     const table = new Tabulator("#play-signatures-table", {
-      data: rows, layout: "fitDataStretch",
+      data: rows, layout: "fitColumns", height: "360px",
       rowFormatter: row => {
         if (row.getData().low_confidence) row.getElement().classList.add("row-low-conf");
       },
@@ -156,20 +161,13 @@
            ? `<span class="ind-off">○</span>`
            : `<span class="ind-on">●</span>`,
          width: 60, sorter: (a,b)=> (a?1:0)-(b?1:0)},
-        {title: "Opening", field: "display_name", widthGrow: 3, headerFilter: "input"},
+        {title: "Opening", field: "display_name", headerFilter: "input"},
         {title: "ECO", field: "eco", width: 70},
         {title: "Color", field: "color", width: 80, headerFilter: "list",
          headerFilterParams: {values: {"":"All", "white":"White", "black":"Black"}}},
         {title: "N", field: "games", width: 60, sorter: "number"},
         {title: "Win%", field: "win_pct", width: 80, sorter: "number", formatter: winPctCell},
         {title: "Form", field: "form", width: 120, formatter: sparkline, headerSort: false},
-        {title: "Flag%", field: "flag_pct", width: 80, sorter: "number"},
-        {title: "Mate%", field: "mate_pct", width: 80, sorter: "number"},
-        {title: "MedLen", field: "med_len", width: 80, sorter: "number"},
-        {title: "AvgOpp", field: "avg_opp_rating", width: 90, sorter: "number"},
-        {title: "Δ-opp", field: "rating_gap", width: 80, sorter: "number"},
-        {title: "Tag", field: "tag", width: 100, headerFilter: "input"},
-        {title: "Note", field: "note", widthGrow: 2},
       ],
       initialSort: [
         {column: "low_confidence", dir: "asc"},
