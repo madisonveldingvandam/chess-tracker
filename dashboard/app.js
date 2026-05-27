@@ -145,14 +145,10 @@
 
   function renderPlaySignatures(rows) {
     if (!document.getElementById("play-signatures-table")) return;
-    // Height ~matches the board + meta + detail panel so the "Drill in"
-    // footer sits right under the L/R block. Slightly off if a row has
-    // both Tag and Note populated; close enough — a dynamic JS sync was
-    // tried and interacted badly with Tabulator's render lifecycle.
-    // Trimmed to 7 essential columns so the table fits viewport width without
-    // horizontal scrolling; deeper stats live in the board-meta panel.
+    // Height ~matches the two-board stack (240+240) + labels + gap + meta
+    // detail block so the "Drill in" footer sits right under the L/R block.
     const table = new Tabulator("#play-signatures-table", {
-      data: rows, layout: "fitColumns", height: "540px",
+      data: rows, layout: "fitColumns", height: "700px",
       // Columns shrink to fit viewport at narrow widths; user can drag a
       // column border to resize or double-click the border to auto-fit
       // the column to its widest content.
@@ -197,10 +193,12 @@
   }
 
   function updateBoardPanel(data) {
-    const board = document.getElementById("board-large");
+    const boardWhite = document.getElementById("board-white");
+    const boardBlack = document.getElementById("board-black");
     const meta = document.getElementById("board-meta");
-    if (!board || !meta) return;
-    board.innerHTML = boardSquaresHTML(data.play_signature);
+    if (!boardWhite || !boardBlack || !meta) return;
+    boardWhite.innerHTML = boardSquaresHTML(data.play_signature, false);
+    boardBlack.innerHTML = boardSquaresHTML(data.play_signature, true);
     const gap = data.rating_gap;
     const gapStr = gap == null ? "—" : (gap >= 0 ? "+" : "") + gap;
     const tagRow = data.tag ? `<div class="row"><span class="k">Tag</span><span class="v">${data.tag}</span></div>` : "";
@@ -315,8 +313,12 @@
     k:"♚", q:"♛", r:"♜", b:"♝", n:"♞", p:"♟︎",
   };
   // Returns just the 64 square <div>s for a FEN. Caller provides the wrapping
-  // grid element (e.g. #board-large) and styles its size via CSS.
-  function boardSquaresHTML(fen) {
+  // grid element and styles its size via CSS. When `flip` is true, the board
+  // renders from Black's perspective (a1 at top-right, h8 at bottom-left) —
+  // achieved by reversing the cells array, which swaps both ranks and files
+  // in one step. Square colors stay correct because a square's color is a
+  // property of its FEN coordinates, not its display position.
+  function boardSquaresHTML(fen, flip = false) {
     if (!fen) return "";
     const cells = [];
     let r = 0;
@@ -337,6 +339,7 @@
       }
       r++;
     }
+    if (flip) cells.reverse();
     return cells.join("");
   }
   function winPctCell(cell) {
