@@ -10,3 +10,4 @@ dashboard/index.html
 
 # OS
 .DS_Store
+.superpowers/
