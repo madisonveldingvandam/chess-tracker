@@ -1987,6 +1987,20 @@ section h3 { margin: 1rem 0 0.5rem; font-size: 1rem; color: var(--muted); }
   background: var(--accent); color: #111; border: 0; border-radius: 4px;
   cursor: pointer; font-weight: 600;
 }
+
+/* Mini FEN board (play-signatures table cell) */
+.board {
+  display: grid;
+  grid-template-columns: repeat(8, 16px);
+  grid-auto-rows: 16px;
+  width: 128px; height: 128px;
+}
+.board > div {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; line-height: 16px; user-select: none;
+}
+.board .light { background: #e8d6b0; color: #111; }
+.board .dark  { background: #a07a4c; color: #111; }
 ```
 
 - [ ] **Step 3: Write `dashboard/app.js`**
@@ -2134,7 +2148,8 @@ section h3 { margin: 1rem 0 0.5rem; font-size: 1rem; color: var(--muted); }
         {title: "Δ-opp", field: "rating_gap", width: 80, sorter: "number"},
         {title: "Tag", field: "tag", width: 100, headerFilter: "input"},
         {title: "Note", field: "note", widthGrow: 2},
-        {title: "FEN@8", field: "play_signature", visible: false},
+        {title: "Board@8", field: "play_signature", formatter: boardCell,
+         width: 144, headerSort: false},
       ],
       initialSort: [
         {column: "low_confidence", dir: "asc"},
@@ -2171,6 +2186,32 @@ section h3 { margin: 1rem 0 0.5rem; font-size: 1rem; color: var(--muted); }
     return `<span class="sparkline">${
       arr.map(r => `<span class="spark-bar spark-${r}"></span>`).join("")
     }</span>`;
+  }
+  const GLYPH = {
+    K:"♔", Q:"♕", R:"♖", B:"♗", N:"♘", P:"♙",
+    k:"♚", q:"♛", r:"♜", b:"♝", n:"♞", p:"♟︎",
+  };
+  function boardCell(cell) {
+    const fen = cell.getValue();
+    if (!fen) return "";
+    const cells = [];
+    let r = 0;
+    for (const row of fen.split(" ")[0].split("/")) {
+      let f = 0;
+      for (const ch of row) {
+        if (ch >= "1" && ch <= "8") {
+          for (let i = 0; i < +ch; i++) {
+            cells.push(`<div class="${(r+f)%2 ? "dark" : "light"}"></div>`);
+            f++;
+          }
+        } else {
+          cells.push(`<div class="${(r+f)%2 ? "dark" : "light"}">${GLYPH[ch] || ""}</div>`);
+          f++;
+        }
+      }
+      r++;
+    }
+    return `<div class="board">${cells.join("")}</div>`;
   }
   function winPctCell(cell) {
     const v = cell.getValue();
