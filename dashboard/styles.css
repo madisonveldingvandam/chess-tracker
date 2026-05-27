@@ -141,12 +141,21 @@ section h3 {
 .board .light { background: var(--board-light); }
 .board .dark  { background: var(--board-dark); }
 
-/* ===== Tabulator overrides (base CSS handles structure) ===== */
+/* ===== Tabulator overrides (base CSS handles structure) =====
+ * Base CSS sets white backgrounds and #333 text on .tabulator-table and
+ * each .tabulator-row; we have to override at every level the white can
+ * bleed through, including hover and selectable variants.
+ */
 .tabulator {
-  background: transparent;
-  border: 0;
+  background: transparent !important;
+  border: 0 !important;
   font-size: 0.85rem;
   color: var(--text);
+}
+.tabulator .tabulator-tableholder,
+.tabulator .tabulator-tableholder .tabulator-table {
+  background-color: transparent !important;
+  color: var(--text) !important;
 }
 .tabulator-header,
 .tabulator .tabulator-header {
@@ -165,19 +174,22 @@ section h3 {
   text-transform: uppercase; letter-spacing: 0.05em;
 }
 .tabulator-row,
-.tabulator .tabulator-row {
-  background: transparent !important;
+.tabulator .tabulator-row,
+.tabulator .tabulator-row.tabulator-row-even,
+.tabulator .tabulator-row.tabulator-selectable {
+  background-color: transparent !important;
   border-bottom: 1px solid var(--border) !important;
-  color: var(--text);
+  color: var(--text) !important;
 }
-.tabulator .tabulator-row.tabulator-row-even {
-  background: transparent !important;
-}
-.tabulator .tabulator-row:hover {
-  background: var(--surface) !important;
+.tabulator .tabulator-row:hover,
+.tabulator .tabulator-row.tabulator-selectable:hover {
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
 }
 .tabulator .tabulator-cell {
+  background-color: transparent !important;
   border-right: 0 !important;
+  color: var(--text) !important;
   padding: 0.6rem 0.75rem;
 }
 .tabulator .tabulator-row.row-low-conf {
