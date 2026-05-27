@@ -146,11 +146,17 @@ section h3 {
 .board-large > div {
   display: flex; align-items: center; justify-content: center;
   font-size: 30px; line-height: 40px;
-  color: var(--piece-fg);
   user-select: none;
 }
 .board-large .light { background: var(--board-light); }
 .board-large .dark  { background: var(--board-dark); }
+.board-large .piece-b { color: var(--piece-fg); }
+.board-large .piece-w {
+  color: var(--text);
+  /* Thin dark outline so cream pieces stay defined on the tan light squares */
+  -webkit-text-stroke: 1px #2a2520;
+  text-shadow: 0 0 1px #2a2520;
+}
 .board-meta {
   margin-top: 0.75rem;
   font-size: 0.85rem;

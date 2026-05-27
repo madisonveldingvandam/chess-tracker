@@ -216,8 +216,11 @@
       arr.map(r => `<span class="spark-bar spark-${r}"></span>`).join("")
     }</span>`;
   }
+  // Use the *filled* Unicode glyph set for BOTH sides so each piece is a
+  // solid silhouette. Color (piece-w / piece-b) distinguishes the side —
+  // matches how chess.com and Lichess render at small sizes.
   const GLYPH = {
-    K:"♔", Q:"♕", R:"♖", B:"♗", N:"♘", P:"♙",
+    K:"♚", Q:"♛", R:"♜", B:"♝", N:"♞", P:"♟︎",
     k:"♚", q:"♛", r:"♜", b:"♝", n:"♞", p:"♟︎",
   };
   // Returns just the 64 square <div>s for a FEN. Caller provides the wrapping
@@ -235,7 +238,9 @@
             f++;
           }
         } else {
-          cells.push(`<div class="${(r+f)%2 ? "dark" : "light"}">${GLYPH[ch] || ""}</div>`);
+          const sq = (r+f)%2 ? "dark" : "light";
+          const side = ch === ch.toUpperCase() ? "piece-w" : "piece-b";
+          cells.push(`<div class="${sq}"><span class="${side}">${GLYPH[ch] || ""}</span></div>`);
           f++;
         }
       }
