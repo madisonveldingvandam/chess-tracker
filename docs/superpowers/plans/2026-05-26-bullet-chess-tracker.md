@@ -6,7 +6,9 @@
 
 **Architecture:** Python pipeline (`refresh.py`) pulls Chess.com archives → parses PGN+clocks → computes metrics as pure functions → merges with `annotations.json` → injects JSON into a static HTML page using Tabulator.js for sortable tables. No server. Per spec at `docs/superpowers/specs/2026-05-26-bullet-chess-tracker-design.md`.
 
-**Tech Stack:** Python 3.14 (stdlib only for runtime), `pytest` (dev only via uv), Tabulator.js (CDN), vanilla CSS + JS, inline SVG sparklines.
+**Tech Stack:** Python 3.14 (stdlib + `python-chess` for the 8-ply FEN), `pytest` (dev only via uv), Tabulator.js vendored locally, vanilla CSS + JS, inline SVG sparklines.
+
+> **Plan revised on 2026-05-26 (second revision) after Tasks 1–11 shipped.** Original grouping by Chess.com ECO label fragmented the same play system into many buckets (e.g., five "Queen's Pawn Opening Zukertort \*" rows that play identically through move 8). Task 10.5 below adds a **`play_signature`** function (canonical FEN at ply 8, computed via `python-chess`) and switches `compute_all` to group by `(play_signature, color)` instead of `(opening_label, color)`. The JSON key renames `opening_outcomes` → `play_signatures`, the low-confidence threshold rises from N<10 to N<15 (collapsing transpositions concentrates more games per row), and Task 11's dashboard template gets its section IDs renamed in the same task. `compute_repertoire` and its 4 existing tests stay as-is (legacy, still green). `python-chess` becomes the project's only runtime dep beyond stdlib.
 
 ---
 
@@ -1429,6 +1431,317 @@ git commit -m "feat(metrics): compute_all wires all panels + low_confidence flag
 
 ---
 
+## Task 10.5: Refactor opening grouping to play_signature
+
+**Why this task exists.** Chess.com's ECO label splits the same play system into many rows keyed on the opponent's response (e.g., five separate "Queen's Pawn Opening Zukertort \*" rows that play identically through move 8). The dashboard's `opening_outcomes` panel was therefore an artifact of opponent choice rather than a real signal about my play. This task replaces ECO-label grouping with an 8-ply **play signature**: the canonical FEN reached after the first 8 plies, computed via `python-chess`. Different move orders reaching the same position collapse into one signature.
+
+**Files:**
+- Modify: `pyproject.toml` (add runtime dep `python-chess`)
+- Create: `chess_tracker/play_signature.py`
+- Modify: `chess_tracker/pgn.py` (add `play_signature` field to `GameRecord` and populate it in `parse_game`)
+- Modify: `chess_tracker/metrics.py` (add `compute_play_signatures`; update `compute_all` to use it, rename JSON key, raise threshold default to 15)
+- Modify: `chess_tracker/templates/index.html` (rename section IDs)
+- Create: `tests/test_play_signature.py`
+- Modify: `tests/test_pgn.py` (assert `parse_game` populates `play_signature`)
+- Modify: `tests/test_metrics.py` (rename 3 `compute_all` tests; threshold 10 → 15)
+- Modify: `tests/fixtures/sample_records.py` (extend `_r` helper with optional `play_signature` arg; populate stubs for RECORDS so the existing `compute_all` tests still find rows)
+
+- [ ] **Step 1: Add `python-chess` runtime dep in `pyproject.toml`**
+
+```toml
+[project]
+dependencies = ["python-chess>=1.10"]
+```
+
+Run `uv sync` to pull the dep. Confirm it lands in the dev venv.
+
+- [ ] **Step 2: Write `chess_tracker/play_signature.py`**
+
+```python
+"""Compute the 8-ply canonical FEN signature for a chess game.
+
+Two games that reach the same position after 8 plies (regardless of move
+order — i.e., transpositions collapse) produce identical signatures.
+"""
+from io import StringIO
+import chess
+import chess.pgn
+
+PLY_DEPTH = 8
+
+
+def play_signature(pgn_text: str) -> str | None:
+    """Return canonical FEN at ply 8, or None if the game has < 8 plies.
+
+    FEN's halfmove and fullmove counters are stripped: the signature is
+    placement + side-to-move + castling rights + en-passant target. Two
+    transpositions reaching the same position get identical signatures.
+    """
+    try:
+        game = chess.pgn.read_game(StringIO(pgn_text))
+    except Exception:
+        return None
+    if game is None:
+        return None
+    board = game.board()
+    plies = 0
+    for move in game.mainline_moves():
+        if plies >= PLY_DEPTH:
+            break
+        board.push(move)
+        plies += 1
+    if plies < PLY_DEPTH:
+        return None
+    parts = board.fen().split()
+    return " ".join(parts[:4])  # drop halfmove + fullmove counters
+```
+
+- [ ] **Step 3: Write failing tests at `tests/test_play_signature.py`**
+
+```python
+from chess_tracker.play_signature import play_signature, PLY_DEPTH
+
+
+def test_play_signature_returns_string_for_long_enough_game():
+    pgn = "1. d4 d5 2. Nf3 Nf6 3. c4 e6 4. Nc3 Be7 5. Bg5 O-O *"
+    sig = play_signature(pgn)
+    assert isinstance(sig, str)
+    assert "/" in sig  # FEN has rank separators
+
+
+def test_play_signature_returns_none_for_short_game():
+    pgn = "1. d4 d5 2. Nf3 *"  # only 4 plies
+    assert play_signature(pgn) is None
+
+
+def test_play_signature_collapses_transpositions():
+    direct     = "1. d4 Nf6 2. c4 e6 3. Nc3 d5 4. Nf3 Be7 *"
+    transposed = "1. d4 d5  2. c4 e6 3. Nc3 Nf6 4. Nf3 Be7 *"
+    assert play_signature(direct) == play_signature(transposed)
+
+
+def test_play_signature_returns_none_for_empty_pgn():
+    assert play_signature("") is None
+
+
+def test_play_signature_distinguishes_different_positions():
+    queens = "1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 *"   # QGD
+    kings  = "1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 *"  # Ruy Lopez
+    assert play_signature(queens) != play_signature(kings)
+```
+
+Run: `uv run pytest tests/test_play_signature.py -v` → expect 5 fail with `ModuleNotFoundError`.
+
+- [ ] **Step 4: Implement steps 2's code so test_play_signature.py goes green**
+
+Then run again — expect 5 PASS.
+
+- [ ] **Step 5: Add `play_signature` field to `GameRecord` and populate it**
+
+In `chess_tracker/pgn.py`:
+
+```python
+from chess_tracker.play_signature import play_signature as _compute_play_signature
+
+@dataclass
+class GameRecord:
+    url: str
+    end_time: int
+    time_class: str
+    side: str
+    my_rating: int
+    opp_rating: int
+    result: str
+    opp_result: str
+    plies: int
+    fullmoves: int
+    opening: str | None
+    eco: str | None
+    my_clocks: list[float] = field(default_factory=list)
+    opp_clocks: list[float] = field(default_factory=list)
+    play_signature: str | None = None  # NEW
+```
+
+In `parse_game`, populate via the new helper:
+```python
+def parse_game(g: dict, username: str) -> GameRecord:
+    ...
+    return GameRecord(
+        ...
+        play_signature=_compute_play_signature(g.get("pgn", "")),
+    )
+```
+
+Add a new assertion to `tests/test_pgn.py::test_parse_game_returns_record_with_required_fields`:
+```python
+    # Real bullet games are >= 8 plies so signature should populate
+    if rec.plies >= 8:
+        assert isinstance(rec.play_signature, str)
+        assert "/" in rec.play_signature
+```
+
+Run tests again — the existing `test_parse_game_returns_record_with_required_fields` should still PASS plus the new clause should pass on the fixture (real chess.com bullet game).
+
+- [ ] **Step 6: Extend `tests/fixtures/sample_records.py` `_r` helper**
+
+Add `play_signature=None` to `_r`'s signature and pass through. Then populate stubs on `RECORDS` so groups exist:
+
+```python
+def _r(end_time, result, opp_result, opening, my_rating=500, opp_rating=500,
+       side="white", fullmoves=30, my_clocks=None, opp_clocks=None,
+       eco="A00", play_signature=None):
+    return GameRecord(
+        ...,
+        play_signature=play_signature,
+    )
+
+# Use opening-name stubs as fake signatures so grouping works in tests:
+RECORDS = [
+    _r(1_700_000_000, "win", "timeout", "London System",
+       my_rating=500, play_signature="sig-london-white"),
+    _r(1_700_000_060, "checkmated", "win", "London System",
+       my_rating=505, play_signature="sig-london-white"),
+    _r(1_700_000_120, "win", "timeout", "Petrovs Defense",
+       my_rating=510, side="black", play_signature="sig-petrov-black"),
+    _r(1_700_002_000, "timeout", "win", "Italian Game",
+       my_rating=505, side="black", play_signature="sig-italian-black"),
+    _r(1_700_002_060, "checkmated", "win", "Italian Game",
+       my_rating=490, side="black", play_signature="sig-italian-black"),
+    _r(1_700_006_000, "win", "timeout", "London System",
+       my_rating=485, play_signature="sig-london-white"),
+]
+```
+
+`CLOCK_RECORDS`, `OUTLASTED_THEN_FLAG_RECORD`: leave `play_signature=None` since their tests don't exercise `compute_play_signatures`.
+
+- [ ] **Step 7: Add `compute_play_signatures` in `chess_tracker/metrics.py`**
+
+Append (do NOT remove `compute_repertoire`; it stays as legacy with its 4 tests):
+
+```python
+def compute_play_signatures(records: list[GameRecord]) -> list[dict]:
+    """Group records by (play_signature, color). Records without a
+    play_signature (game < 8 plies) are skipped. Each row carries
+    display_name = most common opening label among the group's games.
+    """
+    groups: dict[tuple[str, str], list[GameRecord]] = {}
+    for r in records:
+        if r.play_signature is None:
+            continue
+        key = (r.play_signature, r.side)
+        groups.setdefault(key, []).append(r)
+
+    out = []
+    for (sig, color), recs in groups.items():
+        recs = sorted(recs, key=lambda r: r.end_time)
+        name_counts = Counter(r.opening for r in recs if r.opening)
+        display_name = name_counts.most_common(1)[0][0] if name_counts else "Unnamed"
+        n = len(recs)
+        wins = sum(1 for r in recs if _is_win(r.result))
+        losses_recs = [r for r in recs if _is_loss(r.result)]
+        losses = len(losses_recs)
+        draws = n - wins - losses
+        flag = sum(1 for r in losses_recs if r.result == "timeout")
+        mate = sum(1 for r in losses_recs if r.result == "checkmated")
+        med_len = statistics.median([r.fullmoves for r in recs])
+        avg_opp = round(statistics.mean([r.opp_rating for r in recs]), 0)
+        rating_gap = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
+        eco_counts = Counter(r.eco for r in recs if r.eco)
+        eco_top = eco_counts.most_common(1)[0][0] if eco_counts else None
+        out.append({
+            "play_signature": sig,
+            "display_name": display_name,
+            "color": color,
+            "eco": eco_top,
+            "games": n,
+            "wins": wins,
+            "losses": losses,
+            "draws": draws,
+            "win_pct": round(100 * wins / n, 1),
+            "flag_pct": round(100 * flag / losses, 1) if losses else 0.0,
+            "mate_pct": round(100 * mate / losses, 1) if losses else 0.0,
+            "med_len": med_len,
+            "avg_opp_rating": int(avg_opp),
+            "rating_gap": int(rating_gap),
+            "form": [_result_letter(r) for r in recs[-10:]],
+        })
+    out.sort(key=lambda x: (-x["games"], -x["win_pct"]))
+    return out
+```
+
+- [ ] **Step 8: Update `compute_all` to use the new function**
+
+In `chess_tracker/metrics.py`, change two things:
+
+1. Default threshold `low_confidence_threshold: int = 10` → `int = 15`.
+2. Body: replace the `compute_repertoire` block with `compute_play_signatures`, and the JSON key `"opening_outcomes"` → `"play_signatures"`. Annotation lookup keys on `row["display_name"]`:
+
+```python
+def compute_all(records, annotations, username, format="bullet",
+                low_confidence_threshold: int = 15) -> dict:
+    play_signatures = compute_play_signatures(records)
+    opening_notes = annotations.get("openings", {})
+    for row in play_signatures:
+        ann = opening_notes.get(row["display_name"], {})
+        row["tag"] = ann.get("tag", "")
+        row["note"] = ann.get("note", "")
+        row["low_confidence"] = row["games"] < low_confidence_threshold
+
+    return {
+        "username": username,
+        "format": format,
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "kpis": compute_kpis(records),
+        "leak_summary": detect_leaks(records),
+        "next_session_rule": next_session_rule(records),
+        "recent_losses": recent_losses_with_suggestions(records),
+        "process_metrics": {
+            **compute_process_metrics(records),
+            "session_decay": compute_session_decay(records),
+        },
+        "play_signatures": play_signatures,  # was "opening_outcomes"
+        "sessions": compute_sessions(records),
+        "error_log": annotations.get("error_log", []),
+    }
+```
+
+- [ ] **Step 9: Update 3 tests in `tests/test_metrics.py`**
+
+(a) `test_compute_all_has_new_panel_keys`: change `"opening_outcomes"` → `"play_signatures"` in the expected set.
+
+(b) Rename `test_compute_all_opening_outcomes_has_low_confidence_flag` → `test_compute_all_play_signatures_has_low_confidence_flag`. Change `payload["opening_outcomes"]` → `payload["play_signatures"]`. Change `row["games"] < 10` → `row["games"] < 15`.
+
+(c) `test_compute_all_merges_opening_annotations`: change `payload["opening_outcomes"]` → `payload["play_signatures"]`. Change the row match from `r["opening"] == "London System"` to `r["display_name"] == "London System"`. (The new function emits `display_name`, not `opening`, as the human-readable label.)
+
+- [ ] **Step 10: Rename section IDs in `chess_tracker/templates/index.html`**
+
+```diff
+-    <section id="outcomes-section">
+-      <h2>Opening outcomes <small>(sample sizes are small — treat low-N rows as exploratory)</small></h2>
+-      <div id="opening-outcomes-table"></div>
++    <section id="signatures-section">
++      <h2>Play signatures <small>(grouped by 8-ply FEN; sample sizes are small — treat low-N rows as exploratory)</small></h2>
++      <div id="play-signatures-table"></div>
+     </section>
+```
+
+- [ ] **Step 11: Run full suite**
+
+```
+uv run pytest -v
+```
+
+Expected: ~40 passing (34 before + 5 new `test_play_signature.py` + 1 new line in `test_parse_game_returns_record_with_required_fields` doesn't add a test, just an assertion). The 3 renamed `compute_all` tests keep their count.
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add pyproject.toml chess_tracker/play_signature.py chess_tracker/pgn.py chess_tracker/metrics.py chess_tracker/templates/index.html tests/test_play_signature.py tests/test_pgn.py tests/test_metrics.py tests/fixtures/sample_records.py
+git commit -m "refactor(metrics): group play_signatures by 8-ply canonical FEN (python-chess)"
+```
+
+---
+
 ## Task 11: HTML renderer (Python side)
 
 **Files:**
@@ -1465,9 +1778,9 @@ git commit -m "feat(metrics): compute_all wires all panels + low_confidence flag
       <h3>Session-position decay</h3>
       <div id="session-decay-table"></div>
     </section>
-    <section id="outcomes-section">
-      <h2>Opening outcomes <small>(sample sizes are small — treat low-N rows as exploratory)</small></h2>
-      <div id="opening-outcomes-table"></div>
+    <section id="signatures-section">
+      <h2>Play signatures <small>(grouped by 8-ply FEN; sample sizes are small — treat low-N rows as exploratory)</small></h2>
+      <div id="play-signatures-table"></div>
     </section>
     <section id="sessions-section"><h2>Sessions</h2><div id="sessions-table"></div></section>
   </main>
@@ -1693,7 +2006,7 @@ section h3 { margin: 1rem 0 0.5rem; font-size: 1rem; color: var(--muted); }
   renderErrorLog(D.error_log);
   renderProcess(D.process_metrics);
   renderSessionDecay(D.process_metrics.session_decay);
-  renderOpeningOutcomes(D.opening_outcomes);
+  renderPlaySignatures(D.play_signatures);
   renderSessions(D.sessions);
 
   function renderKPI(d) {
@@ -1798,8 +2111,8 @@ section h3 { margin: 1rem 0 0.5rem; font-size: 1rem; color: var(--muted); }
     });
   }
 
-  function renderOpeningOutcomes(rows) {
-    new Tabulator("#opening-outcomes-table", {
+  function renderPlaySignatures(rows) {
+    new Tabulator("#play-signatures-table", {
       data: rows, layout: "fitDataStretch",
       rowFormatter: row => {
         if (row.getData().low_confidence) row.getElement().classList.add("row-low-conf");
@@ -1807,7 +2120,7 @@ section h3 { margin: 1rem 0 0.5rem; font-size: 1rem; color: var(--muted); }
       columns: [
         {title: "Conf", field: "low_confidence",
          formatter: c => c.getValue() ? "⚪" : "🟢", width: 60, sorter: (a,b)=> (a?1:0)-(b?1:0)},
-        {title: "Opening", field: "opening", widthGrow: 3, headerFilter: "input"},
+        {title: "Opening", field: "display_name", widthGrow: 3, headerFilter: "input"},
         {title: "ECO", field: "eco", width: 70},
         {title: "Color", field: "color", width: 80, headerFilter: "list",
          headerFilterParams: {values: {"":"All", "white":"White", "black":"Black"}}},
@@ -1821,6 +2134,7 @@ section h3 { margin: 1rem 0 0.5rem; font-size: 1rem; color: var(--muted); }
         {title: "Δ-opp", field: "rating_gap", width: 80, sorter: "number"},
         {title: "Tag", field: "tag", width: 100, headerFilter: "input"},
         {title: "Note", field: "note", widthGrow: 2},
+        {title: "FEN@8", field: "play_signature", visible: false},
       ],
       initialSort: [
         {column: "low_confidence", dir: "asc"},
@@ -2043,13 +2357,13 @@ Visual checklist (in panel order):
 - [ ] **Error log** below the losses table shows existing entries or the empty placeholder
 - [ ] **Process metrics** cards render with reserve/velocity/burn-delta/outlasted values (some may be "—" if data is too short)
 - [ ] **Session-position decay** table shows 4 rows (1-5, 6-10, 11-20, 21+)
-- [ ] **Opening outcomes** table shows rows sorted with high-confidence (🟢) first, low-confidence (⚪) rows dimmed
+- [ ] **Play signatures** table shows rows sorted with high-confidence (🟢) first, low-confidence (⚪) rows dimmed; the visible "Opening" column shows each row's `display_name`
 - [ ] **Sessions** table shows latest first, red tilt flags where Δ ≤ -50
 
 - [ ] **Step 3: Verify computed.json shape**
 
 Run: `uv run python -c "import json; d=json.load(open('data/computed.json')); print(sorted(d.keys()))"`
-Expected: includes `leak_summary`, `next_session_rule`, `recent_losses`, `process_metrics`, `opening_outcomes`, `sessions`.
+Expected: includes `leak_summary`, `next_session_rule`, `recent_losses`, `process_metrics`, `play_signatures`, `sessions`.
 
 - [ ] **Step 4: Verify offline operation**
 
@@ -2097,7 +2411,7 @@ Then open `dashboard/index.html` in your browser.
 3. **Next session rule** — game cap, move-10 target, stop signal
 4. **Recent losses → error log** — click "Copy starter entries" to populate annotations
 5. **Process metrics** — clock and session behavior
-6. **Opening outcomes** — sortable; low-confidence rows (N<10) are dimmed
+6. **Play signatures** — sortable; low-confidence rows (N<15) are dimmed; grouped by 8-ply FEN, not ECO label
 7. **Sessions** — chronological list with tilt flags
 
 ## Annotations

@@ -11,7 +11,7 @@ A local, single-user **bullet behavior recorder + feedback loop** built from a C
 1. **What is leaking rating right now?** (clock burn, session length, recurring tactical pattern)
 2. **What is the next-session rule?** (game cap, opening time target, stop signal)
 3. **Which recent losses are worth filing in the error log?** (auto-suggested entries the user can promote)
-4. **Which openings are producing outcomes worth investigating?** (opening *outcomes*, not "best openings" — sample sizes too small to rank)
+4. **Which play signatures are producing outcomes worth investigating?** (the 8-ply position reached, not the ECO label — Chess.com's ECO labels fragment the same play system into many buckets keyed on the opponent's response shape; sample sizes are still too small to rank)
 
 Out of scope for v1: engine analysis (ACPL/CAPS) beyond what Chess.com already provides, social/sharing, mobile, non-bullet formats, drill mode.
 
@@ -94,7 +94,7 @@ Single JSON object produced fresh on every refresh. Top-level shape:
   "recent_losses": [ { loss_row, suggested_error_entry } , ... ],
   "process_metrics": { "reserve": {...}, "opening_velocity": {...},
                        "session_decay": [...] },
-  "opening_outcomes": [ { row, "low_confidence": bool }, ... ],
+  "play_signatures": [ { row, "play_signature": str, "display_name": str, "low_confidence": bool }, ... ],
   "sessions": [ { session_row }, ... ]
 }
 ```
@@ -207,18 +207,22 @@ The bullet-specific behavior numbers the research said matter most:
 
 Each metric: current value, 7-day trend arrow (▲ improving, ▼ worsening, → flat).
 
-### Opening outcomes (panel 5 — demoted; was leaderboard)
+### Play signatures (panel 5 — demoted; was opening leaderboard)
 
-**Renamed from "Repertoire" → "Opening Outcomes."** The original framing implied these were Madison's *choices*; for Black games especially, many rows are opponent-choice artifacts (you played 1...e5, opponent played the Italian — "Italian Game (black)" appears in your data but you didn't choose it).
+**Renamed from "Opening Outcomes" → "Play signatures."** Chess.com's ECO labels split the same play system into many buckets keyed on the opponent's response shape (e.g., five separate "Queen's Pawn Opening Zukertort \*" rows that play identically through move 8). The previous "Opening Outcomes" panel was therefore an artifact of opponent choice. Instead, group rows by an 8-ply **play signature**: the canonical FEN (placement + side-to-move + castling + en-passant target) of the position reached after the first 8 plies of the game. `python-chess` produces the FEN, so different move orders reaching the same position collapse into a single signature. Each row carries the most common ECO/opening label that appeared with that signature as its `display_name`, so users still see familiar names in the table; the raw `play_signature` string is preserved in the JSON for users who want to drill in via a board viewer.
 
 Rows include all the prior columns plus:
 
 | New column | Definition |
 |---|---|
-| Confidence | 🟢 N ≥ 20, 🟡 N 10–19, ⚪ N < 10 (low-confidence — treat as sampling noise) |
+| display_name | Most-common ECO/opening label among games sharing this `play_signature` (fallback: "Unnamed"). Renders in the visible "Opening" cell of the table. |
+| play_signature | Canonical FEN at ply 8 (string). Stable across transpositions. Hidden by default; shown on row expand. |
+| Confidence | 🟢 N ≥ 20, 🟡 N 15–19, ⚪ N < 15 (low-confidence — treat as sampling noise). Threshold raised from N<10 with the play_signature pivot: collapsing transpositions means each signature attracts more games than the per-label rows did, but the table is also shorter, so the bar to be "worth looking at" rises with it. |
 | Type | "chooser" if color=white, "responder" if color=black (heuristic; both useful, semantically different) |
 
 Default sort: confidence DESC then games DESC. Rows with `low_confidence = true` rendered dimmer.
+
+Annotation lookup (per-opening tag/note from `annotations.json.openings`) is keyed on `display_name`, so existing notes the user has written against opening names still attach correctly. Games with fewer than 8 plies (rare — usually pre-move resignations) have `play_signature = null` and are excluded from this panel.
 
 ### Sessions table (panel 6 — raw data)
 
@@ -246,7 +250,7 @@ Single-page scroll, top-down:
 3. **Next session rule** — what to do about it
 4. **Recent losses + error log** — what to file from this batch
 5. **Process metrics** — clock and session behavior numbers with trends
-6. **Opening outcomes** — demoted; sortable, with confidence gates
+6. **Play signatures** — demoted; sortable, with confidence gates (display_name shown; raw FEN preserved)
 7. **Sessions** — raw chronological list
 
 The order embodies the product thesis: *act*, then *file*, then *analyze*. Spreadsheets last, recommendations first.
@@ -280,7 +284,7 @@ Idempotent. Cached archives skip re-fetch unless current-month.
 
 | Layer | Pick | Why |
 |---|---|---|
-| Pipeline | Python 3.11+ stdlib only | No deps, fewer install steps |
+| Pipeline | Python 3.11+ stdlib + `python-chess` | One runtime dep: `python-chess` produces the canonical 8-ply FEN used as the `play_signature` key. Everything else (urllib, json, statistics, datetime) is stdlib. |
 | HTTP | urllib | Stdlib; rate is low |
 | HTML rendering | Python f-string templates | Simple, no Jinja dep |
 | Tables | Tabulator.js (vendored in `dashboard/vendor/`) | Modern, sortable/filterable/sparklines, MIT. NOT loaded via CDN — the dashboard must work offline. |
@@ -303,7 +307,7 @@ Idempotent. Cached archives skip re-fetch unless current-month.
 - Multi-user / accounts.
 - Opening trainer / drill mode. Only meaningful after the dashboard can identify actual leaks (panels 2-3 first).
 - Browser-side annotation editing modal (v1.1 — see "Annotation editing flow").
-- Confidence intervals / Bayesian shrinkage on opening outcomes. Replaced for v1 by the simpler 🟢🟡⚪ confidence badge.
+- Confidence intervals / Bayesian shrinkage on play_signatures. Replaced for v1 by the simpler 🟢🟡⚪ confidence badge.
 
 ## Open questions for the reviewer (you)
 
