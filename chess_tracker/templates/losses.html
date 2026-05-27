@@ -1,0 +1,27 @@
+<!-- chess_tracker/templates/losses.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Chess Tracker — Losses — {{USERNAME}}</title>
+  <link rel="stylesheet" href="vendor/tabulator.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="kpi-strip"><a class="home-link" href="index.html">← repertoire</a></header>
+  <main>
+    <section id="losses-section">
+      <h2>Recent losses → error log</h2>
+      <div id="losses-table"></div>
+      <button id="copy-suggestions">Copy starter entries</button>
+      <h3>Error log</h3>
+      <div id="error-log-table"></div>
+    </section>
+  </main>
+  <script src="vendor/tabulator.min.js"></script>
+  <script>
+    /* DATA_INJECTION_POINT */
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>

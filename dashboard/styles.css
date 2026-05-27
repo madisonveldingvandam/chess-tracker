@@ -243,3 +243,50 @@ section h3 {
   text-decoration: none;
 }
 .tabulator a:hover { text-decoration: underline; }
+
+/* Home link in detail-page KPI strips */
+.home-link {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.3rem 0.6rem;
+  margin-right: 0.5rem;
+  border-right: 1px solid var(--border);
+}
+.home-link:hover { color: var(--accent); }
+
+/* Drill-in cards (landing only) */
+.drillin-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem;
+}
+.drillin-grid .card {
+  background: var(--surface);
+  padding: 0.7rem 0.85rem;
+  border-radius: 4px;
+  border-left: 2px solid var(--border);
+  text-decoration: none;
+  color: var(--text);
+  display: block;
+  transition: background 0.1s ease;
+}
+.drillin-grid .card:hover { background: #34342f; }
+.drillin-grid .card.alert { border-left-color: var(--accent); }
+.drillin-grid .card .label {
+  font-size: 0.6rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.drillin-grid .card .headline {
+  font-size: 1rem; font-weight: 600;
+  margin: 0.15rem 0;
+}
+.drillin-grid .card.alert .headline { color: var(--accent); }
+.drillin-grid .card .sub {
+  font-size: 0.7rem; color: var(--muted);
+  line-height: 1.3;
+}
+
+@media (max-width: 900px) {
+  .drillin-grid { grid-template-columns: repeat(2, 1fr); }
+}

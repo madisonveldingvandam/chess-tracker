@@ -17,26 +17,34 @@
   renderRecentLosses(D.recent_losses);
   renderErrorLog(D.error_log);
   renderProcess(D.process_metrics);
-  renderSessionDecay(D.process_metrics.session_decay);
+  renderSessionDecay(D.process_metrics?.session_decay);
   renderPlaySignatures(D.play_signatures);
   renderSessions(D.sessions);
+  renderDrillinCards(D);
 
   function renderKPI(d) {
+    const strip = document.getElementById("kpi-strip");
+    if (!strip) return;
     const k = d.kpis;
-    document.getElementById("kpi-strip").innerHTML = `
+    const lastDelta = (d.sessions && d.sessions.length > 0) ? d.sessions[0].rating_delta : null;
+    const lastStr = lastDelta == null ? "—" : (lastDelta >= 0 ? "+" : "") + lastDelta;
+    strip.insertAdjacentHTML('beforeend', `
       <div class="kpi"><span class="kpi-label">Rating</span>
         <span class="kpi-value">${k.current_rating ?? "—"}</span></div>
-      <div class="kpi"><span class="kpi-label">Games total</span>
+      <div class="kpi"><span class="kpi-label">Games</span>
         <span class="kpi-value">${k.games_total}</span></div>
       <div class="kpi"><span class="kpi-label">Recent form</span>
         <span class="kpi-value${k.recent_form_win_pct >= 50 ? " accent" : ""}">${k.recent_form_win_pct}%</span></div>
-      <div class="kpi"><span class="kpi-label">Generated</span>
+      <div class="kpi"><span class="kpi-label">Last session</span>
+        <span class="kpi-value">${lastStr}</span></div>
+      <div class="kpi"><span class="kpi-label">Updated</span>
         <span class="kpi-value" style="font-size:0.9rem">${new Date(d.generated_at).toLocaleString()}</span></div>
-    `;
+    `);
   }
 
   function renderLeaks(leaks) {
     const root = document.getElementById("leak-list");
+    if (!root) return;
     if (!leaks || leaks.length === 0) {
       root.innerHTML = `<p style="color:var(--muted)">No leaks detected in the last 30 games.</p>`;
       return;
@@ -52,6 +60,7 @@
 
   function renderRule(rule) {
     const root = document.getElementById("next-rule");
+    if (!root) return;
     root.innerHTML = `
       <dl class="rule-block">
         <dt>Game cap</dt><dd>${rule.game_cap}</dd>
@@ -63,6 +72,7 @@
   }
 
   function renderRecentLosses(losses) {
+    if (!document.getElementById("losses-table")) return;
     new Tabulator("#losses-table", {
       data: losses, layout: "fitDataStretch", pagination: false,
       columns: [
@@ -91,6 +101,7 @@
   }
 
   function renderErrorLog(rows) {
+    if (!document.getElementById("error-log-table")) return;
     new Tabulator("#error-log-table", {
       data: rows, layout: "fitDataStretch",
       placeholder: "No entries yet. Paste from suggestions above into data/annotations.json.",
@@ -105,6 +116,7 @@
   }
 
   function renderProcess(pm) {
+    if (!document.getElementById("process-block")) return;
     const fmt = v => v === null || v === undefined ? "—" : v;
     document.getElementById("process-block").innerHTML = `
       <div class="process-grid">
@@ -118,6 +130,7 @@
   }
 
   function renderSessionDecay(rows) {
+    if (!document.getElementById("session-decay-table")) return;
     new Tabulator("#session-decay-table", {
       data: rows, layout: "fitColumns",
       columns: [
@@ -131,6 +144,7 @@
   }
 
   function renderPlaySignatures(rows) {
+    if (!document.getElementById("play-signatures-table")) return;
     const table = new Tabulator("#play-signatures-table", {
       data: rows, layout: "fitDataStretch",
       rowFormatter: row => {
@@ -188,6 +202,7 @@
   }
 
   function renderSessions(rows) {
+    if (!document.getElementById("sessions-table")) return;
     new Tabulator("#sessions-table", {
       data: rows, layout: "fitDataStretch",
       columns: [
@@ -208,6 +223,61 @@
       ],
       initialSort: [{column: "start", dir: "desc"}],
     });
+  }
+
+  function renderDrillinCards(D) {
+    const root = document.getElementById("drillin-cards");
+    if (!root) return;
+    const leaks = D.leak_summary || [];
+    const losses = D.recent_losses || [];
+    const sessions = D.sessions || [];
+    const pm = D.process_metrics || {};
+
+    // Leaks card: alert when any critical leak exists
+    const critical = leaks.find(L => L.severity === "critical");
+    const firstWarn = leaks.find(L => L.severity === "warn");
+    const worstName = critical ? critical.name : (firstWarn ? firstWarn.name : null);
+    const leaksAlert = critical != null;
+    const leaksSub = leaks.length === 0 ? "all clear"
+      : worstName ? `Worst: ${worstName.replace(/_/g, " ")}`
+      : `${leaks.length} active`;
+
+    // Recent losses card: alert when count >= 10
+    const lossCounts = {};
+    losses.forEach(L => { lossCounts[L.loss_type] = (lossCounts[L.loss_type] || 0) + 1; });
+    const topLossTypes = Object.entries(lossCounts).sort((a, b) => b[1] - a[1]).slice(0, 2);
+    const lossesSub = losses.length === 0 ? "none in last 30"
+      : topLossTypes.map(([t, n]) => `${n} ${t}`).join(", ");
+    const lossesAlert = losses.length >= 10;
+
+    // Process card: alert when opening_velocity_median < 18
+    const velocity = pm.opening_velocity_median;
+    const processHeadline = velocity == null ? "—" : `${velocity}s @ 8`;
+    const processSub = velocity == null ? "insufficient data" : "Target ≥ 18s";
+    const processAlert = velocity != null && velocity < 18;
+
+    // Sessions card: alert when last session was tilted
+    const sessionCount = sessions.length;
+    const last5 = sessions.slice(0, 5);
+    const tiltedCount = last5.filter(s => s.tilt_flag).length;
+    const sessionsSub = sessionCount === 0 ? "no sessions"
+      : `${tiltedCount} tilted of last 5`;
+    const sessionsAlert = sessions.length > 0 && sessions[0].tilt_flag === true;
+
+    root.innerHTML = [
+      card("Leaks", `${leaks.length} active`, leaksSub, "leaks.html", leaksAlert),
+      card("Recent losses", `${losses.length}`, lossesSub, "losses.html", lossesAlert),
+      card("Process", processHeadline, processSub, "process.html", processAlert),
+      card("Sessions", `${sessionCount} total`, sessionsSub, "sessions.html", sessionsAlert),
+    ].join("");
+  }
+
+  function card(label, headline, sub, href, alert) {
+    return `<a class="card${alert ? " alert" : ""}" href="${href}">
+      <div class="label">${label}</div>
+      <div class="headline">${headline}</div>
+      <div class="sub">${sub}</div>
+    </a>`;
   }
 
   function sparkline(cell) {

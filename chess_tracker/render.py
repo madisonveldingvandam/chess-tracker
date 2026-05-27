@@ -4,7 +4,9 @@ import json
 from pathlib import Path
 
 INJECT_MARKER = "/* DATA_INJECTION_POINT */"
-DEFAULT_TEMPLATE_PATH = Path(__file__).parent / "templates" / "index.html"
+DEFAULT_TEMPLATE_DIR = Path(__file__).parent / "templates"
+DEFAULT_TEMPLATE_PATH = DEFAULT_TEMPLATE_DIR / "index.html"
+PAGE_TEMPLATES = ["index", "leaks", "losses", "process", "sessions"]
 
 
 def _safe_json(payload: dict) -> str:
@@ -29,3 +31,19 @@ def render_dashboard(template_path: Path, output_path: Path, payload: dict) -> N
     html = html.replace(INJECT_MARKER, embed)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html)
+
+
+def render_all_pages(template_dir: Path, output_dir: Path, payload: dict) -> None:
+    """Render each template in PAGE_TEMPLATES to <output_dir>/<name>.html.
+
+    Each output file is produced by calling render_dashboard with the matching
+    template at <template_dir>/<name>.html.
+    """
+    template_dir = Path(template_dir)
+    output_dir = Path(output_dir)
+    for name in PAGE_TEMPLATES:
+        render_dashboard(
+            template_path=template_dir / f"{name}.html",
+            output_path=output_dir / f"{name}.html",
+            payload=payload,
+        )

@@ -8,7 +8,7 @@ from chess_tracker.api import fetch_archives_index, fetch_archive
 from chess_tracker.pgn import parse_game
 from chess_tracker.metrics import compute_all
 from chess_tracker.annotations import load_annotations
-from chess_tracker.render import render_dashboard, DEFAULT_TEMPLATE_PATH
+from chess_tracker.render import render_all_pages, DEFAULT_TEMPLATE_DIR
 
 
 def main(argv=None) -> int:
@@ -19,14 +19,13 @@ def main(argv=None) -> int:
                     help="Re-fetch all archives, not just current month.")
     ap.add_argument("--data-dir", default="data")
     ap.add_argument("--dashboard-dir", default="dashboard")
-    ap.add_argument("--template-path", default=str(DEFAULT_TEMPLATE_PATH))
+    ap.add_argument("--template-dir", default=str(DEFAULT_TEMPLATE_DIR))
     args = ap.parse_args(argv)
 
     data_dir = Path(args.data_dir)
     raw_dir = data_dir / "raw"
     dashboard_dir = Path(args.dashboard_dir)
-    template = Path(args.template_path)
-    output = dashboard_dir / "index.html"
+    template_dir = Path(args.template_dir)
     annotations_path = data_dir / "annotations.json"
 
     print(f"[1/5] Loading archives index for {args.username}...")
@@ -56,12 +55,12 @@ def main(argv=None) -> int:
     (data_dir / "computed.json").write_text(json.dumps(payload, indent=2))
 
     print("[5/5] Rendering dashboard...")
-    render_dashboard(template_path=template, output_path=output, payload=payload)
+    render_all_pages(template_dir=template_dir, output_dir=dashboard_dir, payload=payload)
 
-    print(f"\nDone. Rendered to: {output.resolve()}")
+    print(f"\nDone. Rendered to: {(dashboard_dir / 'index.html').resolve()}")
     print(f"  Browsers block file:// subresources; serve over HTTP instead:")
     print(f"    python3 -m http.server 8000")
-    print(f"  Then open: http://localhost:8000/{output}")
+    print(f"  Then open: http://localhost:8000/dashboard/index.html")
     return 0
 
 
