@@ -67,7 +67,7 @@ def compute_sessions(records: list[GameRecord], gap_seconds: int = 600) -> list[
         rating_end = s[-1].my_rating
         delta = rating_end - rating_start
         out.append({
-            "start": datetime.fromtimestamp(s[0].end_time).isoformat(),
+            "start": datetime.fromtimestamp(s[0].end_time).astimezone().isoformat(),
             "games": len(s),
             "duration_minutes": round((s[-1].end_time - s[0].end_time) / 60, 1),
             "wins": wins, "losses": losses, "draws": draws,
