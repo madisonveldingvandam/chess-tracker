@@ -105,7 +105,7 @@ def compute_repertoire(records: list[GameRecord]) -> list[dict]:
         mate = sum(1 for r in losses_recs if r.result == "checkmated")
         med_len = statistics.median([r.fullmoves for r in recs])
         avg_opp = round(statistics.mean([r.opp_rating for r in recs]), 0)
-        delta_yours = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
+        rating_gap = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
         # ECO mode
         eco_counts = Counter(r.eco for r in recs if r.eco)
         eco_top = eco_counts.most_common(1)[0][0] if eco_counts else None
@@ -122,7 +122,7 @@ def compute_repertoire(records: list[GameRecord]) -> list[dict]:
             "mate_pct": round(100 * mate / losses, 1) if losses else 0.0,
             "med_len": med_len,
             "avg_opp_rating": int(avg_opp),
-            "rating_delta": int(delta_yours),
+            "rating_gap": int(rating_gap),  # mean(my - opp); positive = you outrated
             "form": [_result_letter(r) for r in recs[-10:]],
         })
     out.sort(key=lambda x: (-x["games"], -x["win_pct"]))

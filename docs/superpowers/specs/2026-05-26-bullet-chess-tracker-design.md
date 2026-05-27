@@ -153,7 +153,7 @@ Opening family = ECO opening name with trailing move-number tokens stripped (e.g
 | MedLen | median full-moves in this opening |
 | Form | sparkline of last 10 results (W=up, L=down) |
 | AvgOppRating | mean opponent rating |
-| Δ-yours | mean(my_rating – opp_rating) |
+| Δ-opp (`rating_gap`) | mean(my_rating – opp_rating); positive = you outrated |
 | Tag | from annotations: 📌 / 🧪 / 🗑 |
 
 Conditional formatting: Win% cell green ≥60%, red ≤35%. Flag%/Mate% red if ≥60% (signals leak).

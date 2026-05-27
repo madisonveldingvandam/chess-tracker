@@ -842,7 +842,7 @@ def compute_repertoire(records: list[GameRecord]) -> list[dict]:
         mate = sum(1 for r in losses_recs if r.result == "checkmated")
         med_len = statistics.median([r.fullmoves for r in recs])
         avg_opp = round(statistics.mean([r.opp_rating for r in recs]), 0)
-        delta_yours = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
+        rating_gap = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
         # ECO mode
         eco_counts = Counter(r.eco for r in recs if r.eco)
         eco_top = eco_counts.most_common(1)[0][0] if eco_counts else None
@@ -859,7 +859,7 @@ def compute_repertoire(records: list[GameRecord]) -> list[dict]:
             "mate_pct": round(100 * mate / losses, 1) if losses else 0.0,
             "med_len": med_len,
             "avg_opp_rating": int(avg_opp),
-            "rating_delta": int(delta_yours),
+            "rating_gap": int(rating_gap),  # mean(my - opp); positive = you outrated
             "form": [_result_letter(r) for r in recs[-10:]],
         })
     out.sort(key=lambda x: (-x["games"], -x["win_pct"]))
@@ -1384,7 +1384,7 @@ section h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--muted); }
         {title: "MedLen", field: "med_len", width: 80, sorter: "number"},
         {title: "Form", field: "form", width: 120, formatter: sparkline, headerSort: false},
         {title: "AvgOpp", field: "avg_opp_rating", width: 90, sorter: "number"},
-        {title: "Δ", field: "rating_delta", width: 70, sorter: "number"},
+        {title: "Δ-opp", field: "rating_gap", width: 70, sorter: "number"},
         {title: "Tag", field: "tag", width: 120, headerFilter: "input"},
         {title: "Note", field: "note", widthGrow: 2},
       ],
