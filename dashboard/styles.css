@@ -5,12 +5,12 @@
 :root {
   --bg: #262624;
   --surface: #2d2d2a;
-  --accent-bg: #332e26;
-  --text: #f0eee6;
-  --muted: #8a8a82;
+  --accent-bg: #353532;       /* was #332e26 warm-tan tint; now neutral lift over --surface */
+  --text: #f0eee6;            /* primary cream */
+  --muted: #b8b8b0;           /* lightened from #8a8a82 for readability */
   --border: #3a3a37;
-  --accent: #c9a574;
-  --board-light: #d8c9a8;
+  --accent: #ffffff;          /* was warm tan #c9a574; now pure white */
+  --board-light: #c0c0b6;     /* was warm tan #d8c9a8; now warm gray */
   --board-dark: #5a5852;
   --piece-fg: #111111;
 }
@@ -39,7 +39,7 @@ header#kpi-strip {
 .kpi-value { font-size: 1.5rem; font-weight: 600; margin-top: 0.2rem; }
 .kpi-value.accent { color: var(--accent); }
 
-main { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+main { padding: 1.5rem 2rem; }
 section { margin-bottom: 2.5rem; }
 section h2 {
   margin: 0 0 0.75rem;
@@ -154,8 +154,8 @@ section h3 {
 .board-large .piece-w {
   color: var(--text);
   /* Thin dark outline so cream pieces stay defined on the tan light squares */
-  -webkit-text-stroke: 1px #2a2520;
-  text-shadow: 0 0 1px #2a2520;
+  -webkit-text-stroke: 1px #2a2a28;
+  text-shadow: 0 0 1px #2a2a28;
 }
 .board-meta {
   margin-top: 0.75rem;
@@ -285,7 +285,7 @@ section h3 {
   display: block;
   transition: background 0.1s ease;
 }
-.drillin-grid .card:hover { background: #34342f; }
+.drillin-grid .card:hover { background: var(--accent-bg); }
 .drillin-grid .card.alert { border-left-color: var(--accent); }
 .drillin-grid .card .label {
   font-size: 0.6rem; color: var(--muted);
