@@ -14,7 +14,7 @@ def test_render_dashboard_injects_data_and_substitutes_username(tmp_path):
     render_dashboard(template_path=template, output_path=out, payload=payload)
     html = out.read_text()
     assert "Chess Tracker — alice" in html
-    assert "const DATA =" in html
+    assert "window.DATA =" in html
     assert "/* DATA_INJECTION_POINT */" not in html
     assert "alice" in html
 

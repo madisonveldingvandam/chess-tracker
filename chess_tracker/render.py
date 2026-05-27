@@ -22,7 +22,10 @@ def render_dashboard(template_path: Path, output_path: Path, payload: dict) -> N
     html = template_path.read_text()
     username = payload.get("username", "")
     html = html.replace("{{USERNAME}}", username)
-    embed = f"const DATA = {_safe_json(payload)};"
+    # Use window.DATA (not bare `const DATA`) so the dashboard's app.js can
+    # read `window.DATA` — top-level `const` in a script tag does NOT attach
+    # to the window object.
+    embed = f"window.DATA = {_safe_json(payload)};"
     html = html.replace(INJECT_MARKER, embed)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html)
