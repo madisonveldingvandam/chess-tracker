@@ -18,7 +18,10 @@
   renderErrorLog(D.error_log);
   renderProcess(D.process_metrics);
   renderSessionDecay(D.process_metrics?.session_decay);
-  renderPlaySignatures(D.play_signatures);
+  renderColorBlock(D.play_signatures, "white",
+    "#white-signatures-table", "white-board", "white-board-meta", false);
+  renderColorBlock(D.play_signatures, "black",
+    "#black-signatures-table", "black-board", "black-board-meta", true);
   renderSessions(D.sessions);
   renderDrillinCards(D);
 
@@ -143,15 +146,15 @@
     });
   }
 
-  function renderPlaySignatures(rows) {
-    if (!document.getElementById("play-signatures-table")) return;
-    // Height ~matches the two-board stack (240+240) + labels + gap + meta
-    // detail block so the "Drill in" footer sits right under the L/R block.
-    const table = new Tabulator("#play-signatures-table", {
-      data: rows, layout: "fitColumns", height: "700px",
-      // Columns shrink to fit viewport at narrow widths; user can drag a
-      // column border to resize or double-click the border to auto-fit
-      // the column to its widest content.
+  // Renders a per-color repertoire block (table + single board panel). Called
+  // twice from the init block — once for white (no flip), once for black
+  // (board flipped so user's pieces are on the bottom). Each block has its
+  // own table id, board id, and meta id, so the two instances don't collide.
+  function renderColorBlock(allRows, color, tableSelector, boardId, metaId, flip) {
+    if (!document.querySelector(tableSelector)) return;
+    const rows = allRows.filter(r => r.color === color);
+    const table = new Tabulator(tableSelector, {
+      data: rows, layout: "fitColumns", height: "540px",
       resizableColumns: true,
       rowFormatter: row => {
         if (row.getData().low_confidence) row.getElement().classList.add("row-low-conf");
@@ -167,8 +170,6 @@
          formatter: c => c.getValue() || `<span class="ind-off">—</span>`},
         {title: "Opening", field: "display_name", headerFilter: "input", minWidth: 180},
         {title: "ECO", field: "eco", width: 70},
-        {title: "Color", field: "color", width: 80, headerFilter: "list",
-         headerFilterParams: {values: {"":"All", "white":"White", "black":"Black"}}},
         {title: "Games", field: "games", width: 80, sorter: "number"},
         {title: "Win%", field: "win_pct", width: 80, sorter: "number", formatter: winPctCell},
         {title: "Form", field: "form", width: 120, formatter: sparkline, headerSort: false},
@@ -178,27 +179,29 @@
         {column: "games", dir: "desc"},
       ],
     });
-    table.on("rowClick", (e, row) => selectSignatureRow(row));
+    table.on("rowClick", (e, row) => selectBlockRow(row, boardId, metaId, flip));
     table.on("tableBuilt", () => {
       const first = table.getRows()[0];
-      if (first) selectSignatureRow(first);
+      if (first) selectBlockRow(first, boardId, metaId, flip);
     });
   }
 
-  function selectSignatureRow(row) {
-    document.querySelectorAll(".tabulator-row.row-selected")
-      .forEach(el => el.classList.remove("row-selected"));
+  function selectBlockRow(row, boardId, metaId, flip) {
+    // Clear selection only within this block's table — not across both.
+    const tableEl = row.getElement().closest(".tabulator");
+    if (tableEl) {
+      tableEl.querySelectorAll(".tabulator-row.row-selected")
+        .forEach(el => el.classList.remove("row-selected"));
+    }
     row.getElement().classList.add("row-selected");
-    updateBoardPanel(row.getData());
+    updateBlockBoard(row.getData(), boardId, metaId, flip);
   }
 
-  function updateBoardPanel(data) {
-    const boardWhite = document.getElementById("board-white");
-    const boardBlack = document.getElementById("board-black");
-    const meta = document.getElementById("board-meta");
-    if (!boardWhite || !boardBlack || !meta) return;
-    boardWhite.innerHTML = boardSquaresHTML(data.play_signature, false);
-    boardBlack.innerHTML = boardSquaresHTML(data.play_signature, true);
+  function updateBlockBoard(data, boardId, metaId, flip) {
+    const board = document.getElementById(boardId);
+    const meta = document.getElementById(metaId);
+    if (!board || !meta) return;
+    board.innerHTML = boardSquaresHTML(data.play_signature, flip);
     const gap = data.rating_gap;
     const gapStr = gap == null ? "—" : (gap >= 0 ? "+" : "") + gap;
     const tagRow = data.tag ? `<div class="row"><span class="k">Tag</span><span class="v">${data.tag}</span></div>` : "";

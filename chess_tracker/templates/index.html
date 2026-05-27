@@ -10,22 +10,23 @@
 <body>
   <header id="kpi-strip"></header>
   <main>
-    <section id="signatures-section">
-      <h2>Repertoire <small>sortable · click a row to see the position</small></h2>
+    <section id="white-block">
+      <h2>White <small>click a row to see the position</small></h2>
       <div class="sig-split">
-        <div id="play-signatures-table"></div>
+        <div id="white-signatures-table"></div>
         <aside class="board-panel">
-          <div class="board-stack">
-            <div class="board-frame">
-              <div class="board-label">White's view</div>
-              <div class="board-large" id="board-white"></div>
-            </div>
-            <div class="board-frame">
-              <div class="board-label">Black's view</div>
-              <div class="board-large" id="board-black"></div>
-            </div>
-          </div>
-          <div class="board-meta" id="board-meta"></div>
+          <div class="board-large" id="white-board"></div>
+          <div class="board-meta" id="white-board-meta"></div>
+        </aside>
+      </div>
+    </section>
+    <section id="black-block">
+      <h2>Black <small>click a row to see the position</small></h2>
+      <div class="sig-split">
+        <div id="black-signatures-table"></div>
+        <aside class="board-panel">
+          <div class="board-large" id="black-board"></div>
+          <div class="board-meta" id="black-board-meta"></div>
         </aside>
       </div>
     </section>
