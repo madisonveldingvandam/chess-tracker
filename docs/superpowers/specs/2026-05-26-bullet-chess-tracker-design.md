@@ -151,8 +151,8 @@ Rule-based detection over the recent window. Each leak is a `{name, severity, ev
 
 | Leak | Trigger | Suggested action |
 |---|---|---|
-| Time burn in opening | mean(time on first 8 plies) > 8s in last 30 games | "Move 8 with ≥50s left; pre-pick first 6 moves before sit-down" |
-| Mid-session decay | win% in games 21+ within a session < win% in games 1–10 by ≥10pts | "Cap sessions at N games (computed below)" |
+| Time burn in opening | median(seconds spent on my first 8 moves) > 8s in last 30 games | "Move 8 with ≥50s left; pre-pick first 6 moves before sit-down" |
+| Mid-session decay | win% in games 21+ within a session < win% in games 1–5 by ≥10pts (matches existing session-decay buckets 1-5, 6-10, 11-20, 21+) | "Cap sessions at N games (computed below)" |
 | Flag-loss dominant | flag% of losses ≥ 60 in last 30 games | "Reserve at move 20 too low; try 1+1 to convert" |
 | Mate-loss dominant | mate% of losses ≥ 55 in last 30 games | "Middlegame tactics — file recurring patterns in error log" |
 | Tilt sessions | ≥1 session in last 24h with rating Δ ≤ -50 | "Stop-rule: leave the desk after -50 in 30 min" |

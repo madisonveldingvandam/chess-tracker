@@ -252,7 +252,7 @@ def detect_leaks(records: list[GameRecord]) -> list[dict]:
 
     pm = compute_process_metrics(window)
 
-    # Time burn in opening
+    # Time burn in opening. Spec says mean; we use median across games (robust to one slow think).
     if pm["opening_velocity_median"] is not None and pm["opening_velocity_median"] > 8.0:
         leaks.append({
             "name": "time_burn_opening",
@@ -281,7 +281,7 @@ def detect_leaks(records: list[GameRecord]) -> list[dict]:
                 "suggested_action": "Middlegame tactics — file recurring patterns in the error log.",
             })
 
-    # Mid-session decay
+    # Mid-session decay & tilt-session use full history; 30-game window starves the 21+ bucket.
     decay = compute_session_decay(records)
     by_bucket = {row["bucket"]: row for row in decay}
     early = by_bucket.get("1-5", {}).get("win_pct", 0.0)
