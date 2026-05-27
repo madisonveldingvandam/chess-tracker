@@ -338,14 +338,13 @@ def next_session_rule(records: list[GameRecord]) -> dict:
                 "stop_if_rating_drops": 50,
                 "narrative": "No data yet — start conservative."}
 
-    # Game cap: first session-position bucket where win% < 40
+    # Game cap: tied 1:1 to the post_peak_decay leak. End of peak bucket
+    # when fired; default 30 otherwise.
     decay = compute_session_decay(records)
-    cap = 30  # default
-    for row in decay:
-        if row["games"] >= 5 and row["win_pct"] < 40:
-            bucket = row["bucket"]
-            cap = {"1-5": 5, "6-10": 10, "11-20": 20, "21+": 30}[bucket]
-            break
+    fired, peak, _last = _post_peak_decay(decay)
+    cap = 30
+    if fired:
+        cap = {"1-5": 5, "6-10": 10, "11-20": 20}[peak["bucket"]]
 
     # Move-10 target: median my-clock at my_clocks[9] among wins, minus 5s
     wins = [r for r in records if _is_win(r.result)]

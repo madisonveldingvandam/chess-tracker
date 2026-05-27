@@ -264,6 +264,31 @@ def test_next_session_rule_has_three_fields_plus_narrative():
     assert isinstance(rule["narrative"], str) and len(rule["narrative"]) > 10
 
 
+def test_next_session_rule_caps_at_peak_bucket_end_when_decay_fires():
+    # Same fixture shape as the leak test: peak at 11-20, crash at 21+.
+    results = (
+        ["win"] * 2 + ["timeout"] * 3 +
+        ["win"] * 3 + ["timeout"] * 2 +
+        ["win"] * 8 + ["timeout"] * 2 +
+        ["win"] * 1 + ["timeout"] * 4
+    )
+    rule = next_session_rule(_session_with_results(results))
+    assert rule["game_cap"] == 20
+
+
+def test_next_session_rule_keeps_default_cap_when_no_decay():
+    # Monotonic increase: 1-5 (1W,4L), 6-10 (2W,3L), 11-20 (6W,4L), 21+ (4W,1L)
+    # Peak == last == 21+, no fire, cap should stay at 30.
+    results = (
+        ["win"] * 1 + ["timeout"] * 4 +
+        ["win"] * 2 + ["timeout"] * 3 +
+        ["win"] * 6 + ["timeout"] * 4 +
+        ["win"] * 4 + ["timeout"] * 1
+    )
+    rule = next_session_rule(_session_with_results(results))
+    assert rule["game_cap"] == 30
+
+
 from chess_tracker.pgn import GameRecord
 
 
