@@ -125,21 +125,44 @@ section h3 {
   cursor: pointer; font-weight: 600; font-size: 0.85rem;
 }
 
-/* Mini FEN board (play-signatures table cell) */
-.board {
+/* Play-signatures split layout: table on the left, sticky board on the right.
+ * Stacks vertically below 900px viewport. */
+.sig-split {
   display: grid;
-  grid-template-columns: repeat(8, 14px);
-  grid-auto-rows: 14px;
-  width: 112px; height: 112px;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 1.5rem;
+  align-items: start;
 }
-.board > div {
+.board-panel {
+  position: sticky;
+  top: 5rem;
+}
+.board-large {
+  display: grid;
+  grid-template-columns: repeat(8, 40px);
+  grid-auto-rows: 40px;
+  width: 320px; height: 320px;
+}
+.board-large > div {
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; line-height: 14px;
+  font-size: 30px; line-height: 40px;
   color: var(--piece-fg);
   user-select: none;
 }
-.board .light { background: var(--board-light); }
-.board .dark  { background: var(--board-dark); }
+.board-large .light { background: var(--board-light); }
+.board-large .dark  { background: var(--board-dark); }
+.board-meta {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+.board-meta .name { font-weight: 600; }
+.board-meta .stats { color: var(--muted); margin-top: 0.25rem; }
+.board-meta .empty { color: var(--muted); font-style: italic; }
+
+@media (max-width: 900px) {
+  .sig-split { grid-template-columns: minmax(0, 1fr); }
+  .board-panel { position: static; }
+}
 
 /* ===== Tabulator overrides (base CSS handles structure) =====
  * Base CSS sets white backgrounds and #333 text on .tabulator-table and
@@ -195,6 +218,12 @@ section h3 {
 .tabulator .tabulator-row.row-low-conf {
   opacity: 0.45;
 }
+.tabulator .tabulator-row.row-selected {
+  background-color: var(--accent-bg) !important;
+  box-shadow: inset 3px 0 0 var(--accent);
+  cursor: pointer;
+}
+.tabulator .tabulator-row { cursor: pointer; }
 .tabulator .tabulator-header-filter input {
   background: var(--bg);
   color: var(--text);

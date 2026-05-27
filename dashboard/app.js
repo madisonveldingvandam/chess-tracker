@@ -131,7 +131,7 @@
   }
 
   function renderPlaySignatures(rows) {
-    new Tabulator("#play-signatures-table", {
+    const table = new Tabulator("#play-signatures-table", {
       data: rows, layout: "fitDataStretch",
       rowFormatter: row => {
         if (row.getData().low_confidence) row.getElement().classList.add("row-low-conf");
@@ -142,8 +142,6 @@
            ? `<span class="ind-off">○</span>`
            : `<span class="ind-on">●</span>`,
          width: 60, sorter: (a,b)=> (a?1:0)-(b?1:0)},
-        {title: "Board@8", field: "play_signature", formatter: boardCell,
-         width: 136, headerSort: false},
         {title: "Opening", field: "display_name", widthGrow: 3, headerFilter: "input"},
         {title: "ECO", field: "eco", width: 70},
         {title: "Color", field: "color", width: 80, headerFilter: "list",
@@ -164,6 +162,29 @@
         {column: "games", dir: "desc"},
       ],
     });
+    table.on("rowClick", (e, row) => selectSignatureRow(row));
+    table.on("tableBuilt", () => {
+      const first = table.getRows()[0];
+      if (first) selectSignatureRow(first);
+    });
+  }
+
+  function selectSignatureRow(row) {
+    document.querySelectorAll(".tabulator-row.row-selected")
+      .forEach(el => el.classList.remove("row-selected"));
+    row.getElement().classList.add("row-selected");
+    updateBoardPanel(row.getData());
+  }
+
+  function updateBoardPanel(data) {
+    const board = document.getElementById("board-large");
+    const meta = document.getElementById("board-meta");
+    if (!board || !meta) return;
+    board.innerHTML = boardSquaresHTML(data.play_signature);
+    meta.innerHTML = `
+      <div class="name">${data.display_name}</div>
+      <div class="stats">${data.color} · N=${data.games} · ${data.win_pct}% win · ECO ${data.eco}</div>
+    `;
   }
 
   function renderSessions(rows) {
@@ -199,8 +220,9 @@
     K:"♔", Q:"♕", R:"♖", B:"♗", N:"♘", P:"♙",
     k:"♚", q:"♛", r:"♜", b:"♝", n:"♞", p:"♟︎",
   };
-  function boardCell(cell) {
-    const fen = cell.getValue();
+  // Returns just the 64 square <div>s for a FEN. Caller provides the wrapping
+  // grid element (e.g. #board-large) and styles its size via CSS.
+  function boardSquaresHTML(fen) {
     if (!fen) return "";
     const cells = [];
     let r = 0;
@@ -219,7 +241,7 @@
       }
       r++;
     }
-    return `<div class="board">${cells.join("")}</div>`;
+    return cells.join("");
   }
   function winPctCell(cell) {
     const v = cell.getValue();
