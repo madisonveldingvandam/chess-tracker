@@ -143,20 +143,16 @@
     });
   }
 
-  // Captured at table creation so selectSignatureRow can re-sync the table
-  // height after each click (the board-meta detail block changes height
-  // when a row has a Tag/Note row).
-  let signaturesTable = null;
-
   function renderPlaySignatures(rows) {
     if (!document.getElementById("play-signatures-table")) return;
-    // Initial height matches the board (320px) — syncTableHeightToPanel()
-    // grows it to match the full panel (board + meta + detail) once the
-    // first row is selected and the panel knows its real height.
+    // Height ~matches the board + meta + detail panel so the "Drill in"
+    // footer sits right under the L/R block. Slightly off if a row has
+    // both Tag and Note populated; close enough — a dynamic JS sync was
+    // tried and interacted badly with Tabulator's render lifecycle.
     // Trimmed to 7 essential columns so the table fits viewport width without
     // horizontal scrolling; deeper stats live in the board-meta panel.
     const table = new Tabulator("#play-signatures-table", {
-      data: rows, layout: "fitColumns", height: "320px",
+      data: rows, layout: "fitColumns", height: "540px",
       rowFormatter: row => {
         if (row.getData().low_confidence) row.getElement().classList.add("row-low-conf");
       },
@@ -184,7 +180,6 @@
       const first = table.getRows()[0];
       if (first) selectSignatureRow(first);
     });
-    signaturesTable = table;
   }
 
   function selectSignatureRow(row) {
@@ -192,16 +187,6 @@
       .forEach(el => el.classList.remove("row-selected"));
     row.getElement().classList.add("row-selected");
     updateBoardPanel(row.getData());
-    // Wait for the meta DOM to reflow with the new row's data, then resize
-    // the table to match the panel's full height (board + meta + detail).
-    requestAnimationFrame(syncTableHeightToPanel);
-  }
-
-  function syncTableHeightToPanel() {
-    if (!signaturesTable) return;
-    const panel = document.querySelector(".board-panel");
-    if (!panel) return;
-    signaturesTable.setHeight(Math.ceil(panel.getBoundingClientRect().height));
   }
 
   function updateBoardPanel(data) {
