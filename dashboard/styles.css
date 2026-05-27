@@ -162,8 +162,22 @@ section h3 {
   font-size: 0.85rem;
 }
 .board-meta .name { font-weight: 600; }
-.board-meta .stats { color: var(--muted); margin-top: 0.25rem; }
+.board-meta .stats { color: var(--muted); margin-top: 0.25rem; font-size: 0.75rem; }
 .board-meta .empty { color: var(--muted); font-style: italic; }
+.board-meta .detail {
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0 0;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+}
+.board-meta .detail .row {
+  display: flex; justify-content: space-between; gap: 0.5rem;
+}
+.board-meta .detail .k { color: var(--muted); }
+.board-meta .detail .v { font-variant-numeric: tabular-nums; }
 
 @media (max-width: 900px) {
   .sig-split { grid-template-columns: minmax(0, 1fr); }

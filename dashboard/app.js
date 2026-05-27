@@ -193,9 +193,24 @@
     const meta = document.getElementById("board-meta");
     if (!board || !meta) return;
     board.innerHTML = boardSquaresHTML(data.play_signature);
+    const gap = data.rating_gap;
+    const gapStr = gap == null ? "—" : (gap >= 0 ? "+" : "") + gap;
+    const tagRow = data.tag ? `<div class="row"><span class="k">Tag</span><span class="v">${data.tag}</span></div>` : "";
+    const noteRow = data.note ? `<div class="row"><span class="k">Note</span><span class="v">${data.note}</span></div>` : "";
     meta.innerHTML = `
       <div class="name">${data.display_name}</div>
-      <div class="stats">${data.color} · N=${data.games} · ${data.win_pct}% win · ECO ${data.eco}</div>
+      <div class="stats">${data.color} · ECO ${data.eco}</div>
+      <dl class="detail">
+        <div class="row"><span class="k">Games</span><span class="v">${data.games}</span></div>
+        <div class="row"><span class="k">Win</span><span class="v">${data.win_pct}%</span></div>
+        <div class="row"><span class="k">Flag</span><span class="v">${data.flag_pct}%</span></div>
+        <div class="row"><span class="k">Mate</span><span class="v">${data.mate_pct}%</span></div>
+        <div class="row"><span class="k">Median len</span><span class="v">${data.med_len}</span></div>
+        <div class="row"><span class="k">Avg opp</span><span class="v">${data.avg_opp_rating}</span></div>
+        <div class="row"><span class="k">Δ opp</span><span class="v">${gapStr}</span></div>
+        ${tagRow}
+        ${noteRow}
+      </dl>
     `;
   }
 
