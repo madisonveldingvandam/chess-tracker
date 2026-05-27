@@ -145,7 +145,7 @@ section h3 {
 }
 .board-large > div {
   display: flex; align-items: center; justify-content: center;
-  font-size: 30px; line-height: 40px;
+  font-size: 39px; line-height: 40px;   /* pieces 30% larger than the 30px default */
   user-select: none;
 }
 .board-large .light { background: var(--board-light); }
@@ -205,16 +205,27 @@ section h3 {
   background: transparent !important;
   border-bottom: 1px solid var(--border) !important;
   border-top: 0 !important;
-  color: var(--text);
+  color: var(--text) !important;
 }
 .tabulator .tabulator-header .tabulator-col {
   background: transparent !important;
   border-right: 0 !important;
+  color: var(--text) !important;
 }
 .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title {
-  color: var(--text);
+  color: var(--text) !important;
   font-size: 0.72rem; font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.05em;
+}
+/* Sort arrows render as CSS border-triangles in Tabulator's base; override
+ * the border-color to match the cream palette so they read as text-colored. */
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-sorter,
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-sorter .tabulator-arrow {
+  color: var(--text) !important;
+}
+.tabulator .tabulator-arrow {
+  border-bottom-color: var(--text) !important;
+  border-top-color: var(--text) !important;
 }
 .tabulator-row,
 .tabulator .tabulator-row,

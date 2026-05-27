@@ -169,6 +169,7 @@
         {title: "First moves", field: "first_moves", headerFilter: "input",
          minWidth: 240,
          formatter: c => c.getValue() || `<span class="ind-off">—</span>`},
+        {title: "Opening", field: "display_name", headerFilter: "input", minWidth: 180},
         {title: "ECO", field: "eco", width: 70},
         {title: "Color", field: "color", width: 80, headerFilter: "list",
          headerFilterParams: {values: {"":"All", "white":"White", "black":"Black"}}},
