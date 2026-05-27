@@ -17,7 +17,7 @@
   renderRecentLosses(D.recent_losses);
   renderErrorLog(D.error_log);
   renderProcess(D.process_metrics);
-  renderSessionDecay(D.process_metrics.session_decay);
+  renderSessionDecay(D.process_metrics?.session_decay);
   renderPlaySignatures(D.play_signatures);
   renderSessions(D.sessions);
   renderDrillinCards(D);
@@ -43,8 +43,8 @@
   }
 
   function renderLeaks(leaks) {
-    if (!document.getElementById("leak-list")) return;
     const root = document.getElementById("leak-list");
+    if (!root) return;
     if (!leaks || leaks.length === 0) {
       root.innerHTML = `<p style="color:var(--muted)">No leaks detected in the last 30 games.</p>`;
       return;
@@ -59,8 +59,8 @@
   }
 
   function renderRule(rule) {
-    if (!document.getElementById("next-rule")) return;
     const root = document.getElementById("next-rule");
+    if (!root) return;
     root.innerHTML = `
       <dl class="rule-block">
         <dt>Game cap</dt><dd>${rule.game_cap}</dd>
