@@ -61,14 +61,14 @@ CLOCK_RECORDS = [
 ]
 
 
-# Designed for outlasted-but-flagged test: I was ahead on time at every recorded
-# ply, then ran out anyway. Bad pacing hidden behind an OK position.
+# Designed for outlasted-but-flagged test: I was ahead on time in the opening,
+# burned hard mid-game, and ran out. Opp paced steadily and survives.
 _OUTLASTED_THEN_FLAG_MINE = [55.0, 50.0, 45.0, 35.0, 25.0, 15.0, 5.0, 0.0]
-_OPP_BEHIND_BUT_SAFE     = [50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0]
+_OPP_STEADY_PACER = [50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0]
 
 OUTLASTED_THEN_FLAG_RECORD = _r(
     1_700_011_000, "timeout", "win", "London System", side="white",
     fullmoves=8,
     my_clocks=_OUTLASTED_THEN_FLAG_MINE,
-    opp_clocks=_OPP_BEHIND_BUT_SAFE,
+    opp_clocks=_OPP_STEADY_PACER,
 )

@@ -113,17 +113,17 @@ def test_outlasted_but_flagged_excludes_timeouts_where_you_were_always_behind():
 
 
 def test_time_burn_delta_is_positive_when_slow_opening():
-    """Slow opener: 3s/move early, 1s/move late → delta ≈ +2.0."""
+    """Slow opener: 3s/move early, 1s/move late → delta = +2.0 exactly."""
     pm = compute_process_metrics([CLOCK_RECORDS[1]])
     assert pm["time_burn_delta"] is not None
-    assert pm["time_burn_delta"] > 1.5
+    assert abs(pm["time_burn_delta"] - 2.0) < 0.1
 
 
 def test_time_burn_delta_is_negative_when_fast_opening():
-    """Fast opener: 0.5s/move early, 1.5s/move late → delta ≈ -1.0."""
+    """Fast opener: 0.5s/move early, 1.5s/move late → delta = -1.0 exactly."""
     pm = compute_process_metrics([CLOCK_RECORDS[0]])
     assert pm["time_burn_delta"] is not None
-    assert pm["time_burn_delta"] < -0.5
+    assert abs(pm["time_burn_delta"] - (-1.0)) < 0.1
 
 
 def test_compute_session_decay_returns_buckets():
