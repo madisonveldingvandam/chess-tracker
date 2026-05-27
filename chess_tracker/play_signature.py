@@ -20,7 +20,7 @@ def play_signature(pgn_text: str) -> str | None:
     try:
         game = chess.pgn.read_game(StringIO(pgn_text))
     except Exception:
-        return None
+        return None  # any malformed PGN → no signature; never crash ingestion
     if game is None:
         return None
     board = game.board()

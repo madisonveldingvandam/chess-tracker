@@ -402,6 +402,8 @@ def compute_play_signatures(records: list[GameRecord]) -> list[dict]:
     out = []
     for (sig, color), recs in groups.items():
         recs = sorted(recs, key=lambda r: r.end_time)
+        # display_name ties break on earliest-end_time of the tied label
+        # (Counter.most_common is insertion-order on ties; recs is end_time-sorted).
         name_counts = Counter(r.opening for r in recs if r.opening)
         display_name = name_counts.most_common(1)[0][0] if name_counts else "Unnamed"
         n = len(recs)

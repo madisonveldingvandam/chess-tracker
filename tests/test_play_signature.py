@@ -1,4 +1,4 @@
-from chess_tracker.play_signature import play_signature, PLY_DEPTH
+from chess_tracker.play_signature import play_signature
 
 
 def test_play_signature_returns_string_for_long_enough_game():

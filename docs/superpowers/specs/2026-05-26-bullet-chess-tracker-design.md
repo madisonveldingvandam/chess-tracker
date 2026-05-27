@@ -224,6 +224,8 @@ Default sort: confidence DESC then games DESC. Rows with `low_confidence = true`
 
 Annotation lookup (per-opening tag/note from `annotations.json.openings`) is keyed on `display_name`, so existing notes the user has written against opening names still attach correctly. Games with fewer than 8 plies (rare — usually pre-move resignations) have `play_signature = null` and are excluded from this panel.
 
+**Known limitation:** if the same `play_signature` group has games under multiple ECO labels (e.g. 3 games labelled "London System" and 2 labelled "Queen's Pawn Opening Zukertort"), `display_name` resolves to the most common label only. An `annotations.json.openings` entry keyed on the *minority* label silently does not render against that signature's row. Workaround: rewrite the annotation key to match the majority label, or accept the trade-off until v1.1 adds a multi-label lookup.
+
 ### Sessions table (panel 6 — raw data)
 
 Session = consecutive games with no 10-min gap.

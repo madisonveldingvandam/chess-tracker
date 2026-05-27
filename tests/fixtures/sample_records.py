@@ -18,7 +18,9 @@ def _r(end_time, result, opp_result, opening, my_rating=500, opp_rating=500,
     )
 
 
-# Three sessions: clear boundaries (>10min gap)
+# Three sessions: clear boundaries (>10min gap).
+# play_signature values below are synthetic grouping keys, not real FENs;
+# compute_play_signatures only uses them as opaque group identifiers.
 RECORDS = [
     # Session 1: 3 games, 2W 1L, ratings 500→510
     _r(1_700_000_000, "win", "timeout", "London System", my_rating=500,
