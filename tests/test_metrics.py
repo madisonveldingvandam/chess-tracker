@@ -135,6 +135,93 @@ def test_compute_session_decay_returns_buckets():
         assert {"games", "win_pct", "flag_pct", "mate_pct"} <= set(row.keys())
 
 
+from chess_tracker.metrics import _post_peak_decay
+
+
+def _decay(rows):
+    """Build a decay-bucket list from terse (bucket, games, win_pct) triples."""
+    return [{"bucket": b, "games": g, "win_pct": w,
+             "flag_pct": 0.0, "mate_pct": 0.0} for b, g, w in rows]
+
+
+def test_post_peak_decay_fires_when_peak_crashes_to_last():
+    decay = _decay([
+        ("1-5",   5, 40.0),
+        ("6-10",  5, 50.0),
+        ("11-20", 10, 80.0),
+        ("21+",   5, 20.0),
+    ])
+    fired, peak, last = _post_peak_decay(decay)
+    assert fired is True
+    assert peak["bucket"] == "11-20"
+    assert last["bucket"] == "21+"
+
+
+def test_post_peak_decay_does_not_fire_on_monotonic_increase():
+    decay = _decay([
+        ("1-5",   5, 20.0),
+        ("6-10",  5, 40.0),
+        ("11-20", 5, 60.0),
+        ("21+",   5, 80.0),
+    ])
+    fired, _peak, _last = _post_peak_decay(decay)
+    assert fired is False
+
+
+def test_post_peak_decay_does_not_fire_when_drop_below_threshold():
+    decay = _decay([
+        ("1-5",   5, 60.0),
+        ("6-10",  5, 70.0),
+        ("11-20", 5, 80.0),
+        ("21+",   5, 75.0),  # peak=80, last=75, drop=5pp < 10pp
+    ])
+    fired, _peak, _last = _post_peak_decay(decay)
+    assert fired is False
+
+
+def test_post_peak_decay_excludes_peak_bucket_with_too_few_games():
+    # 11-20 would be the peak by win_pct, but has only 4 games -> ineligible.
+    # Eligible buckets: 1-5 (60%) and 21+ (20%). Peak=1-5, last=21+, drop=40pp.
+    decay = _decay([
+        ("1-5",   5, 60.0),
+        ("6-10",  4, 55.0),
+        ("11-20", 4, 95.0),  # ineligible
+        ("21+",   5, 20.0),
+    ])
+    fired, peak, last = _post_peak_decay(decay)
+    assert fired is True  # still fires, but with a different peak
+    assert peak["bucket"] == "1-5"
+    assert last["bucket"] == "21+"
+
+
+def test_post_peak_decay_does_not_fire_when_last_bucket_has_too_few_games():
+    # 21+ has only 4 games -> ineligible. With 1-5, 6-10, 11-20 all eligible
+    # at >=5 games and 11-20 having the highest win%, peak == last == 11-20
+    # -> no fire even though 21+ visibly crashed.
+    decay = _decay([
+        ("1-5",   5, 40.0),
+        ("6-10",  10, 60.0),
+        ("11-20", 10, 80.0),
+        ("21+",   4, 10.0),
+    ])
+    fired, _peak, _last = _post_peak_decay(decay)
+    assert fired is False
+
+
+def test_post_peak_decay_tie_break_picks_later_bucket():
+    # 6-10 and 11-20 tied at 70%. Tie-break: later (11-20) wins as peak.
+    decay = _decay([
+        ("1-5",   5, 40.0),
+        ("6-10",  5, 70.0),
+        ("11-20", 5, 70.0),
+        ("21+",   5, 30.0),
+    ])
+    fired, peak, last = _post_peak_decay(decay)
+    assert fired is True
+    assert peak["bucket"] == "11-20"
+    assert last["bucket"] == "21+"
+
+
 from chess_tracker.metrics import (
     detect_leaks, next_session_rule, recent_losses_with_suggestions
 )

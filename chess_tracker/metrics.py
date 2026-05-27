@@ -241,6 +241,27 @@ def compute_session_decay(records: list[GameRecord], gap_seconds: int = 600) -> 
     return [{"bucket": b, **_bucket_stats(recs)} for b, recs in groups.items()]
 
 
+def _post_peak_decay(decay: list[dict]) -> tuple[bool, dict | None, dict | None]:
+    """Detect peak-then-crash within session-position buckets.
+
+    Returns (fired, peak_row, last_row). Fires iff there are >=2 buckets with
+    games >= 5, the peak (highest win_pct, tie-broken by latest position) is
+    not the same bucket as `last` (highest-position eligible), and
+    peak.win_pct - last.win_pct >= 10.
+    """
+    bucket_order = {"1-5": 0, "6-10": 1, "11-20": 2, "21+": 3}
+    eligible = [row for row in decay if row.get("games", 0) >= 5]
+    if len(eligible) < 2:
+        return False, None, None
+    peak = max(eligible, key=lambda r: (r["win_pct"], bucket_order[r["bucket"]]))
+    last = max(eligible, key=lambda r: bucket_order[r["bucket"]])
+    if peak["bucket"] == last["bucket"]:
+        return False, peak, last
+    if peak["win_pct"] - last["win_pct"] >= 10:
+        return True, peak, last
+    return False, peak, last
+
+
 def detect_leaks(records: list[GameRecord]) -> list[dict]:
     """Rule-based leak detection over the recent window."""
     leaks = []
