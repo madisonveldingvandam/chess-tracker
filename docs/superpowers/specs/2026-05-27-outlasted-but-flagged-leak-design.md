@@ -5,7 +5,7 @@
 
 ## Motivation
 
-The `outlasted_but_flagged_count` field has lived in `process_metrics` since v1 ([chess_tracker/metrics.py:194-204](../../chess_tracker/metrics.py)) but only ever renders as a raw integer tile in the process-grid ([dashboard/app.js:127](../../dashboard/app.js)). It carries no severity, no interpretation, and no suggested action — the user sees "97" with no read on whether it matters.
+The `outlasted_but_flagged_count` field has lived in `process_metrics` since v1 (computed in `compute_process_metrics`, returned alongside the other reserve / velocity / time-burn fields) but only ever renders as a raw integer tile in the process-grid (the last `.process-card` inside `renderProcess()` in `dashboard/app.js`). It carries no severity, no interpretation, and no suggested action — the user sees "97" with no read on whether it matters.
 
 Against the real-data snapshot (586 bullet games):
 
@@ -16,13 +16,13 @@ That's a meaningful behavioral signal — winning-position-but-flag-loss is a di
 
 ## Algorithm — `outlasted_but_flagged` leak
 
-Inserted in `detect_leaks()` immediately after the `mate_loss_dominant` block (between [metrics.py:303 and metrics.py:305](../../chess_tracker/metrics.py)), inside the existing `if losses_recs:` branch so the window iteration is shared.
+Inserted in `detect_leaks()` immediately after the `mate_loss_dominant` block (i.e. after the `if mate_pct >= 55:` branch closes, before the `# Post-peak decay` comment), inside the existing `if losses_recs:` branch so the window iteration is shared.
 
 Inputs already available in the current `detect_leaks()` scope:
 
-- `window` — last 30 games (line 272)
-- `pm = compute_process_metrics(window)` (line 274) → `pm["outlasted_but_flagged_count"]`
-- `losses_recs` — losses in window (line 286)
+- `window` — last 30 games
+- `pm = compute_process_metrics(window)` → `pm["outlasted_but_flagged_count"]`
+- `losses_recs` — losses in window
 
 Compute one new local:
 
@@ -38,7 +38,7 @@ Rule:
 4. Else if `outlasted_pct >= 50` → fire `severity="warn"`.
 5. Else → no fire.
 
-Evidence string (server-constructed from numerics, safe to inline into HTML per the [app.js trust-boundary comment](../../dashboard/app.js)):
+Evidence string (server-constructed from numerics, safe to inline into HTML per the trust-boundary comment at the top of `dashboard/app.js`):
 
 ```
 {count} of {timeouts} timeout losses ({pct:.0f}%) had you ahead on the clock at some ply
@@ -54,9 +54,9 @@ Convert clock leads: simplify and trade in winning positions instead of grinding
 
 Zero template changes. The existing flow:
 
-1. `renderLeaks()` ([app.js:45](../../dashboard/app.js)) renders each leak as `.severity-{warn,critical}` — the new leak name uses the existing CSS rules.
-2. `renderDrillinCards()` ([app.js:251-256](../../dashboard/app.js)) selects the first `critical` leak (or first `warn`) as the headline; the new leak participates in that selection automatically.
-3. The existing `outlasted-but-flagged` process tile ([app.js:127](../../dashboard/app.js)) is **unchanged** — raw count stays for forensic reference.
+1. `renderLeaks()` in `dashboard/app.js` renders each leak as `.severity-{warn,critical}` — the new leak name uses the existing CSS rules.
+2. `renderDrillinCards()` in `dashboard/app.js` selects the first `critical` leak (or first `warn`) as the Leaks-card headline; the new leak participates in that selection automatically.
+3. The existing `Outlasted-but-flagged` `.process-card` tile inside `renderProcess()` is **unchanged** — raw count stays for forensic reference.
 
 Display-text humanization: `renderLeaks()` already does `L.name.replace(/_/g, " ")`, so `outlasted_but_flagged` will render as "outlasted but flagged". This is consistent with how `flag_loss_dominant` renders as "flag loss dominant". No additional copy work.
 
@@ -76,7 +76,7 @@ Display-text humanization: `renderLeaks()` already does `L.name.replace(/_/g, " 
 
 ## Testing
 
-Add to `tests/test_metrics.py` after `test_detect_leaks_includes_post_peak_decay_when_peak_crashes` (currently [tests/test_metrics.py:320](../../tests/test_metrics.py)). Reuse the existing fixture style.
+Add to `tests/test_metrics.py` after `test_detect_leaks_includes_post_peak_decay_when_peak_crashes`. Reuse the existing fixture style.
 
 Available fixture: `OUTLASTED_THEN_FLAG_RECORD` already exists in `tests/fixtures/sample_records.py` and produces one outlasted timeout. For varied counts, build small lists by hand using `GameRecord(...)` constructors with `my_clocks` / `opp_clocks` chosen so the per-ply comparison either triggers or doesn't.
 
@@ -91,14 +91,14 @@ Tests to add:
 Existing tests to leave alone:
 
 - `test_detect_leaks_returns_rows_with_required_fields` — shape check, unaffected.
-- `test_outlasted_but_flagged_*` (currently [tests/test_metrics.py:102, 108](../../tests/test_metrics.py)) — test the underlying metric, unchanged.
+- `test_outlasted_but_flagged_counts_a_timeout_where_you_were_ahead_at_some_ply` and `test_outlasted_but_flagged_excludes_timeouts_where_you_were_always_behind` — test the underlying metric, unchanged.
 
 Full suite must remain green (51 passing + 5 new tests = 56 expected).
 
 ## Files touched
 
-- `chess_tracker/metrics.py` — insert ~10 lines in `detect_leaks()` between lines 303 and 305.
-- `tests/test_metrics.py` — add 5 tests near line 337.
+- `chess_tracker/metrics.py` — insert ~10 lines in `detect_leaks()` between the `mate_loss_dominant` block and the `# Post-peak decay` comment.
+- `tests/test_metrics.py` — add 5 tests after `test_detect_leaks_includes_post_peak_decay_when_peak_crashes`.
 
 No other files in scope. Templates, app.js, styles.css, render.py, refresh.py, and the API layer are untouched.
 

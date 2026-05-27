@@ -51,7 +51,7 @@ if args.serve:
 3. `ThreadingHTTPServer(("127.0.0.1", args.port), RefreshHandler)` — threading so a slow refresh doesn't block parallel `GET styles.css` requests.
 4. Print `Serving http://127.0.0.1:{port}/dashboard/index.html — Ctrl-C to stop.` and `serve_forever()`.
 
-The current `main()` body is refactored: lines 31-58 become `_run_refresh(args)`. `main()` parses args, then either calls `_serve(args)` (if `--serve`) or `_run_refresh(args)` (default). This keeps the existing CLI behavior bit-for-bit and gives the POST handler one canonical call.
+The current `main()` body is refactored: everything after `args = ap.parse_args(argv)` — the fetch / parse / compute-metrics / render block — moves into `_run_refresh(args)`. `main()` parses args, then either calls `_serve(args)` (if `--serve`) or `_run_refresh(args)` (default). This keeps the existing CLI behavior bit-for-bit and gives the POST handler one canonical call.
 
 ### `--force` semantics
 
@@ -127,7 +127,8 @@ Add ~10 lines to `dashboard/styles.css`:
 
 ```css
 #refresh-btn {
-  /* match the muted-text palette from ced9f71 */
+  /* muted by default — uses the same --muted / --border tokens as KPI labels
+     so the button blends with the rest of the strip until interacted with. */
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--border);
@@ -137,7 +138,7 @@ Add ~10 lines to `dashboard/styles.css`:
   cursor: pointer;
   margin-left: auto;  /* push to far right of the strip */
 }
-#refresh-btn:hover:not(:disabled) { color: var(--fg); border-color: var(--fg); }
+#refresh-btn:hover:not(:disabled) { color: var(--text); border-color: var(--text); }
 #refresh-btn:disabled { cursor: wait; opacity: 0.6; }
 ```
 
