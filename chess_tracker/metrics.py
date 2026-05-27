@@ -302,16 +302,17 @@ def detect_leaks(records: list[GameRecord]) -> list[dict]:
                 "suggested_action": "Middlegame tactics — file recurring patterns in the error log.",
             })
 
-    # Mid-session decay & tilt-session use full history; 30-game window starves the 21+ bucket.
+    # Post-peak decay & tilt-session use full history; 30-game window starves the 21+ bucket.
     decay = compute_session_decay(records)
-    by_bucket = {row["bucket"]: row for row in decay}
-    early = by_bucket.get("1-5", {}).get("win_pct", 0.0)
-    late = by_bucket.get("21+", {}).get("win_pct", 0.0)
-    if early - late >= 10 and by_bucket.get("21+", {}).get("games", 0) >= 5:
+    fired, peak, last = _post_peak_decay(decay)
+    if fired:
         leaks.append({
-            "name": "mid_session_decay",
+            "name": "post_peak_decay",
             "severity": "warn",
-            "evidence": f"win% drops from {early:.0f}% in games 1-5 to {late:.0f}% after game 21",
+            "evidence": (
+                f"win% drops from {peak['win_pct']:.0f}% in games {peak['bucket']} "
+                f"to {last['win_pct']:.0f}% in games {last['bucket']}"
+            ),
             "suggested_action": "Cap sessions — see Next Session Rule.",
         })
 

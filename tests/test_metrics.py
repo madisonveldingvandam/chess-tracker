@@ -179,7 +179,7 @@ def test_post_peak_decay_does_not_fire_when_drop_below_threshold():
     assert fired is False
 
 
-def test_post_peak_decay_excludes_peak_bucket_with_too_few_games():
+def test_post_peak_decay_falls_back_to_alternate_peak_when_top_bucket_ineligible():
     # 11-20 would be the peak by win_pct, but has only 4 games -> ineligible.
     # Eligible buckets: 1-5 (60%) and 21+ (20%). Peak=1-5, last=21+, drop=40pp.
     decay = _decay([
@@ -192,6 +192,22 @@ def test_post_peak_decay_excludes_peak_bucket_with_too_few_games():
     assert fired is True  # still fires, but with a different peak
     assert peak["bucket"] == "1-5"
     assert last["bucket"] == "21+"
+
+
+def test_post_peak_decay_does_not_fire_when_only_one_bucket_eligible():
+    # Only 1-5 has >=5 games; the would-be peak (11-20) is ineligible at 4 games
+    # and 6-10 / 21+ are also short. With <2 eligible buckets the rule cannot
+    # fire even though 11-20 visibly outperforms 1-5.
+    decay = _decay([
+        ("1-5",   5, 40.0),
+        ("6-10",  4, 50.0),
+        ("11-20", 4, 95.0),
+        ("21+",   3, 20.0),
+    ])
+    fired, peak, last = _post_peak_decay(decay)
+    assert fired is False
+    assert peak is None
+    assert last is None
 
 
 def test_post_peak_decay_does_not_fire_when_last_bucket_has_too_few_games():
@@ -246,6 +262,53 @@ def test_next_session_rule_has_three_fields_plus_narrative():
     assert set(rule.keys()) == {"game_cap", "move_10_target_seconds",
                                  "stop_if_rating_drops", "narrative"}
     assert isinstance(rule["narrative"], str) and len(rule["narrative"]) > 10
+
+
+from chess_tracker.pgn import GameRecord
+
+
+def _session_with_results(results: list[str], start: int = 1_700_000_000) -> list[GameRecord]:
+    """Build a single-session GameRecord list from per-position results.
+
+    Games are spaced 60s apart so they all sit within a single session
+    under the default 600s gap. Clocks are stubs (not exercised by the
+    decay path).
+    """
+    out = []
+    for i, r in enumerate(results):
+        opp = "win" if r != "win" else "timeout"
+        out.append(GameRecord(
+            url=f"https://chess.com/game/{start + i * 60}",
+            end_time=start + i * 60,
+            time_class="bullet",
+            side="white",
+            my_rating=500, opp_rating=500,
+            result=r, opp_result=opp,
+            plies=20, fullmoves=10,
+            opening="Test", eco="A00",
+            my_clocks=[30.0], opp_clocks=[30.0],
+            play_signature=None,
+        ))
+    return out
+
+
+def test_detect_leaks_includes_post_peak_decay_when_peak_crashes():
+    # Session of 25 games shaped so 11-20 peaks at 80% and 21+ crashes to 20%.
+    # Positions:   1-5  (2W,3L), 6-10 (3W,2L), 11-20 (8W,2L), 21-25 (1W,4L)
+    results = (
+        ["win"] * 2 + ["timeout"] * 3 +
+        ["win"] * 3 + ["timeout"] * 2 +
+        ["win"] * 8 + ["timeout"] * 2 +
+        ["win"] * 1 + ["timeout"] * 4
+    )
+    leaks = detect_leaks(_session_with_results(results))
+    names = [l["name"] for l in leaks]
+    assert "post_peak_decay" in names
+    assert "mid_session_decay" not in names  # renamed
+    leak = next(l for l in leaks if l["name"] == "post_peak_decay")
+    assert leak["severity"] == "warn"
+    assert "11-20" in leak["evidence"]
+    assert "21+" in leak["evidence"]
 
 
 def test_recent_losses_includes_suggested_entry():
