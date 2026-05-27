@@ -189,11 +189,21 @@ section h3 {
  * each .tabulator-row; we have to override at every level the white can
  * bleed through, including hover and selectable variants.
  */
+
+/* Nuclear text color: every descendant inside a tabulator uses --text.
+ * Tabulator's base CSS sprinkles #555/#666/#333 on many nested elements
+ * (cells, headers, sorters, footers, filter inputs); this catch-all
+ * sweeps them in one rule. Borders / backgrounds / bar fills still use
+ * their own properties so they're untouched. */
+.tabulator,
+.tabulator * {
+  color: var(--text) !important;
+}
+
 .tabulator {
   background: transparent !important;
   border: 0 !important;
   font-size: 0.85rem;
-  color: var(--text);
 }
 .tabulator .tabulator-tableholder,
 .tabulator .tabulator-tableholder .tabulator-table {
@@ -214,8 +224,10 @@ section h3 {
 }
 .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title {
   color: var(--text) !important;
-  font-size: 0.72rem; font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.05em;
+  font-size: 0.85rem; font-weight: 500;
+  /* Headers in normal case (no uppercase transform). Full spelling lives
+   * in the column titles themselves; only chess-specific abbreviations
+   * (e.g. "ECO") stay uppercase as conventional. */
 }
 /* Sort arrows render as CSS border-triangles in Tabulator's base; override
  * the border-color to match the cream palette so they read as text-colored. */
