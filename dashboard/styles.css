@@ -5,11 +5,11 @@
 :root {
   --bg: #262624;
   --surface: #2d2d2a;
-  --accent-bg: #353532;       /* was #332e26 warm-tan tint; now neutral lift over --surface */
+  --accent-bg: #2e3a2a;       /* sage-tinted dark for accent backgrounds (selected row, card hover) */
   --text: #f0eee6;            /* primary cream */
   --muted: #b8b8b0;           /* lightened from #8a8a82 for readability */
   --border: #3a3a37;
-  --accent: #ffffff;          /* was warm tan #c9a574; now pure white */
+  --accent: #7d9b6e;          /* muted sage — chess-felt warm, harmonizes with the warm-dark base */
   --board-light: #c0c0b6;     /* was warm tan #d8c9a8; now warm gray */
   --board-dark: #5a5852;
   --piece-fg: #111111;
@@ -37,7 +37,7 @@ header#kpi-strip {
   text-transform: uppercase; letter-spacing: 0.05em;
 }
 .kpi-value { font-size: 1.5rem; font-weight: 400; margin-top: 0.2rem; }
-.kpi-value.accent { color: var(--text); }
+.kpi-value.accent { color: var(--accent); }
 
 main { padding: 1.5rem 2rem; }
 section { margin-bottom: 2.5rem; }
