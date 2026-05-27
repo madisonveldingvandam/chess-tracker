@@ -239,3 +239,149 @@ def compute_session_decay(records: list[GameRecord], gap_seconds: int = 600) -> 
     """Win/flag/mate stats bucketed by position within session."""
     groups = _session_position_groups(records, gap_seconds)
     return [{"bucket": b, **_bucket_stats(recs)} for b, recs in groups.items()]
+
+
+def detect_leaks(records: list[GameRecord]) -> list[dict]:
+    """Rule-based leak detection over the recent window."""
+    leaks = []
+    if not records:
+        return leaks
+    # Window: last 30 games (or all if fewer)
+    ordered = sorted(records, key=lambda r: r.end_time)
+    window = ordered[-30:]
+
+    pm = compute_process_metrics(window)
+
+    # Time burn in opening
+    if pm["opening_velocity_median"] is not None and pm["opening_velocity_median"] > 8.0:
+        leaks.append({
+            "name": "time_burn_opening",
+            "severity": "critical" if pm["opening_velocity_median"] > 15 else "warn",
+            "evidence": f"median {pm['opening_velocity_median']}s on my first 8 moves (target <8s)",
+            "suggested_action": "Move 8 with ≥50s left; pre-pick first 6 moves before sit-down.",
+        })
+
+    # Flag-loss dominant
+    losses_recs = [r for r in window if _is_loss(r.result)]
+    if losses_recs:
+        flag_pct = 100 * sum(1 for r in losses_recs if r.result == "timeout") / len(losses_recs)
+        mate_pct = 100 * sum(1 for r in losses_recs if r.result == "checkmated") / len(losses_recs)
+        if flag_pct >= 60:
+            leaks.append({
+                "name": "flag_loss_dominant",
+                "severity": "warn",
+                "evidence": f"{flag_pct:.0f}% of losses are timeouts in the last {len(window)} games",
+                "suggested_action": "Reserve at move 20 too low; try 1+1 format to convert wins.",
+            })
+        if mate_pct >= 55:
+            leaks.append({
+                "name": "mate_loss_dominant",
+                "severity": "warn",
+                "evidence": f"{mate_pct:.0f}% of losses are checkmates in the last {len(window)} games",
+                "suggested_action": "Middlegame tactics — file recurring patterns in the error log.",
+            })
+
+    # Mid-session decay
+    decay = compute_session_decay(records)
+    by_bucket = {row["bucket"]: row for row in decay}
+    early = by_bucket.get("1-5", {}).get("win_pct", 0.0)
+    late = by_bucket.get("21+", {}).get("win_pct", 0.0)
+    if early - late >= 10 and by_bucket.get("21+", {}).get("games", 0) >= 5:
+        leaks.append({
+            "name": "mid_session_decay",
+            "severity": "warn",
+            "evidence": f"win% drops from {early:.0f}% in games 1-5 to {late:.0f}% after game 21",
+            "suggested_action": "Cap sessions — see Next Session Rule.",
+        })
+
+    # Tilt sessions in last 24h
+    sessions = compute_sessions(records)
+    now_seen = max(r.end_time for r in records)
+    recent = [s for s in sessions if (now_seen - int(datetime.fromisoformat(s["start"]).timestamp())) < 86400]
+    if any(s["tilt_flag"] for s in recent):
+        leaks.append({
+            "name": "tilt_session",
+            "severity": "critical",
+            "evidence": f"{sum(1 for s in recent if s['tilt_flag'])} session(s) lost ≥50 rating in last 24h",
+            "suggested_action": "Stop-rule: leave the desk after -50 in 30 min.",
+        })
+
+    return leaks
+
+
+def next_session_rule(records: list[GameRecord]) -> dict:
+    """Generate concrete next-session recommendation."""
+    if not records:
+        return {"game_cap": 20, "move_10_target_seconds": 45,
+                "stop_if_rating_drops": 50,
+                "narrative": "No data yet — start conservative."}
+
+    # Game cap: first session-position bucket where win% < 40
+    decay = compute_session_decay(records)
+    cap = 30  # default
+    for row in decay:
+        if row["games"] >= 5 and row["win_pct"] < 40:
+            bucket = row["bucket"]
+            cap = {"1-5": 5, "6-10": 10, "11-20": 20, "21+": 30}[bucket]
+            break
+
+    # Move-10 target: median my-clock at my_clocks[9] among wins, minus 5s
+    wins = [r for r in records if _is_win(r.result)]
+    win_reserves = [c for r in wins if (c := _ply_clock(r.my_clocks, 9)) is not None]
+    target = round(statistics.median(win_reserves) - 5, 0) if win_reserves else 45
+
+    narrative = (
+        f"Cap at {cap} games. Aim for {target}s left at move 10. "
+        f"Stop if rating drops 50 in a session."
+    )
+
+    return {
+        "game_cap": cap,
+        "move_10_target_seconds": int(target),
+        "stop_if_rating_drops": 50,
+        "narrative": narrative,
+    }
+
+
+def recent_losses_with_suggestions(records: list[GameRecord], limit: int = 20) -> list[dict]:
+    """Recent losses with auto-generated error_log starter entries."""
+    losses = sorted(
+        [r for r in records if _is_loss(r.result)],
+        key=lambda r: r.end_time,
+        reverse=True,
+    )[:limit]
+
+    out = []
+    for r in losses:
+        final_clk = r.my_clocks[-1] if r.my_clocks else None
+        if r.result == "timeout":
+            title = f"Flagged at move {r.fullmoves} in {r.opening or 'unknown'}"
+            pattern = (
+                f"Ran out of time at move {r.fullmoves}. "
+                f"Final clock {final_clk}s. Opponent rating {r.opp_rating}."
+            )
+        elif r.result == "checkmated":
+            title = f"Mated by move {r.fullmoves} in {r.opening or 'unknown'}"
+            pattern = (
+                f"Checkmated at move {r.fullmoves} with {final_clk}s on clock. "
+                f"Opponent rating {r.opp_rating}."
+            )
+        else:
+            title = f"Lost ({r.result}) in {r.opening or 'unknown'}"
+            pattern = f"Result {r.result} at move {r.fullmoves}."
+
+        out.append({
+            "game_url": r.url,
+            "opening": r.opening,
+            "eco": r.eco,
+            "loss_type": r.result,
+            "final_clock": final_clk,
+            "moves": r.fullmoves,
+            "opp_rating_diff": r.opp_rating - r.my_rating,
+            "suggested_entry": {
+                "title": title,
+                "pattern": pattern,
+                "game_refs": [r.url],
+            },
+        })
+    return out

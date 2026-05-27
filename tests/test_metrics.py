@@ -133,3 +133,39 @@ def test_compute_session_decay_returns_buckets():
     # Each row has the same keys as a generic stats row
     for row in decay:
         assert {"games", "win_pct", "flag_pct", "mate_pct"} <= set(row.keys())
+
+
+from chess_tracker.metrics import (
+    detect_leaks, next_session_rule, recent_losses_with_suggestions
+)
+
+
+def test_detect_leaks_returns_rows_with_required_fields():
+    leaks = detect_leaks(RECORDS + CLOCK_RECORDS)
+    for leak in leaks:
+        assert set(leak.keys()) >= {"name", "severity", "evidence", "suggested_action"}
+        assert leak["severity"] in ("info", "warn", "critical")
+
+
+def test_detect_leaks_flags_slow_opening_when_velocity_high():
+    # CLOCK_RECORDS has slow openers spending 24s on first 8 of-my-moves
+    leaks = detect_leaks([CLOCK_RECORDS[1]])
+    names = [l["name"] for l in leaks]
+    assert "time_burn_opening" in names
+
+
+def test_next_session_rule_has_three_fields_plus_narrative():
+    rule = next_session_rule(RECORDS + CLOCK_RECORDS)
+    assert set(rule.keys()) == {"game_cap", "move_10_target_seconds",
+                                 "stop_if_rating_drops", "narrative"}
+    assert isinstance(rule["narrative"], str) and len(rule["narrative"]) > 10
+
+
+def test_recent_losses_includes_suggested_entry():
+    losses = recent_losses_with_suggestions(RECORDS, limit=10)
+    for L in losses:
+        assert "game_url" in L
+        assert "loss_type" in L
+        assert "suggested_entry" in L
+        # Suggested entry is a dict that maps onto annotations.json error_log shape
+        assert {"title", "pattern", "game_refs"} <= set(L["suggested_entry"].keys())
