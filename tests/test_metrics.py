@@ -374,6 +374,17 @@ def test_compute_all_play_signatures_has_low_confidence_flag():
         assert row["low_confidence"] == (row["games"] < 15)
 
 
+def test_compute_all_play_signatures_has_first_moves_field():
+    annotations = {"openings": {}, "games": {}, "error_log": []}
+    payload = compute_all(RECORDS, annotations, username="m_v-v")
+    for row in payload["play_signatures"]:
+        assert "first_moves" in row
+        # Fixture records don't set first_moves so it should be None here;
+        # the test asserts the *field* is present (real ingestion populates it
+        # from PGN via pgn.parse_game → play_signature.first_moves_san).
+        assert row["first_moves"] is None
+
+
 def test_compute_all_merges_opening_annotations():
     annotations = {
         "openings": {"London System": {"tag": "in_repertoire", "note": "main d4"}},

@@ -153,6 +153,10 @@
     // horizontal scrolling; deeper stats live in the board-meta panel.
     const table = new Tabulator("#play-signatures-table", {
       data: rows, layout: "fitColumns", height: "540px",
+      // Columns shrink to fit viewport at narrow widths; user can drag a
+      // column border to resize or double-click the border to auto-fit
+      // the column to its widest content.
+      resizableColumns: true,
       rowFormatter: row => {
         if (row.getData().low_confidence) row.getElement().classList.add("row-low-conf");
       },
@@ -162,7 +166,9 @@
            ? `<span class="ind-off">○</span>`
            : `<span class="ind-on">●</span>`,
          width: 60, sorter: (a,b)=> (a?1:0)-(b?1:0)},
-        {title: "Opening", field: "display_name", headerFilter: "input"},
+        {title: "First moves", field: "first_moves", headerFilter: "input",
+         minWidth: 240,
+         formatter: c => c.getValue() || `<span class="ind-off">—</span>`},
         {title: "ECO", field: "eco", width: 70},
         {title: "Color", field: "color", width: 80, headerFilter: "list",
          headerFilterParams: {values: {"":"All", "white":"White", "black":"Black"}}},

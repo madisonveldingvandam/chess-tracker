@@ -439,8 +439,12 @@ def compute_play_signatures(records: list[GameRecord]) -> list[dict]:
         rating_gap = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
         eco_counts = Counter(r.eco for r in recs if r.eco)
         eco_top = eco_counts.most_common(1)[0][0] if eco_counts else None
+        # Representative move sequence: first game's SAN (records are
+        # sorted by end_time, so this is the earliest-played bucket entry).
+        first_moves = next((r.first_moves for r in recs if r.first_moves), None)
         out.append({
             "play_signature": sig,
+            "first_moves": first_moves,
             "display_name": display_name,
             "color": color,
             "eco": eco_top,
