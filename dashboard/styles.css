@@ -111,7 +111,7 @@ section h3 {
 /* Cell formatting */
 .cell-strong { color: var(--text); font-weight: 400; }
 .cell-weak { /* spec: no color on weak cells */ }
-.row-low-conf { opacity: 0.45; }
+.row-low-conf { /* opacity dim removed — Confidence column glyph carries the signal */ }
 
 /* Confidence / tilt indicator glyphs */
 .ind-on  { color: var(--text); }
