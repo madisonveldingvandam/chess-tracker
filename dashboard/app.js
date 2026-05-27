@@ -160,15 +160,10 @@
         if (row.getData().low_confidence) row.getElement().classList.add("row-low-conf");
       },
       columns: [
-        {title: "Confidence", field: "low_confidence",
-         formatter: c => c.getValue()
-           ? `<span class="ind-off">○</span>`
-           : `<span class="ind-on">●</span>`,
-         width: 110, sorter: (a,b)=> (a?1:0)-(b?1:0)},
+        {title: "Opening", field: "display_name", headerFilter: "input", minWidth: 200},
         {title: "First moves", field: "first_moves", headerFilter: "input",
          minWidth: 240,
          formatter: c => c.getValue() || `<span class="ind-off">—</span>`},
-        {title: "Opening", field: "display_name", headerFilter: "input", minWidth: 180},
         {title: "ECO", field: "eco", width: 70},
         {title: "Games", field: "games", width: 80, sorter: "number"},
         {title: "Win%", field: "win_pct", width: 80, sorter: "number", formatter: winPctCell},
