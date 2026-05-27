@@ -190,14 +190,16 @@ section h3 {
  * bleed through, including hover and selectable variants.
  */
 
-/* Nuclear text color: every descendant inside a tabulator uses --text.
- * Tabulator's base CSS sprinkles #555/#666/#333 on many nested elements
- * (cells, headers, sorters, footers, filter inputs); this catch-all
+/* Nuclear text color + opacity: every descendant inside a tabulator uses
+ * --text at full opacity. Tabulator's base CSS sprinkles #555/#666/#333
+ * AND various opacity: .5/.6/.7 rules across nested elements (cells,
+ * headers, sort-arrow holders, footers, filter inputs); this catch-all
  * sweeps them in one rule. Borders / backgrounds / bar fills still use
  * their own properties so they're untouched. */
 .tabulator,
 .tabulator * {
   color: var(--text) !important;
+  opacity: 1 !important;
 }
 
 .tabulator {
