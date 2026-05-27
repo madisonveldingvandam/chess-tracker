@@ -258,9 +258,10 @@ section h3 {
   color: var(--text) !important;
   padding: 0.6rem 0.75rem;
 }
-.tabulator .tabulator-row.row-low-conf {
-  opacity: 0.45;
-}
+/* Low-confidence rows were dimmed to opacity 0.45 — but with the new
+ * filtered-by-color tables most rows have games<15 and the wholesale
+ * dimming made the entire table look "another color". The Confidence
+ * column's ●/○ glyph already carries the signal; no opacity needed. */
 .tabulator .tabulator-row.row-selected {
   background-color: var(--accent-bg) !important;
   box-shadow: inset 3px 0 0 var(--accent);
