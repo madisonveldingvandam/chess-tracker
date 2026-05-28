@@ -441,6 +441,8 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
         rating_gap = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
         eco_counts = Counter(r.eco for r in recs if r.eco)
         eco_top = eco_counts.most_common(1)[0][0] if eco_counts else None
+        sig_counts = Counter(r.play_signature for r in recs if r.play_signature)
+        canonical_sig = sig_counts.most_common(1)[0][0] if sig_counts else None
         out.append({
             "family": family,
             "color": color,
@@ -456,6 +458,7 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
             "avg_opp_rating": int(avg_opp),
             "rating_gap": int(rating_gap),
             "variation_count": len(sig_keys.get((family, color), set())),
+            "canonical_play_signature": canonical_sig,
             "form": [_result_letter(r) for r in recs[-10:]],
         })
     out.sort(key=lambda x: (-x["games"], -x["win_pct"]))

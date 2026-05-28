@@ -178,6 +178,17 @@ section h3 {
 }
 .board-meta .detail .k { color: var(--text); }
 .board-meta .detail .v { font-variant-numeric: tabular-nums; }
+.board-meta .drill-link {
+  display: inline-block;
+  margin-top: 0.6rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+.board-meta .drill-link:hover { color: var(--text); border-color: var(--text); }
 
 @media (max-width: 900px) {
   .sig-split { grid-template-columns: minmax(0, 1fr); }

@@ -435,6 +435,9 @@ def test_opening_families_aggregates_across_play_signatures():
     assert qp_white["games"] == 3
     assert qp_white["variation_count"] == 2  # sig-A and sig-B
     assert qp_black["games"] == 1
+    # canonical_play_signature = most-frequent play_signature in the group;
+    # sig-A appears 2x vs sig-B's 1x → sig-A wins
+    assert qp_white["canonical_play_signature"] == "sig-A"
 
 
 def test_opening_variations_collapses_transpositions_into_one_row():

@@ -18,8 +18,10 @@
   renderErrorLog(D.error_log);
   renderProcess(D.process_metrics);
   renderSessionDecay(D.process_metrics?.session_decay);
-  renderFamilyBlock(D.opening_families, "white", "#white-families-table");
-  renderFamilyBlock(D.opening_families, "black", "#black-families-table");
+  renderFamilyBlock(D.opening_families, "white",
+    "#white-families-table", "white-board", "white-board-meta", false);
+  renderFamilyBlock(D.opening_families, "black",
+    "#black-families-table", "black-board", "black-board-meta", true);
   renderOpeningDetail(D);
   renderSessions(D.sessions);
   renderDrillinCards(D);
@@ -145,16 +147,17 @@
     });
   }
 
-  // Tier-1 family table on index.html. One row per (family, color); click a
-  // row to navigate to opening.html?family=...&color=... (the tier-2/3 view).
-  // No board panel here — boards live on the detail page.
-  function renderFamilyBlock(families, color, tableSelector) {
+  // Tier-1 family block on index.html — table + board panel. One row per
+  // (family, color). Click row to update the board to the family's canonical
+  // (most-played) position. Double-click row, or click "→ View variations"
+  // in the meta panel, to drill into opening.html.
+  function renderFamilyBlock(families, color, tableSelector, boardId, metaId, flip) {
     if (!document.querySelector(tableSelector)) return;
     const rows = (families || []).filter(r => r.color === color);
     const table = new Tabulator(tableSelector, {
-      data: rows, layout: "fitColumns",
+      data: rows, layout: "fitColumns", height: "540px",
       columns: [
-        {title: "Opening", field: "family", headerFilter: "input", minWidth: 200},
+        {title: "Opening", field: "family", headerFilter: "input", minWidth: 180},
         {title: "Games", field: "games", width: 80, sorter: "number"},
         {title: "Win%", field: "win_pct", width: 80, sorter: "number", formatter: winPctCell},
         {title: "Flag%", field: "flag_pct", width: 80, sorter: "number"},
@@ -164,11 +167,51 @@
       ],
       initialSort: [{column: "games", dir: "desc"}],
     });
-    table.on("rowClick", (e, row) => {
-      const d = row.getData();
-      const qs = `family=${encodeURIComponent(d.family)}&color=${encodeURIComponent(d.color)}`;
-      window.location.href = `opening.html?${qs}`;
+    table.on("rowClick", (e, row) => selectFamilyRow(row, boardId, metaId, flip));
+    table.on("rowDblClick", (e, row) => drillIntoFamily(row.getData()));
+    table.on("tableBuilt", () => {
+      const first = table.getRows()[0];
+      if (first) selectFamilyRow(first, boardId, metaId, flip);
     });
+  }
+
+  function selectFamilyRow(row, boardId, metaId, flip) {
+    const tableEl = row.getElement().closest(".tabulator");
+    if (tableEl) {
+      tableEl.querySelectorAll(".tabulator-row.row-selected")
+        .forEach(el => el.classList.remove("row-selected"));
+    }
+    row.getElement().classList.add("row-selected");
+    updateFamilyBoard(row.getData(), boardId, metaId, flip);
+  }
+
+  function drillIntoFamily(d) {
+    const qs = `family=${encodeURIComponent(d.family)}&color=${encodeURIComponent(d.color)}`;
+    window.location.href = `opening.html?${qs}`;
+  }
+
+  function updateFamilyBoard(data, boardId, metaId, flip) {
+    const board = document.getElementById(boardId);
+    const meta = document.getElementById(metaId);
+    if (!board || !meta) return;
+    board.innerHTML = boardSquaresHTML(data.canonical_play_signature, flip);
+    const gap = data.rating_gap;
+    const gapStr = gap == null ? "—" : (gap >= 0 ? "+" : "") + gap;
+    const qs = `family=${encodeURIComponent(data.family)}&color=${encodeURIComponent(data.color)}`;
+    meta.innerHTML = `
+      <div class="name">${data.family}</div>
+      <div class="stats">${data.color} · ECO ${data.eco} · ${data.variation_count} variation${data.variation_count === 1 ? "" : "s"}</div>
+      <dl class="detail">
+        <div class="row"><span class="k">Games</span><span class="v">${data.games}</span></div>
+        <div class="row"><span class="k">Win</span><span class="v">${data.win_pct}%</span></div>
+        <div class="row"><span class="k">Flag</span><span class="v">${data.flag_pct}%</span></div>
+        <div class="row"><span class="k">Mate</span><span class="v">${data.mate_pct}%</span></div>
+        <div class="row"><span class="k">Median len</span><span class="v">${data.med_len}</span></div>
+        <div class="row"><span class="k">Avg opp</span><span class="v">${data.avg_opp_rating}</span></div>
+        <div class="row"><span class="k">Δ opp</span><span class="v">${gapStr}</span></div>
+      </dl>
+      <a class="drill-link" href="opening.html?${qs}">→ View ${data.variation_count} variation${data.variation_count === 1 ? "" : "s"}</a>
+    `;
   }
 
   // Tier-2 view on opening.html — one row per unique named variation within
