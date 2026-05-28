@@ -4,7 +4,7 @@ from datetime import datetime
 import statistics
 from chess_tracker.pgn import GameRecord, opening_family, opening_variation
 from chess_tracker.enrich import enrich_with_deltas, enrich_with_sessions
-from chess_tracker.behavior import compute_loss_streaks
+from chess_tracker.behavior import compute_loss_streaks, compute_revenge_gap
 
 
 _DRAW_RESULTS = {"agreed", "repetition", "stalemate", "insufficient",
@@ -633,6 +633,7 @@ def compute_all(records: list[GameRecord], annotations: dict,
         "sessions": compute_sessions(records),
         "behavior": {
             "loss_streaks": compute_loss_streaks(records),
+            "revenge_gap": compute_revenge_gap(records),
         },
         "error_log": annotations.get("error_log", []),
     }
