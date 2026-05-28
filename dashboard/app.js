@@ -16,6 +16,7 @@
   renderLeaks(D.leak_summary);
   renderRule(D.next_session_rule);
   renderRecentLosses(D.recent_losses);
+  renderLossSummary(D);
   renderErrorLog(D.error_log);
   renderProcess(D.process_metrics);
   renderSessionDecay(D.process_metrics?.session_decay);
@@ -486,6 +487,50 @@
       todWorst && todWorst.mean_session_delta <= -20
     ));
     root.innerHTML = cards.join("");
+  }
+
+  function renderLossSummary(D) {
+    const root = document.getElementById("loss-summary-cards");
+    const bucketsRoot = document.getElementById("mate-buckets");
+    if (!root) return;
+    const losses = D.recent_losses || [];
+    if (losses.length === 0) {
+      root.innerHTML = `<p style="color:var(--muted)">No losses in window.</p>`;
+      if (bucketsRoot) bucketsRoot.innerHTML = "";
+      return;
+    }
+    const byType = {};
+    losses.forEach(L => { byType[L.loss_type] = (byType[L.loss_type] || 0) + 1; });
+    const pct = (n) => `${Math.round(100 * n / losses.length)}%`;
+    const cell = (label, value, sub) =>
+      `<div class="behavior-card">
+         <div class="bh-label">${label}</div>
+         <div class="bh-value">${value}</div>
+         <div class="bh-sub">${sub}</div>
+       </div>`;
+    root.innerHTML = [
+      cell("Losses in window", String(losses.length), ""),
+      cell("Timeouts", `${byType.timeout || 0}`, pct(byType.timeout || 0)),
+      cell("Mates", `${byType.checkmated || 0}`, pct(byType.checkmated || 0)),
+      cell("Abandoned", `${byType.abandoned || 0}`, pct(byType.abandoned || 0)),
+    ].join("");
+
+    if (bucketsRoot) {
+      const mb = (D.behavior && D.behavior.mate_loss_buckets) || [];
+      if (mb.length === 0) {
+        bucketsRoot.innerHTML = `<p style="color:var(--muted)">No mate losses yet.</p>`;
+      } else {
+        new Tabulator("#mate-buckets", {
+          data: mb, layout: "fitColumns",
+          columns: [
+            {title: "Side", field: "side"},
+            {title: "Length", field: "bucket"},
+            {title: "Count", field: "count", sorter: "number"},
+          ],
+          initialSort: [{column: "count", dir: "desc"}],
+        });
+      }
+    }
   }
 
   function winPctCell(cell) {
