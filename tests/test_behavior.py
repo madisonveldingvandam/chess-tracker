@@ -1,6 +1,6 @@
 """Tests for the behavioral-signals layer."""
 from chess_tracker.pgn import GameRecord
-from chess_tracker.behavior import compute_loss_streaks, compute_revenge_gap
+from chess_tracker.behavior import compute_loss_streaks, compute_revenge_gap, compute_daily_drawdown
 
 
 def _mk(t, result):
@@ -66,3 +66,30 @@ def test_revenge_gap_handles_too_few_games():
     assert out["games_after_win"] == 0
     assert out["games_after_loss"] == 0
     assert out["revenge_gap"] is None
+
+
+def test_daily_drawdown_tracks_max_intraday_slide():
+    # All on the same local date (UTC midnight + small offsets).
+    # Ratings sequence: 500 -> 520 -> 510 -> 480 -> 460 -> 490
+    # High = 520, low = 460, max drawdown = -60, close = 490.
+    # Games after being down 100: 0 (worst drawdown is -60, never reached -100).
+    base = 1_700_000_000  # arbitrary unix ts
+    ratings = [500, 520, 510, 480, 460, 490]
+    records = []
+    for i, rating in enumerate(ratings):
+        records.append(GameRecord(
+            url=f"u{i}", end_time=base + i*60, time_class="bullet",
+            side="white", my_rating=rating, opp_rating=500,
+            result="win", opp_result="checkmated",
+            plies=20, fullmoves=10, opening="x", eco="A00",
+        ))
+    days = compute_daily_drawdown(records)
+    assert len(days) == 1
+    d = days[0]
+    assert d["open"] == 500
+    assert d["high"] == 520
+    assert d["low"] == 460
+    assert d["close"] == 490
+    assert d["max_drawdown"] == -60
+    assert d["games_after_drawdown_100"] == 0
+    assert d["games"] == 6
