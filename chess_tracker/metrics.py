@@ -58,12 +58,23 @@ def compute_sessions(records: list[GameRecord], gap_seconds: int = 600) -> list[
         current.append(r)
     sessions.append(current)
 
+    # For each session, the "start rating" should be the postgame rating of
+    # the prior global game (so the first game of the session contributes to
+    # the session delta). For the very first session in the dataset there is
+    # no prior game — fall back to the first game's postgame rating and flag
+    # rating_start_exact=False so consumers can show an asterisk.
     out = []
+    prev_end_rating = None  # postgame rating of last record in the previous session
     for s in sessions:
         wins = sum(1 for r in s if _is_win(r.result))
         losses = sum(1 for r in s if _is_loss(r.result))
         draws = sum(1 for r in s if _is_draw(r.result))
-        rating_start = s[0].my_rating
+        if prev_end_rating is not None:
+            rating_start = prev_end_rating
+            rating_start_exact = True
+        else:
+            rating_start = s[0].my_rating
+            rating_start_exact = False
         rating_end = s[-1].my_rating
         delta = rating_end - rating_start
         out.append({
@@ -72,10 +83,12 @@ def compute_sessions(records: list[GameRecord], gap_seconds: int = 600) -> list[
             "duration_minutes": round((s[-1].end_time - s[0].end_time) / 60, 1),
             "wins": wins, "losses": losses, "draws": draws,
             "rating_start": rating_start,
+            "rating_start_exact": rating_start_exact,
             "rating_end": rating_end,
             "rating_delta": delta,
             "tilt_flag": delta <= -50,
         })
+        prev_end_rating = rating_end
     return out
 
 

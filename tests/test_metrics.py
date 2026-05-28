@@ -507,6 +507,46 @@ def test_opening_variations_separates_by_color_and_main_line():
     assert len(london_black_main) == 1
 
 
+def test_compute_sessions_includes_first_game_delta():
+    """Session rating delta uses prior global game's postgame rating as start,
+    so the first game in a session contributes to the session's delta."""
+    from chess_tracker.pgn import GameRecord
+    from chess_tracker.metrics import compute_sessions
+
+    def _mk(t, rating, result="win", opp_result="checkmated"):
+        return GameRecord(
+            url=f"u{t}", end_time=t, time_class="bullet",
+            side="white", my_rating=rating, opp_rating=500,
+            result=result, opp_result=opp_result,
+            plies=20, fullmoves=10, opening="x", eco="A00",
+            play_signature="sig",
+        )
+
+    # Two sessions, separated by a >10min gap.
+    # Session 1: 500 → 510 → 520 (two wins after starting at 490 prior). Delta should be 30 (520-490).
+    # Session 2: starts with a 20-point loss (rating 520→500), then steady at 500. Delta should be -20.
+    records = [
+        _mk(1_700_000_000, 500),   # first game ever: prior rating unknown; falls back to postgame=500
+        _mk(1_700_000_060, 510),   # +10
+        _mk(1_700_000_120, 520),   # +10
+        # Gap of 30 min
+        _mk(1_700_002_000, 500, result="checkmated", opp_result="win"),  # -20 from 520
+        _mk(1_700_002_060, 500),   # +0
+    ]
+    sessions = compute_sessions(records)
+    assert len(sessions) == 2
+    # Session 1: first session has no prior record → rating_start = 500 (postgame of game 1)
+    assert sessions[0]["rating_start"] == 500
+    assert sessions[0]["rating_end"] == 520
+    assert sessions[0]["rating_delta"] == 20
+    assert sessions[0]["rating_start_exact"] is False
+    # Session 2: prior global record is rating 520 → start = 520
+    assert sessions[1]["rating_start"] == 520
+    assert sessions[1]["rating_end"] == 500
+    assert sessions[1]["rating_delta"] == -20
+    assert sessions[1]["rating_start_exact"] is True
+
+
 def test_compute_all_merges_opening_annotations():
     annotations = {
         "openings": {"London System": {"tag": "in_repertoire", "note": "main d4"}},
