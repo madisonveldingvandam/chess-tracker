@@ -657,3 +657,36 @@ def test_opening_families_rating_weighted_columns_and_sort():
     assert italian["sum_rating_delta"] == 20
     # Sort: worst (most negative sum) first
     assert rows[0]["family"] == "London System"
+
+
+def test_review_picks_one_timeout_one_mate_one_biggest_loss():
+    from chess_tracker.pgn import GameRecord
+    from chess_tracker.enrich import enrich_with_deltas
+    from chess_tracker.metrics import compute_review_picks
+
+    def _mk(t, rating, result, fullmoves=20):
+        return GameRecord(
+            url=f"u{t}", end_time=t, time_class="bullet",
+            side="white", my_rating=rating, opp_rating=500,
+            result=result, opp_result="win",
+            plies=fullmoves*2, fullmoves=fullmoves, opening="x", eco="A00",
+        )
+
+    records = [
+        _mk(1, 500, "win"),
+        _mk(2, 480, "timeout"),                  # -20 timeout
+        _mk(3, 470, "checkmated", fullmoves=12), # -10 fast mate
+        _mk(4, 430, "checkmated", fullmoves=40), # -40 long-game mate, largest single-game loss
+        _mk(5, 425, "timeout"),                  # -5 timeout
+    ]
+    enrich_with_deltas(records)
+    picks = compute_review_picks(records)
+    # Three picks: kinds in this order.
+    kinds = [p["kind"] for p in picks]
+    assert kinds == ["biggest_loss", "timeout", "fast_mate"]
+    # biggest_loss = -40 mate at game 4
+    assert picks[0]["url"] == "u4"
+    # timeout = most recent timeout (game 5)
+    assert picks[1]["url"] == "u5"
+    # fast_mate = most recent checkmated game with fullmoves <= 15 (game 3)
+    assert picks[2]["url"] == "u3"

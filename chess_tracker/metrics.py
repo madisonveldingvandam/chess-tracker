@@ -440,6 +440,71 @@ def recent_losses_with_suggestions(records: list[GameRecord], limit: int = 20) -
     return out
 
 
+def compute_review_picks(records: list[GameRecord], window: int = 30) -> list[dict]:
+    """Pick up to 3 recent-loss games worth a manual review.
+
+    - biggest_loss: the loss in the recent window with the most-negative rating_delta.
+    - timeout: the most recent timeout loss in the window.
+    - fast_mate: the most recent checkmated loss with fullmoves <= 15.
+
+    Each pick carries a one-line `question` framing what to look for.
+    Returns [] if no losses in the window.
+
+    Requires `enrich_with_deltas(records)` to have run first for accurate
+    biggest_loss selection. `compute_all` enriches before calling.
+    """
+    if not records:
+        return []
+    ordered = sorted(records, key=lambda r: r.end_time)
+    win_recs = ordered[-window:]
+    losses = [r for r in win_recs if _is_loss(r.result)]
+    if not losses:
+        return []
+    picks = []
+    seen_urls = set()
+
+    losses_with_delta = [r for r in losses if r.rating_delta is not None]
+    if losses_with_delta:
+        biggest = min(losses_with_delta, key=lambda r: r.rating_delta)
+        picks.append({
+            "kind": "biggest_loss",
+            "url": biggest.url,
+            "moves": biggest.fullmoves,
+            "loss_type": biggest.result,
+            "rating_delta": biggest.rating_delta,
+            "question": "What single move made the position lost? Mark the ply.",
+        })
+        seen_urls.add(biggest.url)
+
+    timeouts = [r for r in losses if r.result == "timeout" and r.url not in seen_urls]
+    if timeouts:
+        recent_timeout = timeouts[-1]
+        picks.append({
+            "kind": "timeout",
+            "url": recent_timeout.url,
+            "moves": recent_timeout.fullmoves,
+            "loss_type": "timeout",
+            "rating_delta": recent_timeout.rating_delta,
+            "question": "At which move did the clock first slip below the opponent's by 5+ seconds?",
+        })
+        seen_urls.add(recent_timeout.url)
+
+    fast_mates = [r for r in losses
+                  if r.result == "checkmated" and r.fullmoves <= 15
+                  and r.url not in seen_urls]
+    if fast_mates:
+        recent_fm = fast_mates[-1]
+        picks.append({
+            "kind": "fast_mate",
+            "url": recent_fm.url,
+            "moves": recent_fm.fullmoves,
+            "loss_type": "checkmated",
+            "rating_delta": recent_fm.rating_delta,
+            "question": "Which opponent move first threatened mate? What did you miss?",
+        })
+    return picks
+
+
 def compute_opening_families(records: list[GameRecord]) -> list[dict]:
     """Tier-1 aggregation: group records by (family, color).
 
@@ -676,6 +741,7 @@ def compute_all(records: list[GameRecord], annotations: dict,
         "leak_summary": detect_leaks(records),
         "next_session_rule": next_session_rule(records),
         "recent_losses": recent_losses_with_suggestions(records),
+        "review_picks": compute_review_picks(records),
         "process_metrics": {
             **compute_process_metrics(records),
             "session_decay": compute_session_decay(records),

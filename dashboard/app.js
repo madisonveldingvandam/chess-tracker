@@ -17,6 +17,7 @@
   renderRule(D.next_session_rule);
   renderRecentLosses(D.recent_losses);
   renderLossSummary(D);
+  renderReviewPicks(D.review_picks);
   renderErrorLog(D.error_log);
   renderProcess(D.process_metrics);
   renderSessionDecay(D.process_metrics?.session_decay);
@@ -531,6 +532,29 @@
         });
       }
     }
+  }
+
+  function renderReviewPicks(picks) {
+    const root = document.getElementById("review-picks-list");
+    if (!root) return;
+    if (!picks || picks.length === 0) {
+      root.innerHTML = `<li style="color:var(--muted)">No recent losses to review.</li>`;
+      return;
+    }
+    const label = {
+      biggest_loss: "Biggest single-game rating loss",
+      timeout: "Most recent timeout",
+      fast_mate: "Most recent fast mate (≤15 moves)",
+    };
+    root.innerHTML = picks.map(p => {
+      const delta = p.rating_delta == null ? "" :
+        ` (${p.rating_delta > 0 ? "+" : ""}${p.rating_delta} rating)`;
+      return `<li>
+        <strong>${label[p.kind] || p.kind}</strong>${delta} —
+        <a href="${escapeAttr(p.url)}" target="_blank">${p.loss_type}, ${p.moves} moves</a>
+        <div style="color:var(--muted);font-size:0.9rem">${p.question}</div>
+      </li>`;
+    }).join("");
   }
 
   function winPctCell(cell) {
