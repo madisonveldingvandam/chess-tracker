@@ -4,7 +4,7 @@ from chess_tracker.pgn import GameRecord
 # Helper to keep fixtures terse
 def _r(end_time, result, opp_result, opening, my_rating=500, opp_rating=500,
        side="white", fullmoves=30, my_clocks=None, opp_clocks=None, eco="A00",
-       play_signature=None):
+       play_signature=None, time_control: str = "60", rated: bool = True):
     return GameRecord(
         url=f"https://chess.com/game/{end_time}",
         end_time=end_time, time_class="bullet",
@@ -15,6 +15,8 @@ def _r(end_time, result, opp_result, opening, my_rating=500, opp_rating=500,
         my_clocks=my_clocks or [60.0, 30.0, 10.0],
         opp_clocks=opp_clocks or [60.0, 30.0, 5.0],
         play_signature=play_signature,
+        time_control=time_control,
+        rated=rated,
     )
 
 
@@ -71,8 +73,9 @@ CLOCK_RECORDS = [
 ]
 
 
-# Designed for outlasted-but-flagged test: I was ahead on time in the opening,
-# burned hard mid-game, and ran out. Opp paced steadily and survives.
+# 8-ply game: the clock advantage is entirely in moves 1-3, never reaching
+# move 10. Under the tightened outlasted-but-flagged rule (≥5s edge at index
+# ≥ 9) this is a NEGATIVE case — the metric returns 0.
 _OUTLASTED_THEN_FLAG_MINE = [55.0, 50.0, 45.0, 35.0, 25.0, 15.0, 5.0, 0.0]
 _OPP_STEADY_PACER = [50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0]
 
@@ -81,4 +84,19 @@ OUTLASTED_THEN_FLAG_RECORD = _r(
     fullmoves=8,
     my_clocks=_OUTLASTED_THEN_FLAG_MINE,
     opp_clocks=_OPP_STEADY_PACER,
+)
+
+# Designed for the tightened outlasted-but-flagged test: I held a 7-second
+# clock lead through move 10, then collapsed and flagged. 12 plies of clock
+# data per side.
+_LONG_OUTLAST_MINE = [55.0, 50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0,
+                       12.0, 5.0, 0.0]
+_LONG_OUTLAST_OPP =  [50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0, 10.0,
+                       5.0, 4.0, 3.0]
+
+LONG_OUTLAST_RECORD = _r(
+    1_700_011_200, "timeout", "win", "London System", side="white",
+    fullmoves=12,
+    my_clocks=_LONG_OUTLAST_MINE,
+    opp_clocks=_LONG_OUTLAST_OPP,
 )

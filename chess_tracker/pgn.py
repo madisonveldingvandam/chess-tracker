@@ -1,6 +1,8 @@
 """Parse a Chess.com game dict into a GameRecord."""
 from dataclasses import dataclass, field
+from io import StringIO
 import re
+import chess.pgn
 from chess_tracker.play_signature import (
     play_signature as _compute_play_signature,
     first_moves_san as _compute_first_moves_san,
@@ -31,6 +33,12 @@ class GameRecord:
     first_moves: str | None = None     # SAN of first 8 plies, e.g. "1.d4 d5 …"
     family: str | None = None          # tier-1 stem (e.g. "Queens Pawn Opening"); auto-derived from opening
     variation: str | None = None       # tier-2 suffix (e.g. "Zukertort Chigorin Variation"); "" for main lines
+    time_control: str = "60"           # Chess.com raw TimeControl string, e.g. "60" = 1+0
+    rated: bool = True
+    prev_rating: int | None = None     # postgame rating of the prior chronological game; None for first
+    rating_delta: int | None = None    # my_rating - prev_rating; None for first
+    session_id: int | None = None              # 0-indexed; assigned by enrich_with_sessions
+    game_index_in_session: int | None = None   # 1-indexed; first game in a session is 1
 
     def __post_init__(self):
         # Derive family/variation from opening when not explicitly set.
@@ -129,7 +137,10 @@ def parse_game(g: dict, username: str) -> GameRecord:
     w_clocks = all_clocks[0::2]
     b_clocks = all_clocks[1::2]
 
-    plies = len(all_clocks)
+    # Move count from PGN tree, not from clock annotations (some plies may
+    # be missing [%clk] tags due to server-side lag refunds).
+    game_tree = chess.pgn.read_game(StringIO(pgn))
+    plies = sum(1 for _ in game_tree.mainline_moves()) if game_tree else 0
     fullmoves = (plies + 1) // 2
 
     eco_url_m = _ECO_URL_RE.search(pgn)
@@ -154,4 +165,6 @@ def parse_game(g: dict, username: str) -> GameRecord:
         opp_clocks=b_clocks if me_white else w_clocks,
         play_signature=_compute_play_signature(pgn),
         first_moves=_compute_first_moves_san(pgn),
+        time_control=str(g.get("time_control", "60")),
+        rated=bool(g.get("rated", True)),
     )

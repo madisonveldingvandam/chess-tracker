@@ -1,5 +1,5 @@
 """Tests for metric computations."""
-from tests.fixtures.sample_records import RECORDS, CLOCK_RECORDS, OUTLASTED_THEN_FLAG_RECORD
+from tests.fixtures.sample_records import RECORDS, CLOCK_RECORDS, OUTLASTED_THEN_FLAG_RECORD, LONG_OUTLAST_RECORD
 from chess_tracker.metrics import compute_kpis, compute_sessions, compute_repertoire, compute_process_metrics, compute_session_decay
 
 
@@ -99,9 +99,17 @@ def test_opening_velocity_reflects_first_8_plies():
     assert abs(slow_vel - 24.0) < 0.5
 
 
-def test_outlasted_but_flagged_counts_a_timeout_where_you_were_ahead_at_some_ply():
-    """Timeout-loss where you had more time than opponent at some recorded ply."""
+def test_outlasted_but_flagged_ignores_early_only_edge():
+    """Under the tightened definition, a brief opening clock lead that
+    doesn't persist to move 10 is not 'outlasted'."""
     pm = compute_process_metrics([OUTLASTED_THEN_FLAG_RECORD])
+    assert pm["outlasted_but_flagged_count"] == 0
+
+
+def test_outlasted_but_flagged_counts_5s_edge_at_move_10_plus():
+    """A 7-second lead at move 10 followed by a timeout is the textbook
+    panic-conversion failure the metric was designed to catch."""
+    pm = compute_process_metrics([LONG_OUTLAST_RECORD])
     assert pm["outlasted_but_flagged_count"] == 1
 
 
@@ -507,6 +515,46 @@ def test_opening_variations_separates_by_color_and_main_line():
     assert len(london_black_main) == 1
 
 
+def test_compute_sessions_includes_first_game_delta():
+    """Session rating delta uses prior global game's postgame rating as start,
+    so the first game in a session contributes to the session's delta."""
+    from chess_tracker.pgn import GameRecord
+    from chess_tracker.metrics import compute_sessions
+
+    def _mk(t, rating, result="win", opp_result="checkmated"):
+        return GameRecord(
+            url=f"u{t}", end_time=t, time_class="bullet",
+            side="white", my_rating=rating, opp_rating=500,
+            result=result, opp_result=opp_result,
+            plies=20, fullmoves=10, opening="x", eco="A00",
+            play_signature="sig",
+        )
+
+    # Two sessions, separated by a >10min gap.
+    # Session 1: 500 → 510 → 520 (two wins after starting at 490 prior). Delta should be 30 (520-490).
+    # Session 2: starts with a 20-point loss (rating 520→500), then steady at 500. Delta should be -20.
+    records = [
+        _mk(1_700_000_000, 500),   # first game ever: prior rating unknown; falls back to postgame=500
+        _mk(1_700_000_060, 510),   # +10
+        _mk(1_700_000_120, 520),   # +10
+        # Gap of 30 min
+        _mk(1_700_002_000, 500, result="checkmated", opp_result="win"),  # -20 from 520
+        _mk(1_700_002_060, 500),   # +0
+    ]
+    sessions = compute_sessions(records)
+    assert len(sessions) == 2
+    # Session 1: first session has no prior record → rating_start = 500 (postgame of game 1)
+    assert sessions[0]["rating_start"] == 500
+    assert sessions[0]["rating_end"] == 520
+    assert sessions[0]["rating_delta"] == 20
+    assert sessions[0]["rating_start_exact"] is False
+    # Session 2: prior global record is rating 520 → start = 520
+    assert sessions[1]["rating_start"] == 520
+    assert sessions[1]["rating_end"] == 500
+    assert sessions[1]["rating_delta"] == -20
+    assert sessions[1]["rating_start_exact"] is True
+
+
 def test_compute_all_merges_opening_annotations():
     annotations = {
         "openings": {"London System": {"tag": "in_repertoire", "note": "main d4"}},
@@ -517,3 +565,128 @@ def test_compute_all_merges_opening_annotations():
                   if r["display_name"] == "London System")
     assert london["tag"] == "in_repertoire"
     assert london["note"] == "main d4"
+
+
+def test_outlasted_but_flagged_requires_5s_edge_after_move_10():
+    """Tighter definition: timeout loss with ≥5s clock edge at any ply
+    from move 10 onward (my_clocks index >= 9). Tiny early edges don't count."""
+    from chess_tracker.pgn import GameRecord
+    from chess_tracker.metrics import compute_process_metrics
+
+    def _mk(my_clocks, opp_clocks):
+        return GameRecord(
+            url="u", end_time=1, time_class="bullet",
+            side="white", my_rating=500, opp_rating=500,
+            result="timeout", opp_result="win",
+            plies=len(my_clocks) * 2, fullmoves=len(my_clocks),
+            opening="x", eco="A00",
+            my_clocks=my_clocks, opp_clocks=opp_clocks,
+        )
+
+    # Case 1: 0.2s edge at move 2, then opponent leads the rest. Should NOT count.
+    too_early = _mk(
+        my_clocks=[59.0, 50.0, 40.0, 30.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0],
+        opp_clocks=[58.8, 51.0, 45.0, 38.0, 30.0, 25.0, 20.0, 15.0, 12.0, 10.0],
+    )
+    # Case 2: 7s edge at move 10, still timed out. Should count.
+    real_choke = _mk(
+        my_clocks=[55.0, 50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0, 12.0,
+                   5.0, 0.0],
+        opp_clocks=[50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0, 10.0, 5.0,
+                    4.0, 3.0],
+    )
+    pm = compute_process_metrics([too_early, real_choke])
+    assert pm["outlasted_but_flagged_count"] == 1
+
+
+def test_abandonment_leak_fires_on_any_abandonment_in_window():
+    from chess_tracker.pgn import GameRecord
+    from chess_tracker.metrics import detect_leaks
+
+    def _mk(t, result):
+        return GameRecord(
+            url=f"u{t}", end_time=t, time_class="bullet",
+            side="white", my_rating=500, opp_rating=500,
+            result=result, opp_result="win",
+            plies=20, fullmoves=10, opening="x", eco="A00",
+        )
+
+    # 30 games: 29 timeouts (boring losses), 1 abandonment. Should fire abandonment leak.
+    records = [_mk(1_700_000_000 + i*60, "timeout") for i in range(29)]
+    records.append(_mk(1_700_001_800, "abandoned"))
+    leaks = detect_leaks(records)
+    names = [L["name"] for L in leaks]
+    assert "abandonment" in names
+    ab = next(L for L in leaks if L["name"] == "abandonment")
+    assert ab["severity"] == "critical"
+    assert "1" in ab["evidence"]  # mentions the count
+
+
+def test_opening_families_rating_weighted_columns_and_sort():
+    """Each family row carries sum_rating_delta / avg_rating_delta /
+    timeout_rating_delta / checkmate_rating_delta, and the default sort
+    is by sum_rating_delta ascending (worst-bleeding family first)."""
+    from chess_tracker.pgn import GameRecord
+    from chess_tracker.enrich import enrich_with_deltas
+    from chess_tracker.metrics import compute_opening_families
+
+    def _mk(t, rating, opening, result, side="white"):
+        return GameRecord(
+            url=f"u{t}", end_time=t, time_class="bullet",
+            side=side, my_rating=rating, opp_rating=500,
+            result=result, opp_result="win" if result != "win" else "checkmated",
+            plies=20, fullmoves=10, opening=opening, eco="A00",
+        )
+
+    # London System: net -30 across two games (timeout cost 20, mate cost 10)
+    # Italian Game: net +20 across two games
+    records = [
+        _mk(1, 500, "London System", "win"),                # prev=None → delta=None
+        _mk(2, 480, "London System", "timeout"),            # -20 timeout
+        _mk(3, 470, "London System", "checkmated"),         # -10 mate
+        _mk(4, 480, "Italian Game", "win"),                 # +10
+        _mk(5, 490, "Italian Game", "win"),                 # +10
+    ]
+    enrich_with_deltas(records)
+    rows = compute_opening_families(records)
+    london = next(r for r in rows if r["family"] == "London System")
+    italian = next(r for r in rows if r["family"] == "Italian Game")
+    assert london["sum_rating_delta"] == -30
+    assert london["timeout_rating_delta"] == -20
+    assert london["checkmate_rating_delta"] == -10
+    assert italian["sum_rating_delta"] == 20
+    # Sort: worst (most negative sum) first
+    assert rows[0]["family"] == "London System"
+
+
+def test_review_picks_one_timeout_one_mate_one_biggest_loss():
+    from chess_tracker.pgn import GameRecord
+    from chess_tracker.enrich import enrich_with_deltas
+    from chess_tracker.metrics import compute_review_picks
+
+    def _mk(t, rating, result, fullmoves=20):
+        return GameRecord(
+            url=f"u{t}", end_time=t, time_class="bullet",
+            side="white", my_rating=rating, opp_rating=500,
+            result=result, opp_result="win",
+            plies=fullmoves*2, fullmoves=fullmoves, opening="x", eco="A00",
+        )
+
+    records = [
+        _mk(1, 500, "win"),
+        _mk(2, 480, "timeout"),                  # -20 timeout
+        _mk(3, 470, "checkmated", fullmoves=12), # -10 fast mate
+        _mk(4, 430, "checkmated", fullmoves=40), # -40 long-game mate, largest single-game loss
+        _mk(5, 425, "timeout"),                  # -5 timeout
+    ]
+    enrich_with_deltas(records)
+    picks = compute_review_picks(records)
+    # Three picks: kinds in this order.
+    kinds = [p["kind"] for p in picks]
+    assert kinds == ["biggest_loss", "timeout", "fast_mate"]
+    # biggest_loss = -40 mate at game 4
+    assert picks[0]["url"] == "u4"
+    # timeout = most recent timeout (game 5)
+    assert picks[1]["url"] == "u5"
+    # fast_mate = most recent checkmated game with fullmoves <= 15 (game 3)
+    assert picks[2]["url"] == "u3"

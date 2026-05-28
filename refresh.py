@@ -42,10 +42,15 @@ def main(argv=None) -> int:
         all_games.extend(data.get("games", []))
     print(f"      {len(all_games)} games total")
 
-    print(f"[3/5] Filtering to {args.format} and parsing PGNs...")
-    in_format = [g for g in all_games if g.get("time_class") == args.format]
+    print(f"[3/5] Filtering to {args.format} 1+0 rated standard-chess games...")
+    def _accept(g):
+        return (g.get("time_class") == args.format
+                and str(g.get("time_control")) == "60"
+                and g.get("rated") is True
+                and g.get("rules") == "chess")
+    in_format = [g for g in all_games if _accept(g)]
     records = [parse_game(g, username=args.username) for g in in_format]
-    print(f"      {len(records)} {args.format} games parsed")
+    print(f"      {len(records)} rated 1+0 {args.format} games parsed")
 
     print("[4/5] Computing metrics + merging annotations...")
     annotations = load_annotations(annotations_path)

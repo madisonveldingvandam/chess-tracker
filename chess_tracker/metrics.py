@@ -3,10 +3,18 @@ from collections import Counter
 from datetime import datetime
 import statistics
 from chess_tracker.pgn import GameRecord, opening_family, opening_variation
+from chess_tracker.enrich import enrich_with_deltas, enrich_with_sessions
+from chess_tracker.behavior import (
+    compute_loss_streaks, compute_revenge_gap, compute_daily_drawdown,
+    compute_time_of_day, compute_mate_loss_buckets,
+)
 
 
 _DRAW_RESULTS = {"agreed", "repetition", "stalemate", "insufficient",
                  "50move", "timevsinsufficient"}
+
+OUTLASTED_EDGE_SECONDS = 5.0   # minimum clock lead (seconds) to qualify as "outlasted"
+OUTLASTED_MIN_PLY_INDEX = 9    # first ply index checked (0-indexed; ply 9 = move 10)
 
 
 def _is_win(r: str) -> bool:
@@ -58,12 +66,23 @@ def compute_sessions(records: list[GameRecord], gap_seconds: int = 600) -> list[
         current.append(r)
     sessions.append(current)
 
+    # For each session, the "start rating" should be the postgame rating of
+    # the prior global game (so the first game of the session contributes to
+    # the session delta). For the very first session in the dataset there is
+    # no prior game — fall back to the first game's postgame rating and flag
+    # rating_start_exact=False so consumers can show an asterisk.
     out = []
+    prev_end_rating = None  # postgame rating of last record in the previous session
     for s in sessions:
         wins = sum(1 for r in s if _is_win(r.result))
         losses = sum(1 for r in s if _is_loss(r.result))
         draws = sum(1 for r in s if _is_draw(r.result))
-        rating_start = s[0].my_rating
+        if prev_end_rating is not None:
+            rating_start = prev_end_rating
+            rating_start_exact = True
+        else:
+            rating_start = s[0].my_rating
+            rating_start_exact = False
         rating_end = s[-1].my_rating
         delta = rating_end - rating_start
         out.append({
@@ -72,10 +91,12 @@ def compute_sessions(records: list[GameRecord], gap_seconds: int = 600) -> list[
             "duration_minutes": round((s[-1].end_time - s[0].end_time) / 60, 1),
             "wins": wins, "losses": losses, "draws": draws,
             "rating_start": rating_start,
+            "rating_start_exact": rating_start_exact,
             "rating_end": rating_end,
             "rating_delta": delta,
             "tilt_flag": delta <= -50,
         })
+        prev_end_rating = rating_end
     return out
 
 
@@ -191,15 +212,16 @@ def compute_process_metrics(records: list[GameRecord]) -> dict:
         time_burn_delta = round(
             statistics.mean(early_rates) - statistics.mean(late_rates), 2)
 
-    # "Outlasted but flagged": timeout-losses where at some recorded ply
-    # you had more time than opponent did at the same ply.
+    # "Outlasted but flagged": timeout-losses where I had a ≥5s clock edge
+    # at some ply from move 10 onward (my_clocks index ≥ 9). Tiny early
+    # edges don't count — this isolates panic-conversion failures.
     outlasted = 0
     for r in records:
         if r.result != "timeout":
             continue
         common = min(len(r.my_clocks), len(r.opp_clocks))
-        for i in range(common):
-            if r.my_clocks[i] > r.opp_clocks[i]:
+        for i in range(OUTLASTED_MIN_PLY_INDEX, common):
+            if r.my_clocks[i] - r.opp_clocks[i] >= OUTLASTED_EDGE_SECONDS:
                 outlasted += 1
                 break
 
@@ -301,6 +323,16 @@ def detect_leaks(records: list[GameRecord]) -> list[dict]:
                 "evidence": f"{mate_pct:.0f}% of losses are checkmates in the last {len(window)} games",
                 "suggested_action": "Middlegame tactics — file recurring patterns in the error log.",
             })
+
+    # Any abandonment in last 30 games is a high-confidence tilt signal.
+    abandoned = [r for r in window if r.result == "abandoned"]
+    if abandoned:
+        leaks.append({
+            "name": "abandonment",
+            "severity": "critical",
+            "evidence": f"{len(abandoned)} abandoned game(s) in the last {len(window)} games",
+            "suggested_action": "Walk away after the urge to close the tab — that is the stop signal.",
+        })
 
     # Post-peak decay & tilt-session use full history; 30-game window starves the 21+ bucket.
     decay = compute_session_decay(records)
@@ -408,6 +440,71 @@ def recent_losses_with_suggestions(records: list[GameRecord], limit: int = 20) -
     return out
 
 
+def compute_review_picks(records: list[GameRecord], window: int = 30) -> list[dict]:
+    """Pick up to 3 recent-loss games worth a manual review.
+
+    - biggest_loss: the loss in the recent window with the most-negative rating_delta.
+    - timeout: the most recent timeout loss in the window.
+    - fast_mate: the most recent checkmated loss with fullmoves <= 15.
+
+    Each pick carries a one-line `question` framing what to look for.
+    Returns [] if no losses in the window.
+
+    Requires `enrich_with_deltas(records)` to have run first for accurate
+    biggest_loss selection. `compute_all` enriches before calling.
+    """
+    if not records:
+        return []
+    ordered = sorted(records, key=lambda r: r.end_time)
+    win_recs = ordered[-window:]
+    losses = [r for r in win_recs if _is_loss(r.result)]
+    if not losses:
+        return []
+    picks = []
+    seen_urls = set()
+
+    losses_with_delta = [r for r in losses if r.rating_delta is not None]
+    if losses_with_delta:
+        biggest = min(losses_with_delta, key=lambda r: r.rating_delta)
+        picks.append({
+            "kind": "biggest_loss",
+            "url": biggest.url,
+            "moves": biggest.fullmoves,
+            "loss_type": biggest.result,
+            "rating_delta": biggest.rating_delta,
+            "question": "What single move made the position lost? Mark the ply.",
+        })
+        seen_urls.add(biggest.url)
+
+    timeouts = [r for r in losses if r.result == "timeout" and r.url not in seen_urls]
+    if timeouts:
+        recent_timeout = timeouts[-1]
+        picks.append({
+            "kind": "timeout",
+            "url": recent_timeout.url,
+            "moves": recent_timeout.fullmoves,
+            "loss_type": "timeout",
+            "rating_delta": recent_timeout.rating_delta,
+            "question": "At which move did the clock first slip below the opponent's by 5+ seconds?",
+        })
+        seen_urls.add(recent_timeout.url)
+
+    fast_mates = [r for r in losses
+                  if r.result == "checkmated" and r.fullmoves <= 15
+                  and r.url not in seen_urls]
+    if fast_mates:
+        recent_fm = fast_mates[-1]
+        picks.append({
+            "kind": "fast_mate",
+            "url": recent_fm.url,
+            "moves": recent_fm.fullmoves,
+            "loss_type": "checkmated",
+            "rating_delta": recent_fm.rating_delta,
+            "question": "Which opponent move first threatened mate? What did you miss?",
+        })
+    return picks
+
+
 def compute_opening_families(records: list[GameRecord]) -> list[dict]:
     """Tier-1 aggregation: group records by (family, color).
 
@@ -415,6 +512,10 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
     where applicable, plus `variation_count` (how many distinct play_signatures
     fall under this family-color). Drives the main-page family tables;
     variations within a family live on the opening detail page.
+
+    Requires `enrich_with_deltas(records)` to have run first — otherwise
+    every row's `sum_rating_delta` / `avg_rating_delta` silently returns 0.
+    `compute_all` enriches before calling.
     """
     groups: dict[tuple[str, str], list[GameRecord]] = {}
     sig_keys: dict[tuple[str, str], set] = {}
@@ -436,6 +537,18 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
         draws = n - wins - losses
         flag = sum(1 for r in losses_recs if r.result == "timeout")
         mate = sum(1 for r in losses_recs if r.result == "checkmated")
+        # Rating-weighted aggregates (require enrich_with_deltas to have run).
+        deltas = [r.rating_delta for r in recs if r.rating_delta is not None]
+        sum_delta = sum(deltas)
+        avg_delta = round(sum_delta / len(deltas), 1) if deltas else 0.0
+        timeout_delta = sum(
+            r.rating_delta for r in recs
+            if r.result == "timeout" and r.rating_delta is not None
+        )
+        mate_delta = sum(
+            r.rating_delta for r in recs
+            if r.result == "checkmated" and r.rating_delta is not None
+        )
         med_len = statistics.median([r.fullmoves for r in recs])
         avg_opp = round(statistics.mean([r.opp_rating for r in recs]), 0)
         rating_gap = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
@@ -454,6 +567,10 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
             "win_pct": round(100 * wins / n, 1),
             "flag_pct": round(100 * flag / losses, 1) if losses else 0.0,
             "mate_pct": round(100 * mate / losses, 1) if losses else 0.0,
+            "sum_rating_delta": sum_delta,
+            "avg_rating_delta": avg_delta,
+            "timeout_rating_delta": timeout_delta,
+            "checkmate_rating_delta": mate_delta,
             "med_len": med_len,
             "avg_opp_rating": int(avg_opp),
             "rating_gap": int(rating_gap),
@@ -461,7 +578,7 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
             "canonical_play_signature": canonical_sig,
             "form": [_result_letter(r) for r in recs[-10:]],
         })
-    out.sort(key=lambda x: (-x["games"], -x["win_pct"]))
+    out.sort(key=lambda x: (x["sum_rating_delta"], -x["games"]))
     return out
 
 
@@ -473,6 +590,10 @@ def compute_opening_variations(records: list[GameRecord]) -> list[dict]:
     play_signatures) collapses into a single row. ``canonical_play_signature``
     is the most-frequent play_signature in the group — used to show a
     representative board on the opening detail page.
+
+    Requires `enrich_with_deltas(records)` to have run first — otherwise
+    every row's `sum_rating_delta` / `avg_rating_delta` silently returns 0.
+    `compute_all` enriches before calling.
     """
     groups: dict[tuple[str, str, str], list[GameRecord]] = {}
     for r in records:
@@ -493,6 +614,18 @@ def compute_opening_variations(records: list[GameRecord]) -> list[dict]:
         draws = n - wins - losses
         flag = sum(1 for r in losses_recs if r.result == "timeout")
         mate = sum(1 for r in losses_recs if r.result == "checkmated")
+        # Rating-weighted aggregates (require enrich_with_deltas to have run).
+        deltas = [r.rating_delta for r in recs if r.rating_delta is not None]
+        sum_delta = sum(deltas)
+        avg_delta = round(sum_delta / len(deltas), 1) if deltas else 0.0
+        timeout_delta = sum(
+            r.rating_delta for r in recs
+            if r.result == "timeout" and r.rating_delta is not None
+        )
+        mate_delta = sum(
+            r.rating_delta for r in recs
+            if r.result == "checkmated" and r.rating_delta is not None
+        )
         med_len = statistics.median([r.fullmoves for r in recs])
         avg_opp = round(statistics.mean([r.opp_rating for r in recs]), 0)
         rating_gap = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
@@ -512,6 +645,10 @@ def compute_opening_variations(records: list[GameRecord]) -> list[dict]:
             "win_pct": round(100 * wins / n, 1),
             "flag_pct": round(100 * flag / losses, 1) if losses else 0.0,
             "mate_pct": round(100 * mate / losses, 1) if losses else 0.0,
+            "sum_rating_delta": sum_delta,
+            "avg_rating_delta": avg_delta,
+            "timeout_rating_delta": timeout_delta,
+            "checkmate_rating_delta": mate_delta,
             "med_len": med_len,
             "avg_opp_rating": int(avg_opp),
             "rating_gap": int(rating_gap),
@@ -519,7 +656,7 @@ def compute_opening_variations(records: list[GameRecord]) -> list[dict]:
             "canonical_play_signature": canonical_sig,
             "form": [_result_letter(r) for r in recs[-10:]],
         })
-    out.sort(key=lambda x: (-x["games"], -x["win_pct"]))
+    out.sort(key=lambda x: (x["sum_rating_delta"], -x["games"]))
     return out
 
 
@@ -585,6 +722,9 @@ def compute_all(records: list[GameRecord], annotations: dict,
                 username: str, format: str = "bullet",
                 low_confidence_threshold: int = 15) -> dict:
     """Top-level dashboard payload. All panel data merged + annotations applied."""
+    enrich_with_deltas(records)
+    enrich_with_sessions(records)
+
     play_signatures = compute_play_signatures(records)
     opening_notes = annotations.get("openings", {})
     for row in play_signatures:
@@ -601,6 +741,7 @@ def compute_all(records: list[GameRecord], annotations: dict,
         "leak_summary": detect_leaks(records),
         "next_session_rule": next_session_rule(records),
         "recent_losses": recent_losses_with_suggestions(records),
+        "review_picks": compute_review_picks(records),
         "process_metrics": {
             **compute_process_metrics(records),
             "session_decay": compute_session_decay(records),
@@ -609,5 +750,12 @@ def compute_all(records: list[GameRecord], annotations: dict,
         "opening_variations": compute_opening_variations(records),
         "play_signatures": play_signatures,
         "sessions": compute_sessions(records),
+        "behavior": {
+            "loss_streaks": compute_loss_streaks(records),
+            "revenge_gap": compute_revenge_gap(records),
+            "daily_drawdown": compute_daily_drawdown(records),
+            "time_of_day": compute_time_of_day(records),
+            "mate_loss_buckets": compute_mate_loss_buckets(records),
+        },
         "error_log": annotations.get("error_log", []),
     }

@@ -12,9 +12,12 @@
     return;
   }
   renderKPI(D);
+  renderBehavior(D.behavior);
   renderLeaks(D.leak_summary);
   renderRule(D.next_session_rule);
   renderRecentLosses(D.recent_losses);
+  renderLossSummary(D);
+  renderReviewPicks(D.review_picks);
   renderErrorLog(D.error_log);
   renderProcess(D.process_metrics);
   renderSessionDecay(D.process_metrics?.session_decay);
@@ -30,7 +33,9 @@
     const strip = document.getElementById("kpi-strip");
     if (!strip) return;
     const k = d.kpis;
-    const lastDelta = (d.sessions && d.sessions.length > 0) ? d.sessions[0].rating_delta : null;
+    const lastDelta = (d.sessions && d.sessions.length > 0)
+      ? d.sessions[d.sessions.length - 1].rating_delta
+      : null;
     const lastStr = lastDelta == null ? "—" : (lastDelta >= 0 ? "+" : "") + lastDelta;
     strip.insertAdjacentHTML('beforeend', `
       <div class="kpi"><span class="kpi-label">Rating</span>
@@ -158,14 +163,15 @@
       data: rows, layout: "fitColumns", height: "540px",
       columns: [
         {title: "Opening", field: "family", headerFilter: "input", minWidth: 180},
-        {title: "Games", field: "games", width: 80, sorter: "number"},
-        {title: "Win%", field: "win_pct", width: 80, sorter: "number", formatter: winPctCell},
-        {title: "Flag%", field: "flag_pct", width: 80, sorter: "number"},
-        {title: "Mate%", field: "mate_pct", width: 80, sorter: "number"},
-        {title: "#Vars", field: "variation_count", width: 75, sorter: "number"},
-        {title: "Form", field: "form", width: 120, formatter: sparkline, headerSort: false},
+        {title: "Games", field: "games", width: 75, sorter: "number"},
+        {title: "Δ Rating", field: "sum_rating_delta", width: 90, sorter: "number", formatter: ratingDeltaCell},
+        {title: "Win%", field: "win_pct", width: 75, sorter: "number", formatter: winPctCell},
+        {title: "Flag%", field: "flag_pct", width: 75, sorter: "number"},
+        {title: "Mate%", field: "mate_pct", width: 75, sorter: "number"},
+        {title: "#Vars", field: "variation_count", width: 70, sorter: "number"},
+        {title: "Form", field: "form", width: 110, formatter: sparkline, headerSort: false},
       ],
-      initialSort: [{column: "games", dir: "desc"}],
+      initialSort: [{column: "sum_rating_delta", dir: "asc"}],
     });
     table.on("rowClick", (e, row) => selectFamilyRow(row, boardId, metaId, flip));
     table.on("rowDblClick", (e, row) => drillIntoFamily(row.getData()));
@@ -244,16 +250,17 @@
     const table = new Tabulator("#opening-variations-table", {
       data: rows, layout: "fitColumns", height: "540px",
       columns: [
-        {title: "Variation", field: "variation", headerFilter: "input", minWidth: 240,
+        {title: "Variation", field: "variation", headerFilter: "input", minWidth: 220,
          formatter: c => c.getValue() || `<span class="ind-off">main line</span>`},
-        {title: "ECO", field: "eco", width: 70},
-        {title: "Games", field: "games", width: 80, sorter: "number"},
-        {title: "Win%", field: "win_pct", width: 80, sorter: "number", formatter: winPctCell},
-        {title: "Flag%", field: "flag_pct", width: 80, sorter: "number"},
-        {title: "Mate%", field: "mate_pct", width: 80, sorter: "number"},
-        {title: "Form", field: "form", width: 120, formatter: sparkline, headerSort: false},
+        {title: "ECO", field: "eco", width: 65},
+        {title: "Games", field: "games", width: 75, sorter: "number"},
+        {title: "Δ Rating", field: "sum_rating_delta", width: 90, sorter: "number", formatter: ratingDeltaCell},
+        {title: "Win%", field: "win_pct", width: 75, sorter: "number", formatter: winPctCell},
+        {title: "Flag%", field: "flag_pct", width: 75, sorter: "number"},
+        {title: "Mate%", field: "mate_pct", width: 75, sorter: "number"},
+        {title: "Form", field: "form", width: 110, formatter: sparkline, headerSort: false},
       ],
-      initialSort: [{column: "games", dir: "desc"}],
+      initialSort: [{column: "sum_rating_delta", dir: "asc"}],
     });
     table.on("rowClick", (e, row) => selectOpeningRow(row, flip));
     table.on("tableBuilt", () => {
@@ -344,19 +351,24 @@
       : topLossTypes.map(([t, n]) => `${n} ${t}`).join(", ");
     const lossesAlert = losses.length >= 10;
 
-    // Process card: alert when opening_velocity_median < 18
+    // Process card: alert when opening_velocity_median > 8 (seconds spent
+    // on first 8 moves; matches the leak detector's "time_burn_opening"
+    // threshold of >8s). Lower velocity = faster opening play = better.
     const velocity = pm.opening_velocity_median;
     const processHeadline = velocity == null ? "—" : `${velocity}s @ 8`;
-    const processSub = velocity == null ? "insufficient data" : "Target ≥ 18s";
-    const processAlert = velocity != null && velocity < 18;
+    const processSub = velocity == null ? "insufficient data" : "Target ≤ 8s";
+    const processAlert = velocity != null && velocity > 8;
 
-    // Sessions card: alert when last session was tilted
+    // Sessions card: alert when most-recent session was tilted.
+    // sessions are stored chronologically (oldest first); use slice(-5) and
+    // [length-1] to read the latest entries.
     const sessionCount = sessions.length;
-    const last5 = sessions.slice(0, 5);
+    const last5 = sessions.slice(-5);
     const tiltedCount = last5.filter(s => s.tilt_flag).length;
     const sessionsSub = sessionCount === 0 ? "no sessions"
       : `${tiltedCount} tilted of last 5`;
-    const sessionsAlert = sessions.length > 0 && sessions[0].tilt_flag === true;
+    const lastSession = sessions.length > 0 ? sessions[sessions.length - 1] : null;
+    const sessionsAlert = lastSession != null && lastSession.tilt_flag === true;
 
     root.innerHTML = [
       card("Leaks", `${leaks.length} active`, leaksSub, "leaks.html", leaksAlert),
@@ -417,9 +429,145 @@
     if (flip) cells.reverse();
     return cells.join("");
   }
+  function renderBehavior(b) {
+    const root = document.getElementById("behavior-cards");
+    if (!root || !b) return;
+    const ls = b.loss_streaks || {};
+    const rg = b.revenge_gap || {};
+    const dd = (b.daily_drawdown || []).slice(-7);  // last 7 days
+    const tod = (b.time_of_day || []);
+    const todWorst = [...tod].sort((a, b) => a.mean_session_delta - b.mean_session_delta)[0];
+    const todBest = [...tod].sort((a, b) => b.mean_session_delta - a.mean_session_delta)[0];
+
+    const cell = (label, value, sub, alert=false) =>
+      `<div class="behavior-card${alert ? " alert" : ""}">
+         <div class="bh-label">${label}</div>
+         <div class="bh-value">${value}</div>
+         <div class="bh-sub">${sub}</div>
+       </div>`;
+
+    const cards = [];
+    cards.push(cell(
+      "Current loss streak",
+      String(ls.current_loss_streak ?? 0),
+      ls.current_timeout_loss_streak
+        ? `${ls.current_timeout_loss_streak} of them on time`
+        : "",
+      (ls.current_loss_streak ?? 0) >= 3
+    ));
+    cards.push(cell(
+      "Longest loss streak (24h)",
+      String(ls.longest_loss_streak_24h ?? 0),
+      ls.longest_timeout_loss_streak_24h
+        ? `timeout streak: ${ls.longest_timeout_loss_streak_24h}`
+        : "",
+      (ls.longest_loss_streak_24h ?? 0) >= 5
+    ));
+    const gap = rg.revenge_gap;
+    cards.push(cell(
+      "Revenge gap",
+      gap == null ? "—" : `${gap > 0 ? "+" : ""}${gap}pp`,
+      `${rg.wins_after_loss}/${rg.games_after_loss} after losses vs ${rg.wins_after_win}/${rg.games_after_win} after wins`,
+      gap != null && gap <= -8
+    ));
+    const worstDay = dd.length ? dd.reduce((acc, d) =>
+      d.max_drawdown < acc.max_drawdown ? d : acc, dd[0]) : null;
+    cards.push(cell(
+      "Worst day this week",
+      worstDay ? `${worstDay.max_drawdown}` : "—",
+      worstDay ? `${worstDay.date} (${worstDay.games} games)` : "",
+      worstDay && worstDay.max_drawdown <= -50
+    ));
+    cards.push(cell(
+      "Best time-of-day",
+      todBest ? `${String(todBest.hour).padStart(2, "0")}:00` : "—",
+      todBest ? `mean session Δ ${todBest.mean_session_delta > 0 ? "+" : ""}${todBest.mean_session_delta}` : ""
+    ));
+    cards.push(cell(
+      "Worst time-of-day",
+      todWorst ? `${String(todWorst.hour).padStart(2, "0")}:00` : "—",
+      todWorst ? `mean session Δ ${todWorst.mean_session_delta > 0 ? "+" : ""}${todWorst.mean_session_delta}` : "",
+      todWorst && todWorst.mean_session_delta <= -20
+    ));
+    root.innerHTML = cards.join("");
+  }
+
+  function renderLossSummary(D) {
+    const root = document.getElementById("loss-summary-cards");
+    const bucketsRoot = document.getElementById("mate-buckets");
+    if (!root) return;
+    const losses = D.recent_losses || [];
+    if (losses.length === 0) {
+      root.innerHTML = `<p style="color:var(--muted)">No losses in window.</p>`;
+      if (bucketsRoot) bucketsRoot.innerHTML = "";
+      return;
+    }
+    const byType = {};
+    losses.forEach(L => { byType[L.loss_type] = (byType[L.loss_type] || 0) + 1; });
+    const pct = (n) => `${Math.round(100 * n / losses.length)}%`;
+    const cell = (label, value, sub) =>
+      `<div class="behavior-card">
+         <div class="bh-label">${label}</div>
+         <div class="bh-value">${value}</div>
+         <div class="bh-sub">${sub}</div>
+       </div>`;
+    root.innerHTML = [
+      cell("Losses in window", String(losses.length), ""),
+      cell("Timeouts", `${byType.timeout || 0}`, pct(byType.timeout || 0)),
+      cell("Mates", `${byType.checkmated || 0}`, pct(byType.checkmated || 0)),
+      cell("Abandoned", `${byType.abandoned || 0}`, pct(byType.abandoned || 0)),
+    ].join("");
+
+    if (bucketsRoot) {
+      const mb = (D.behavior && D.behavior.mate_loss_buckets) || [];
+      if (mb.length === 0) {
+        bucketsRoot.innerHTML = `<p style="color:var(--muted)">No mate losses yet.</p>`;
+      } else {
+        new Tabulator("#mate-buckets", {
+          data: mb, layout: "fitColumns",
+          columns: [
+            {title: "Side", field: "side"},
+            {title: "Length", field: "bucket"},
+            {title: "Count", field: "count", sorter: "number"},
+          ],
+          initialSort: [{column: "count", dir: "desc"}],
+        });
+      }
+    }
+  }
+
+  function renderReviewPicks(picks) {
+    const root = document.getElementById("review-picks-list");
+    if (!root) return;
+    if (!picks || picks.length === 0) {
+      root.innerHTML = `<li style="color:var(--muted)">No recent losses to review.</li>`;
+      return;
+    }
+    const label = {
+      biggest_loss: "Biggest single-game rating loss",
+      timeout: "Most recent timeout",
+      fast_mate: "Most recent fast mate (≤15 moves)",
+    };
+    root.innerHTML = picks.map(p => {
+      const delta = p.rating_delta == null ? "" :
+        ` (${p.rating_delta > 0 ? "+" : ""}${p.rating_delta} rating)`;
+      return `<li>
+        <strong>${label[p.kind] || p.kind}</strong>${delta} —
+        <a href="${escapeAttr(p.url)}" target="_blank">${p.loss_type}, ${p.moves} moves</a>
+        <div style="color:var(--muted);font-size:0.9rem">${p.question}</div>
+      </li>`;
+    }).join("");
+  }
+
   function winPctCell(cell) {
     const v = cell.getValue();
     const cls = v >= 60 ? "cell-strong" : v <= 35 ? "cell-weak" : "";
     return `<span class="${cls}">${v}%</span>`;
+  }
+  function ratingDeltaCell(cell) {
+    const v = cell.getValue();
+    if (v == null) return "—";
+    const cls = v <= -20 ? "cell-weak" : v >= 20 ? "cell-strong" : "";
+    return `<span class="${cls}">${v >= 0 ? "+" : ""}${v}</span>`;
   }
 })();
