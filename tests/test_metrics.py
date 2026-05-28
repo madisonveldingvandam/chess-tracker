@@ -620,3 +620,40 @@ def test_abandonment_leak_fires_on_any_abandonment_in_window():
     ab = next(L for L in leaks if L["name"] == "abandonment")
     assert ab["severity"] == "critical"
     assert "1" in ab["evidence"]  # mentions the count
+
+
+def test_opening_families_rating_weighted_columns_and_sort():
+    """Each family row carries sum_rating_delta / avg_rating_delta /
+    timeout_rating_delta / checkmate_rating_delta, and the default sort
+    is by sum_rating_delta ascending (worst-bleeding family first)."""
+    from chess_tracker.pgn import GameRecord
+    from chess_tracker.enrich import enrich_with_deltas
+    from chess_tracker.metrics import compute_opening_families
+
+    def _mk(t, rating, opening, result, side="white"):
+        return GameRecord(
+            url=f"u{t}", end_time=t, time_class="bullet",
+            side=side, my_rating=rating, opp_rating=500,
+            result=result, opp_result="win" if result != "win" else "checkmated",
+            plies=20, fullmoves=10, opening=opening, eco="A00",
+        )
+
+    # London System: net -30 across two games (timeout cost 20, mate cost 10)
+    # Italian Game: net +20 across two games
+    records = [
+        _mk(1, 500, "London System", "win"),                # prev=None → delta=None
+        _mk(2, 480, "London System", "timeout"),            # -20 timeout
+        _mk(3, 470, "London System", "checkmated"),         # -10 mate
+        _mk(4, 480, "Italian Game", "win"),                 # +10
+        _mk(5, 490, "Italian Game", "win"),                 # +10
+    ]
+    enrich_with_deltas(records)
+    rows = compute_opening_families(records)
+    london = next(r for r in rows if r["family"] == "London System")
+    italian = next(r for r in rows if r["family"] == "Italian Game")
+    assert london["sum_rating_delta"] == -30
+    assert london["timeout_rating_delta"] == -20
+    assert london["checkmate_rating_delta"] == -10
+    assert italian["sum_rating_delta"] == 20
+    # Sort: worst (most negative sum) first
+    assert rows[0]["family"] == "London System"

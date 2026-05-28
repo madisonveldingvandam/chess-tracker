@@ -468,6 +468,18 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
         draws = n - wins - losses
         flag = sum(1 for r in losses_recs if r.result == "timeout")
         mate = sum(1 for r in losses_recs if r.result == "checkmated")
+        # Rating-weighted aggregates (require enrich_with_deltas to have run).
+        deltas = [r.rating_delta for r in recs if r.rating_delta is not None]
+        sum_delta = sum(deltas)
+        avg_delta = round(sum_delta / len(deltas), 1) if deltas else 0.0
+        timeout_delta = sum(
+            r.rating_delta for r in recs
+            if r.result == "timeout" and r.rating_delta is not None
+        )
+        mate_delta = sum(
+            r.rating_delta for r in recs
+            if r.result == "checkmated" and r.rating_delta is not None
+        )
         med_len = statistics.median([r.fullmoves for r in recs])
         avg_opp = round(statistics.mean([r.opp_rating for r in recs]), 0)
         rating_gap = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
@@ -486,6 +498,10 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
             "win_pct": round(100 * wins / n, 1),
             "flag_pct": round(100 * flag / losses, 1) if losses else 0.0,
             "mate_pct": round(100 * mate / losses, 1) if losses else 0.0,
+            "sum_rating_delta": sum_delta,
+            "avg_rating_delta": avg_delta,
+            "timeout_rating_delta": timeout_delta,
+            "checkmate_rating_delta": mate_delta,
             "med_len": med_len,
             "avg_opp_rating": int(avg_opp),
             "rating_gap": int(rating_gap),
@@ -493,7 +509,7 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
             "canonical_play_signature": canonical_sig,
             "form": [_result_letter(r) for r in recs[-10:]],
         })
-    out.sort(key=lambda x: (-x["games"], -x["win_pct"]))
+    out.sort(key=lambda x: (x["sum_rating_delta"], -x["games"]))
     return out
 
 
@@ -525,6 +541,18 @@ def compute_opening_variations(records: list[GameRecord]) -> list[dict]:
         draws = n - wins - losses
         flag = sum(1 for r in losses_recs if r.result == "timeout")
         mate = sum(1 for r in losses_recs if r.result == "checkmated")
+        # Rating-weighted aggregates (require enrich_with_deltas to have run).
+        deltas = [r.rating_delta for r in recs if r.rating_delta is not None]
+        sum_delta = sum(deltas)
+        avg_delta = round(sum_delta / len(deltas), 1) if deltas else 0.0
+        timeout_delta = sum(
+            r.rating_delta for r in recs
+            if r.result == "timeout" and r.rating_delta is not None
+        )
+        mate_delta = sum(
+            r.rating_delta for r in recs
+            if r.result == "checkmated" and r.rating_delta is not None
+        )
         med_len = statistics.median([r.fullmoves for r in recs])
         avg_opp = round(statistics.mean([r.opp_rating for r in recs]), 0)
         rating_gap = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
@@ -544,6 +572,10 @@ def compute_opening_variations(records: list[GameRecord]) -> list[dict]:
             "win_pct": round(100 * wins / n, 1),
             "flag_pct": round(100 * flag / losses, 1) if losses else 0.0,
             "mate_pct": round(100 * mate / losses, 1) if losses else 0.0,
+            "sum_rating_delta": sum_delta,
+            "avg_rating_delta": avg_delta,
+            "timeout_rating_delta": timeout_delta,
+            "checkmate_rating_delta": mate_delta,
             "med_len": med_len,
             "avg_opp_rating": int(avg_opp),
             "rating_gap": int(rating_gap),
@@ -551,7 +583,7 @@ def compute_opening_variations(records: list[GameRecord]) -> list[dict]:
             "canonical_play_signature": canonical_sig,
             "form": [_result_letter(r) for r in recs[-10:]],
         })
-    out.sort(key=lambda x: (-x["games"], -x["win_pct"]))
+    out.sort(key=lambda x: (x["sum_rating_delta"], -x["games"]))
     return out
 
 
