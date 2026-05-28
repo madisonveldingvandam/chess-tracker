@@ -111,6 +111,52 @@ def compute_revenge_gap(records: list[GameRecord]) -> dict:
     }
 
 
+def compute_time_of_day(records: list[GameRecord], gap_seconds: int = 600) -> list[dict]:
+    """Per local hour-of-day: session count, games, win rate, mean rating delta.
+
+    Bucketed by the *start hour* of each session — captures "when do I begin
+    to play" rather than "when do I play any given game."
+    """
+    if not records:
+        return []
+    ordered = sorted(records, key=lambda r: r.end_time)
+    # Build sessions inline (same boundary rule as compute_sessions).
+    sessions: list[list[GameRecord]] = [[ordered[0]]]
+    for r in ordered[1:]:
+        if r.end_time - sessions[-1][-1].end_time > gap_seconds:
+            sessions.append([])
+        sessions[-1].append(r)
+
+    # For session delta, use the same logic as compute_sessions (prior-session
+    # postgame rating as start; fall back to first game's postgame for the
+    # very first session).
+    by_hour: dict[int, dict] = {}
+    prev_end_rating = None
+    for s in sessions:
+        hour = datetime.fromtimestamp(s[0].end_time).astimezone().hour
+        start = prev_end_rating if prev_end_rating is not None else s[0].my_rating
+        delta = s[-1].my_rating - start
+        b = by_hour.setdefault(hour, {"hour": hour, "sessions": 0, "games": 0,
+                                       "wins": 0, "delta_sum": 0})
+        b["sessions"] += 1
+        b["games"] += len(s)
+        b["wins"] += sum(1 for r in s if _is_win(r.result))
+        b["delta_sum"] += delta
+        prev_end_rating = s[-1].my_rating
+
+    out = []
+    for hour in sorted(by_hour):
+        b = by_hour[hour]
+        out.append({
+            "hour": hour,
+            "sessions": b["sessions"],
+            "games": b["games"],
+            "win_pct": round(100 * b["wins"] / b["games"], 1) if b["games"] else 0.0,
+            "mean_session_delta": round(b["delta_sum"] / b["sessions"], 1) if b["sessions"] else 0.0,
+        })
+    return out
+
+
 def compute_daily_drawdown(records: list[GameRecord]) -> list[dict]:
     """Per local-date OHLC + max intraday drawdown.
 

@@ -1,6 +1,7 @@
 """Tests for the behavioral-signals layer."""
 from chess_tracker.pgn import GameRecord
 from chess_tracker.behavior import compute_loss_streaks, compute_revenge_gap, compute_daily_drawdown
+from chess_tracker.behavior import compute_time_of_day
 
 
 def _mk(t, result):
@@ -93,3 +94,40 @@ def test_daily_drawdown_tracks_max_intraday_slide():
     assert d["max_drawdown"] == -60
     assert d["games_after_drawdown_100"] == 0
     assert d["games"] == 6
+
+
+def test_time_of_day_groups_sessions_by_start_hour():
+    """One bucket per hour-of-day (0-23); sessions are grouped by their
+    first game's local-time hour. Aggregates total games, wins, and mean
+    rating delta across all sessions starting in that hour."""
+    # Two sessions starting at different hour-buckets (separated by >10min).
+    # Hour values depend on the local timezone of the test runner, so just
+    # assert that bucketing works structurally rather than asserting the hour
+    # number. Build three sessions deliberately separated by >10min gaps.
+    base = 1_700_000_000
+    def _mk_session(start_ts, deltas):
+        rating = 500
+        recs = []
+        for i, dr in enumerate(deltas):
+            rating += dr
+            recs.append(GameRecord(
+                url=f"u{start_ts}-{i}", end_time=start_ts + i*60,
+                time_class="bullet", side="white",
+                my_rating=rating, opp_rating=500,
+                result="win" if dr > 0 else "checkmated",
+                opp_result="checkmated" if dr > 0 else "win",
+                plies=20, fullmoves=10, opening="x", eco="A00",
+            ))
+        return recs
+
+    records = (
+        _mk_session(base, [10, -5, 10])           # net +15
+        + _mk_session(base + 3600 * 6, [-20, -10, -10])  # 6h later, net -40
+    )
+    buckets = compute_time_of_day(records)
+    # Two distinct buckets expected (one per session start-hour).
+    assert len(buckets) == 2
+    # Each bucket reports its session count.
+    assert sum(b["sessions"] for b in buckets) == 2
+    # Total games preserved across buckets.
+    assert sum(b["games"] for b in buckets) == 6
