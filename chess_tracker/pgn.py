@@ -163,8 +163,8 @@ def parse_game(g: dict, username: str) -> GameRecord:
         eco=eco,
         my_clocks=w_clocks if me_white else b_clocks,
         opp_clocks=b_clocks if me_white else w_clocks,
-        play_signature=_compute_play_signature(pgn),
-        first_moves=_compute_first_moves_san(pgn),
+        play_signature=_compute_play_signature(game_tree),
+        first_moves=_compute_first_moves_san(game_tree),
         time_control=str(g.get("time_control", "60")),
         rated=bool(g.get("rated", True)),
     )
