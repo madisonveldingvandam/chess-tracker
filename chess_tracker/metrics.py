@@ -193,15 +193,11 @@ def compute_process_metrics(records: list[GameRecord]) -> dict:
 def _session_position_groups(records: list[GameRecord], gap_seconds: int = 600) -> dict[str, list[GameRecord]]:
     if not records:
         return {"1-5": [], "6-10": [], "11-20": [], "21+": []}
-    ordered = sorted(records, key=lambda r: r.end_time)
+    if any(r.session_id is None for r in records):
+        enrich_with_sessions(records, gap_seconds)
     out: dict[str, list[GameRecord]] = {"1-5": [], "6-10": [], "11-20": [], "21+": []}
-    pos = 1
-    out["1-5"].append(ordered[0])
-    for prev, r in zip(ordered, ordered[1:]):
-        if r.end_time - prev.end_time > gap_seconds:
-            pos = 1
-        else:
-            pos += 1
+    for r in records:
+        pos = r.game_index_in_session
         if pos <= 5:
             out["1-5"].append(r)
         elif pos <= 10:

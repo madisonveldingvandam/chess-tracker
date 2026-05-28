@@ -4,6 +4,7 @@ and time-of-day breakdowns. All functions consume enriched GameRecords
 from datetime import datetime
 from collections import defaultdict
 from chess_tracker.pgn import GameRecord
+from chess_tracker.enrich import enrich_with_sessions
 
 
 _DRAW_RESULTS = {"agreed", "repetition", "stalemate", "insufficient",
@@ -119,13 +120,15 @@ def compute_time_of_day(records: list[GameRecord], gap_seconds: int = 600) -> li
     """
     if not records:
         return []
-    ordered = sorted(records, key=lambda r: r.end_time)
-    # Build sessions inline (same boundary rule as compute_sessions).
-    sessions: list[list[GameRecord]] = [[ordered[0]]]
-    for r in ordered[1:]:
-        if r.end_time - sessions[-1][-1].end_time > gap_seconds:
-            sessions.append([])
-        sessions[-1].append(r)
+    if any(r.session_id is None for r in records):
+        enrich_with_sessions(records, gap_seconds)
+    by_session: dict[int, list[GameRecord]] = defaultdict(list)
+    for r in records:
+        by_session[r.session_id].append(r)
+    sessions: list[list[GameRecord]] = []
+    for sid in sorted(by_session):
+        s = sorted(by_session[sid], key=lambda r: r.end_time)
+        sessions.append(s)
 
     # For session delta, use the same logic as compute_sessions (prior-session
     # postgame rating as start; fall back to first game's postgame for the
