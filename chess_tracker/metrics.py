@@ -3,6 +3,7 @@ from collections import Counter
 from datetime import datetime
 import statistics
 from chess_tracker.pgn import GameRecord, opening_family, opening_variation
+from chess_tracker.enrich import enrich_with_deltas, enrich_with_sessions
 
 
 _DRAW_RESULTS = {"agreed", "repetition", "stalemate", "insufficient",
@@ -602,8 +603,8 @@ def compute_all(records: list[GameRecord], annotations: dict,
                 username: str, format: str = "bullet",
                 low_confidence_threshold: int = 15) -> dict:
     """Top-level dashboard payload. All panel data merged + annotations applied."""
-    from chess_tracker.enrich import enrich_with_deltas
     enrich_with_deltas(records)
+    enrich_with_sessions(records)
 
     play_signatures = compute_play_signatures(records)
     opening_notes = annotations.get("openings", {})

@@ -37,6 +37,8 @@ class GameRecord:
     rated: bool = True
     prev_rating: int | None = None     # postgame rating of the prior chronological game; None for first
     rating_delta: int | None = None    # my_rating - prev_rating; None for first
+    session_id: int | None = None              # 0-indexed; assigned by enrich_with_sessions
+    game_index_in_session: int | None = None   # 1-indexed; first game in a session is 1
 
     def __post_init__(self):
         # Derive family/variation from opening when not explicitly set.

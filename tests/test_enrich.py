@@ -38,3 +38,23 @@ def test_enrich_with_deltas_mutates_in_place():
     ret = enrich_with_deltas(records)
     assert ret is records  # same list object
     assert records[1].rating_delta == 10
+
+
+from chess_tracker.enrich import enrich_with_sessions
+
+
+def test_enrich_with_sessions_assigns_id_and_index():
+    """Session boundary = >gap_seconds idle. session_id is 0-indexed by start time;
+    game_index_in_session is 1-indexed within each session."""
+    records = [
+        _mk(1_700_000_000, 500),
+        _mk(1_700_000_060, 505),
+        # >10 min gap
+        _mk(1_700_002_000, 510),
+        _mk(1_700_002_060, 515),
+        _mk(1_700_002_120, 520),
+    ]
+    enrich_with_sessions(records, gap_seconds=600)
+    by_time = sorted(records, key=lambda r: r.end_time)
+    assert [r.session_id for r in by_time] == [0, 0, 1, 1, 1]
+    assert [r.game_index_in_session for r in by_time] == [1, 2, 1, 2, 3]
