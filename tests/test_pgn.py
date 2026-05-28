@@ -158,7 +158,7 @@ def test_parse_game_move_count_from_pgn_tree_not_clocks():
         "time_control": "60", "rated": True,
         "white": {"username": "me", "rating": 500, "result": "win"},
         "black": {"username": "opp", "rating": 500, "result": "checkmated"},
-        # 4 plies, only 3 clock annotations
+        # 4 plies, only 2 clock annotations
         "pgn": "[ECO \"C20\"]\n1. e4 e5 2. Nf3 {[%clk 0:00:58]} Nc6 {[%clk 0:00:58]} *",
     }
     rec = parse_game(g, username="me")
