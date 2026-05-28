@@ -163,14 +163,15 @@
       data: rows, layout: "fitColumns", height: "540px",
       columns: [
         {title: "Opening", field: "family", headerFilter: "input", minWidth: 180},
-        {title: "Games", field: "games", width: 80, sorter: "number"},
-        {title: "Win%", field: "win_pct", width: 80, sorter: "number", formatter: winPctCell},
-        {title: "Flag%", field: "flag_pct", width: 80, sorter: "number"},
-        {title: "Mate%", field: "mate_pct", width: 80, sorter: "number"},
-        {title: "#Vars", field: "variation_count", width: 75, sorter: "number"},
-        {title: "Form", field: "form", width: 120, formatter: sparkline, headerSort: false},
+        {title: "Games", field: "games", width: 75, sorter: "number"},
+        {title: "Δ Rating", field: "sum_rating_delta", width: 90, sorter: "number", formatter: ratingDeltaCell},
+        {title: "Win%", field: "win_pct", width: 75, sorter: "number", formatter: winPctCell},
+        {title: "Flag%", field: "flag_pct", width: 75, sorter: "number"},
+        {title: "Mate%", field: "mate_pct", width: 75, sorter: "number"},
+        {title: "#Vars", field: "variation_count", width: 70, sorter: "number"},
+        {title: "Form", field: "form", width: 110, formatter: sparkline, headerSort: false},
       ],
-      initialSort: [{column: "games", dir: "desc"}],
+      initialSort: [{column: "sum_rating_delta", dir: "asc"}],
     });
     table.on("rowClick", (e, row) => selectFamilyRow(row, boardId, metaId, flip));
     table.on("rowDblClick", (e, row) => drillIntoFamily(row.getData()));
@@ -249,16 +250,17 @@
     const table = new Tabulator("#opening-variations-table", {
       data: rows, layout: "fitColumns", height: "540px",
       columns: [
-        {title: "Variation", field: "variation", headerFilter: "input", minWidth: 240,
+        {title: "Variation", field: "variation", headerFilter: "input", minWidth: 220,
          formatter: c => c.getValue() || `<span class="ind-off">main line</span>`},
-        {title: "ECO", field: "eco", width: 70},
-        {title: "Games", field: "games", width: 80, sorter: "number"},
-        {title: "Win%", field: "win_pct", width: 80, sorter: "number", formatter: winPctCell},
-        {title: "Flag%", field: "flag_pct", width: 80, sorter: "number"},
-        {title: "Mate%", field: "mate_pct", width: 80, sorter: "number"},
-        {title: "Form", field: "form", width: 120, formatter: sparkline, headerSort: false},
+        {title: "ECO", field: "eco", width: 65},
+        {title: "Games", field: "games", width: 75, sorter: "number"},
+        {title: "Δ Rating", field: "sum_rating_delta", width: 90, sorter: "number", formatter: ratingDeltaCell},
+        {title: "Win%", field: "win_pct", width: 75, sorter: "number", formatter: winPctCell},
+        {title: "Flag%", field: "flag_pct", width: 75, sorter: "number"},
+        {title: "Mate%", field: "mate_pct", width: 75, sorter: "number"},
+        {title: "Form", field: "form", width: 110, formatter: sparkline, headerSort: false},
       ],
-      initialSort: [{column: "games", dir: "desc"}],
+      initialSort: [{column: "sum_rating_delta", dir: "asc"}],
     });
     table.on("rowClick", (e, row) => selectOpeningRow(row, flip));
     table.on("tableBuilt", () => {
@@ -561,5 +563,11 @@
     const v = cell.getValue();
     const cls = v >= 60 ? "cell-strong" : v <= 35 ? "cell-weak" : "";
     return `<span class="${cls}">${v}%</span>`;
+  }
+  function ratingDeltaCell(cell) {
+    const v = cell.getValue();
+    if (v == null) return "—";
+    const cls = v <= -20 ? "cell-weak" : v >= 20 ? "cell-strong" : "";
+    return `<span class="${cls}">${v >= 0 ? "+" : ""}${v}</span>`;
   }
 })();
