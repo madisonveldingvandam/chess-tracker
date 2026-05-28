@@ -204,15 +204,18 @@ def compute_process_metrics(records: list[GameRecord]) -> dict:
         time_burn_delta = round(
             statistics.mean(early_rates) - statistics.mean(late_rates), 2)
 
-    # "Outlasted but flagged": timeout-losses where at some recorded ply
-    # you had more time than opponent did at the same ply.
+    # "Outlasted but flagged": timeout-losses where I had a ≥5s clock edge
+    # at some ply from move 10 onward (my_clocks index ≥ 9). Tiny early
+    # edges don't count — this isolates panic-conversion failures.
     outlasted = 0
+    EDGE_SECONDS = 5.0
+    MIN_PLY_INDEX = 9
     for r in records:
         if r.result != "timeout":
             continue
         common = min(len(r.my_clocks), len(r.opp_clocks))
-        for i in range(common):
-            if r.my_clocks[i] > r.opp_clocks[i]:
+        for i in range(MIN_PLY_INDEX, common):
+            if r.my_clocks[i] - r.opp_clocks[i] >= EDGE_SECONDS:
                 outlasted += 1
                 break
 

@@ -1,5 +1,5 @@
 """Tests for metric computations."""
-from tests.fixtures.sample_records import RECORDS, CLOCK_RECORDS, OUTLASTED_THEN_FLAG_RECORD
+from tests.fixtures.sample_records import RECORDS, CLOCK_RECORDS, OUTLASTED_THEN_FLAG_RECORD, LONG_OUTLAST_RECORD
 from chess_tracker.metrics import compute_kpis, compute_sessions, compute_repertoire, compute_process_metrics, compute_session_decay
 
 
@@ -99,9 +99,17 @@ def test_opening_velocity_reflects_first_8_plies():
     assert abs(slow_vel - 24.0) < 0.5
 
 
-def test_outlasted_but_flagged_counts_a_timeout_where_you_were_ahead_at_some_ply():
-    """Timeout-loss where you had more time than opponent at some recorded ply."""
+def test_outlasted_but_flagged_ignores_early_only_edge():
+    """Under the tightened definition, a brief opening clock lead that
+    doesn't persist to move 10 is not 'outlasted'."""
     pm = compute_process_metrics([OUTLASTED_THEN_FLAG_RECORD])
+    assert pm["outlasted_but_flagged_count"] == 0
+
+
+def test_outlasted_but_flagged_counts_5s_edge_at_move_10_plus():
+    """A 7-second lead at move 10 followed by a timeout is the textbook
+    panic-conversion failure the metric was designed to catch."""
+    pm = compute_process_metrics([LONG_OUTLAST_RECORD])
     assert pm["outlasted_but_flagged_count"] == 1
 
 
@@ -557,3 +565,35 @@ def test_compute_all_merges_opening_annotations():
                   if r["display_name"] == "London System")
     assert london["tag"] == "in_repertoire"
     assert london["note"] == "main d4"
+
+
+def test_outlasted_but_flagged_requires_5s_edge_after_move_10():
+    """Tighter definition: timeout loss with ≥5s clock edge at any ply
+    from move 10 onward (my_clocks index >= 9). Tiny early edges don't count."""
+    from chess_tracker.pgn import GameRecord
+    from chess_tracker.metrics import compute_process_metrics
+
+    def _mk(my_clocks, opp_clocks):
+        return GameRecord(
+            url="u", end_time=1, time_class="bullet",
+            side="white", my_rating=500, opp_rating=500,
+            result="timeout", opp_result="win",
+            plies=len(my_clocks) * 2, fullmoves=len(my_clocks),
+            opening="x", eco="A00",
+            my_clocks=my_clocks, opp_clocks=opp_clocks,
+        )
+
+    # Case 1: 0.2s edge at move 2, then opponent leads the rest. Should NOT count.
+    too_early = _mk(
+        my_clocks=[59.0, 50.0, 40.0, 30.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0],
+        opp_clocks=[58.8, 51.0, 45.0, 38.0, 30.0, 25.0, 20.0, 15.0, 12.0, 10.0],
+    )
+    # Case 2: 7s edge at move 10, still timed out. Should count.
+    real_choke = _mk(
+        my_clocks=[55.0, 50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0, 12.0,
+                   5.0, 0.0],
+        opp_clocks=[50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0, 10.0, 5.0,
+                    4.0, 3.0],
+    )
+    pm = compute_process_metrics([too_early, real_choke])
+    assert pm["outlasted_but_flagged_count"] == 1

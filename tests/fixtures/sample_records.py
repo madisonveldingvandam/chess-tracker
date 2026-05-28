@@ -84,3 +84,18 @@ OUTLASTED_THEN_FLAG_RECORD = _r(
     my_clocks=_OUTLASTED_THEN_FLAG_MINE,
     opp_clocks=_OPP_STEADY_PACER,
 )
+
+# Designed for the tightened outlasted-but-flagged test: I held a 7-second
+# clock lead through move 10, then collapsed and flagged. 12 plies of clock
+# data per side.
+_LONG_OUTLAST_MINE = [55.0, 50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0,
+                       12.0, 5.0, 0.0]
+_LONG_OUTLAST_OPP =  [50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0, 10.0,
+                       5.0, 4.0, 3.0]
+
+LONG_OUTLAST_RECORD = _r(
+    1_700_011_200, "timeout", "win", "London System", side="white",
+    fullmoves=12,
+    my_clocks=_LONG_OUTLAST_MINE,
+    opp_clocks=_LONG_OUTLAST_OPP,
+)
