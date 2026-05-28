@@ -30,7 +30,9 @@
     const strip = document.getElementById("kpi-strip");
     if (!strip) return;
     const k = d.kpis;
-    const lastDelta = (d.sessions && d.sessions.length > 0) ? d.sessions[0].rating_delta : null;
+    const lastDelta = (d.sessions && d.sessions.length > 0)
+      ? d.sessions[d.sessions.length - 1].rating_delta
+      : null;
     const lastStr = lastDelta == null ? "—" : (lastDelta >= 0 ? "+" : "") + lastDelta;
     strip.insertAdjacentHTML('beforeend', `
       <div class="kpi"><span class="kpi-label">Rating</span>
@@ -352,13 +354,16 @@
     const processSub = velocity == null ? "insufficient data" : "Target ≤ 8s";
     const processAlert = velocity != null && velocity > 8;
 
-    // Sessions card: alert when last session was tilted
+    // Sessions card: alert when most-recent session was tilted.
+    // sessions are stored chronologically (oldest first); use slice(-5) and
+    // [length-1] to read the latest entries.
     const sessionCount = sessions.length;
-    const last5 = sessions.slice(0, 5);
+    const last5 = sessions.slice(-5);
     const tiltedCount = last5.filter(s => s.tilt_flag).length;
     const sessionsSub = sessionCount === 0 ? "no sessions"
       : `${tiltedCount} tilted of last 5`;
-    const sessionsAlert = sessions.length > 0 && sessions[0].tilt_flag === true;
+    const lastSession = sessions.length > 0 ? sessions[sessions.length - 1] : null;
+    const sessionsAlert = lastSession != null && lastSession.tilt_flag === true;
 
     root.innerHTML = [
       card("Leaks", `${leaks.length} active`, leaksSub, "leaks.html", leaksAlert),
