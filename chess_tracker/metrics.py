@@ -408,6 +408,118 @@ def recent_losses_with_suggestions(records: list[GameRecord], limit: int = 20) -
     return out
 
 
+def compute_opening_families(records: list[GameRecord]) -> list[dict]:
+    """Tier-1 aggregation: group records by (family, color).
+
+    One row per family-color combo. Mirrors compute_play_signatures schema
+    where applicable, plus `variation_count` (how many distinct play_signatures
+    fall under this family-color). Drives the main-page family tables;
+    variations within a family live on the opening detail page.
+    """
+    groups: dict[tuple[str, str], list[GameRecord]] = {}
+    sig_keys: dict[tuple[str, str], set] = {}
+    for r in records:
+        if r.family is None:
+            continue
+        key = (r.family, r.side)
+        groups.setdefault(key, []).append(r)
+        if r.play_signature is not None:
+            sig_keys.setdefault(key, set()).add(r.play_signature)
+
+    out = []
+    for (family, color), recs in groups.items():
+        recs = sorted(recs, key=lambda r: r.end_time)
+        n = len(recs)
+        wins = sum(1 for r in recs if _is_win(r.result))
+        losses_recs = [r for r in recs if _is_loss(r.result)]
+        losses = len(losses_recs)
+        draws = n - wins - losses
+        flag = sum(1 for r in losses_recs if r.result == "timeout")
+        mate = sum(1 for r in losses_recs if r.result == "checkmated")
+        med_len = statistics.median([r.fullmoves for r in recs])
+        avg_opp = round(statistics.mean([r.opp_rating for r in recs]), 0)
+        rating_gap = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
+        eco_counts = Counter(r.eco for r in recs if r.eco)
+        eco_top = eco_counts.most_common(1)[0][0] if eco_counts else None
+        out.append({
+            "family": family,
+            "color": color,
+            "eco": eco_top,
+            "games": n,
+            "wins": wins,
+            "losses": losses,
+            "draws": draws,
+            "win_pct": round(100 * wins / n, 1),
+            "flag_pct": round(100 * flag / losses, 1) if losses else 0.0,
+            "mate_pct": round(100 * mate / losses, 1) if losses else 0.0,
+            "med_len": med_len,
+            "avg_opp_rating": int(avg_opp),
+            "rating_gap": int(rating_gap),
+            "variation_count": len(sig_keys.get((family, color), set())),
+            "form": [_result_letter(r) for r in recs[-10:]],
+        })
+    out.sort(key=lambda x: (-x["games"], -x["win_pct"]))
+    return out
+
+
+def compute_opening_variations(records: list[GameRecord]) -> list[dict]:
+    """Tier-2 aggregation: group records by (family, variation, color).
+
+    One row per unique named variation. The same variation reached via
+    different move orders / transpositions (which produce different
+    play_signatures) collapses into a single row. ``canonical_play_signature``
+    is the most-frequent play_signature in the group — used to show a
+    representative board on the opening detail page.
+    """
+    groups: dict[tuple[str, str, str], list[GameRecord]] = {}
+    for r in records:
+        if r.family is None:
+            continue
+        # variation may be None (no opening label parsed) or "" (main line)
+        var = r.variation if r.variation is not None else ""
+        key = (r.family, var, r.side)
+        groups.setdefault(key, []).append(r)
+
+    out = []
+    for (family, variation, color), recs in groups.items():
+        recs = sorted(recs, key=lambda r: r.end_time)
+        n = len(recs)
+        wins = sum(1 for r in recs if _is_win(r.result))
+        losses_recs = [r for r in recs if _is_loss(r.result)]
+        losses = len(losses_recs)
+        draws = n - wins - losses
+        flag = sum(1 for r in losses_recs if r.result == "timeout")
+        mate = sum(1 for r in losses_recs if r.result == "checkmated")
+        med_len = statistics.median([r.fullmoves for r in recs])
+        avg_opp = round(statistics.mean([r.opp_rating for r in recs]), 0)
+        rating_gap = round(statistics.mean([r.my_rating - r.opp_rating for r in recs]), 0)
+        eco_counts = Counter(r.eco for r in recs if r.eco)
+        eco_top = eco_counts.most_common(1)[0][0] if eco_counts else None
+        sig_counts = Counter(r.play_signature for r in recs if r.play_signature)
+        canonical_sig = sig_counts.most_common(1)[0][0] if sig_counts else None
+        out.append({
+            "family": family,
+            "variation": variation,
+            "color": color,
+            "eco": eco_top,
+            "games": n,
+            "wins": wins,
+            "losses": losses,
+            "draws": draws,
+            "win_pct": round(100 * wins / n, 1),
+            "flag_pct": round(100 * flag / losses, 1) if losses else 0.0,
+            "mate_pct": round(100 * mate / losses, 1) if losses else 0.0,
+            "med_len": med_len,
+            "avg_opp_rating": int(avg_opp),
+            "rating_gap": int(rating_gap),
+            "position_count": len(sig_counts),
+            "canonical_play_signature": canonical_sig,
+            "form": [_result_letter(r) for r in recs[-10:]],
+        })
+    out.sort(key=lambda x: (-x["games"], -x["win_pct"]))
+    return out
+
+
 def compute_play_signatures(records: list[GameRecord]) -> list[dict]:
     """Group records by (play_signature, color). Records without a
     play_signature (game < 8 plies) are skipped. Each row carries
@@ -490,6 +602,8 @@ def compute_all(records: list[GameRecord], annotations: dict,
             **compute_process_metrics(records),
             "session_decay": compute_session_decay(records),
         },
+        "opening_families": compute_opening_families(records),
+        "opening_variations": compute_opening_variations(records),
         "play_signatures": play_signatures,
         "sessions": compute_sessions(records),
         "error_log": annotations.get("error_log", []),

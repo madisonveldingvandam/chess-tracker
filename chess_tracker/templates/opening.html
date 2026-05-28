@@ -1,0 +1,30 @@
+<!-- chess_tracker/templates/opening.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Chess Tracker — Opening — {{USERNAME}}</title>
+  <link rel="stylesheet" href="vendor/tabulator.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="kpi-strip"><a class="home-link" href="index.html">← repertoire</a></header>
+  <main>
+    <section id="opening-block">
+      <h2 id="opening-title">Opening</h2>
+      <div class="sig-split">
+        <div id="opening-variations-table"></div>
+        <aside class="board-panel">
+          <div class="board-large" id="opening-board"></div>
+          <div class="board-meta" id="opening-board-meta"></div>
+        </aside>
+      </div>
+    </section>
+  </main>
+  <script src="vendor/tabulator.min.js"></script>
+  <script>
+    /* DATA_INJECTION_POINT */
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>

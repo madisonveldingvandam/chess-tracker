@@ -400,6 +400,110 @@ def test_compute_all_play_signatures_has_family_and_variation_fields():
     assert london["variation"] == ""
 
 
+def test_compute_all_includes_opening_families_and_variations():
+    """compute_all payload exposes the two new tier-1/tier-2 aggregations."""
+    annotations = {"openings": {}, "games": {}, "error_log": []}
+    payload = compute_all(RECORDS, annotations, username="m_v-v")
+    assert "opening_families" in payload
+    assert "opening_variations" in payload
+
+
+def test_opening_families_aggregates_across_play_signatures():
+    """A family-color row sums all games sharing that family + color,
+    regardless of which play_signature they came from."""
+    from chess_tracker.metrics import compute_opening_families
+    from chess_tracker.pgn import GameRecord
+
+    def _rec(family, color, sig):
+        return GameRecord(
+            url="x", end_time=0, time_class="bullet", side=color,
+            my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+            plies=20, fullmoves=10,
+            opening=f"{family} Whatever Variation",
+            eco="A00", play_signature=sig, family=family, variation="Whatever Variation",
+        )
+
+    recs = [
+        _rec("Queens Pawn Opening", "white", "sig-A"),
+        _rec("Queens Pawn Opening", "white", "sig-A"),
+        _rec("Queens Pawn Opening", "white", "sig-B"),  # different play_signature, same family+color
+        _rec("Queens Pawn Opening", "black", "sig-C"),  # different color, separate row
+    ]
+    rows = compute_opening_families(recs)
+    qp_white = next(r for r in rows if r["family"] == "Queens Pawn Opening" and r["color"] == "white")
+    qp_black = next(r for r in rows if r["family"] == "Queens Pawn Opening" and r["color"] == "black")
+    assert qp_white["games"] == 3
+    assert qp_white["variation_count"] == 2  # sig-A and sig-B
+    assert qp_black["games"] == 1
+
+
+def test_opening_variations_collapses_transpositions_into_one_row():
+    """The bug we fixed: same named variation reached via different move
+    orders (different play_signatures) must collapse into ONE row per
+    (family, variation, color)."""
+    from chess_tracker.metrics import compute_opening_variations
+    from chess_tracker.pgn import GameRecord
+
+    def _rec(sig):
+        return GameRecord(
+            url="x", end_time=0, time_class="bullet", side="white",
+            my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+            plies=20, fullmoves=10,
+            opening="Queens Pawn Opening Zukertort Chigorin Variation",
+            eco="D02", play_signature=sig,
+        )
+
+    # Three "different" 8-ply positions, same named variation
+    recs = [_rec("sig-1"), _rec("sig-1"), _rec("sig-2"), _rec("sig-3")]
+    rows = compute_opening_variations(recs)
+    chig = [r for r in rows
+            if r["family"] == "Queens Pawn Opening"
+            and r["variation"] == "Zukertort Chigorin Variation"
+            and r["color"] == "white"]
+    assert len(chig) == 1, "duplicate variation rows — collapsing failed"
+    assert chig[0]["games"] == 4
+    assert chig[0]["position_count"] == 3  # three distinct play_signatures
+    # canonical = most-frequent play_signature
+    assert chig[0]["canonical_play_signature"] == "sig-1"
+
+
+def test_opening_variations_separates_by_color_and_main_line():
+    """Same variation as White vs Black = separate rows. Main-line (no
+    variation suffix) gets its own row too."""
+    from chess_tracker.metrics import compute_opening_variations
+    from chess_tracker.pgn import GameRecord
+
+    def _rec(side, opening):
+        return GameRecord(
+            url="x", end_time=0, time_class="bullet", side=side,
+            my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+            plies=20, fullmoves=10,
+            opening=opening, eco="A00", play_signature=f"sig-{side}-{opening}",
+        )
+
+    recs = [
+        _rec("white", "London System"),                    # main line
+        _rec("white", "London System Indian Defense"),     # named variation
+        _rec("black", "London System"),                    # main line, other color
+    ]
+    rows = compute_opening_variations(recs)
+    london_white_main = [r for r in rows
+                         if r["family"] == "London System"
+                         and r["variation"] == ""
+                         and r["color"] == "white"]
+    london_white_indian = [r for r in rows
+                           if r["family"] == "London System"
+                           and r["variation"] == "Indian Defense"
+                           and r["color"] == "white"]
+    london_black_main = [r for r in rows
+                         if r["family"] == "London System"
+                         and r["variation"] == ""
+                         and r["color"] == "black"]
+    assert len(london_white_main) == 1
+    assert len(london_white_indian) == 1
+    assert len(london_black_main) == 1
+
+
 def test_compute_all_merges_opening_annotations():
     annotations = {
         "openings": {"London System": {"tag": "in_repertoire", "note": "main d4"}},

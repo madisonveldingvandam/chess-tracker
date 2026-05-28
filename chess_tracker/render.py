@@ -6,7 +6,7 @@ from pathlib import Path
 INJECT_MARKER = "/* DATA_INJECTION_POINT */"
 DEFAULT_TEMPLATE_DIR = Path(__file__).parent / "templates"
 DEFAULT_TEMPLATE_PATH = DEFAULT_TEMPLATE_DIR / "index.html"
-PAGE_TEMPLATES = ["index", "leaks", "losses", "process", "sessions"]
+PAGE_TEMPLATES = ["index", "leaks", "losses", "process", "sessions", "opening"]
 
 
 def _safe_json(payload: dict) -> str:

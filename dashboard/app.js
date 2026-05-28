@@ -18,10 +18,9 @@
   renderErrorLog(D.error_log);
   renderProcess(D.process_metrics);
   renderSessionDecay(D.process_metrics?.session_decay);
-  renderColorBlock(D.play_signatures, "white",
-    "#white-signatures-table", "white-board", "white-board-meta", false);
-  renderColorBlock(D.play_signatures, "black",
-    "#black-signatures-table", "black-board", "black-board-meta", true);
+  renderFamilyBlock(D.opening_families, "white", "#white-families-table");
+  renderFamilyBlock(D.opening_families, "black", "#black-families-table");
+  renderOpeningDetail(D);
   renderSessions(D.sessions);
   renderDrillinCards(D);
 
@@ -146,64 +145,101 @@
     });
   }
 
-  // Renders a per-color repertoire block (table + single board panel). Called
-  // twice from the init block — once for white (no flip), once for black
-  // (board flipped so user's pieces are on the bottom). Each block has its
-  // own table id, board id, and meta id, so the two instances don't collide.
-  function renderColorBlock(allRows, color, tableSelector, boardId, metaId, flip) {
+  // Tier-1 family table on index.html. One row per (family, color); click a
+  // row to navigate to opening.html?family=...&color=... (the tier-2/3 view).
+  // No board panel here — boards live on the detail page.
+  function renderFamilyBlock(families, color, tableSelector) {
     if (!document.querySelector(tableSelector)) return;
-    const rows = allRows.filter(r => r.color === color);
+    const rows = (families || []).filter(r => r.color === color);
     const table = new Tabulator(tableSelector, {
-      data: rows, layout: "fitColumns", height: "540px",
-      resizableColumns: true,
-      rowFormatter: row => {
-        if (row.getData().low_confidence) row.getElement().classList.add("row-low-conf");
-      },
+      data: rows, layout: "fitColumns",
       columns: [
         {title: "Opening", field: "family", headerFilter: "input", minWidth: 200},
-        {title: "Variation", field: "variation", headerFilter: "input",
-         minWidth: 240,
-         formatter: c => c.getValue() || `<span class="ind-off">—</span>`},
+        {title: "Games", field: "games", width: 80, sorter: "number"},
+        {title: "Win%", field: "win_pct", width: 80, sorter: "number", formatter: winPctCell},
+        {title: "Flag%", field: "flag_pct", width: 80, sorter: "number"},
+        {title: "Mate%", field: "mate_pct", width: 80, sorter: "number"},
+        {title: "#Vars", field: "variation_count", width: 75, sorter: "number"},
+        {title: "Form", field: "form", width: 120, formatter: sparkline, headerSort: false},
+      ],
+      initialSort: [{column: "games", dir: "desc"}],
+    });
+    table.on("rowClick", (e, row) => {
+      const d = row.getData();
+      const qs = `family=${encodeURIComponent(d.family)}&color=${encodeURIComponent(d.color)}`;
+      window.location.href = `opening.html?${qs}`;
+    });
+  }
+
+  // Tier-2 view on opening.html — one row per unique named variation within
+  // one family-color combo. The board panel shows the canonical (most-played)
+  // position for the selected variation. Reads ?family=...&color=... from
+  // the URL and filters opening_variations.
+  function renderOpeningDetail(D) {
+    const tableEl = document.getElementById("opening-variations-table");
+    if (!tableEl) return;
+    const params = new URLSearchParams(window.location.search);
+    const family = params.get("family");
+    const color = params.get("color");
+    if (!family || !color) {
+      tableEl.innerHTML = `<p style="padding:1rem;color:var(--muted)">No opening selected. <a href="index.html">Pick one from the repertoire</a>.</p>`;
+      return;
+    }
+    const rows = (D.opening_variations || []).filter(
+      r => r.family === family && r.color === color);
+    const totalGames = rows.reduce((a, r) => a + r.games, 0);
+    const title = document.getElementById("opening-title");
+    if (title) {
+      const colorLabel = color.charAt(0).toUpperCase() + color.slice(1);
+      title.textContent = `${family} as ${colorLabel} — ${totalGames} games across ${rows.length} variation${rows.length === 1 ? "" : "s"}`;
+    }
+    if (rows.length === 0) {
+      tableEl.innerHTML = `<p style="padding:1rem;color:var(--muted)">No games found for ${family} (${color}).</p>`;
+      return;
+    }
+    const flip = color === "black";
+    const table = new Tabulator("#opening-variations-table", {
+      data: rows, layout: "fitColumns", height: "540px",
+      columns: [
+        {title: "Variation", field: "variation", headerFilter: "input", minWidth: 240,
+         formatter: c => c.getValue() || `<span class="ind-off">main line</span>`},
         {title: "ECO", field: "eco", width: 70},
         {title: "Games", field: "games", width: 80, sorter: "number"},
         {title: "Win%", field: "win_pct", width: 80, sorter: "number", formatter: winPctCell},
+        {title: "Flag%", field: "flag_pct", width: 80, sorter: "number"},
+        {title: "Mate%", field: "mate_pct", width: 80, sorter: "number"},
         {title: "Form", field: "form", width: 120, formatter: sparkline, headerSort: false},
       ],
-      initialSort: [
-        {column: "low_confidence", dir: "asc"},
-        {column: "games", dir: "desc"},
-      ],
+      initialSort: [{column: "games", dir: "desc"}],
     });
-    table.on("rowClick", (e, row) => selectBlockRow(row, boardId, metaId, flip));
+    table.on("rowClick", (e, row) => selectOpeningRow(row, flip));
     table.on("tableBuilt", () => {
       const first = table.getRows()[0];
-      if (first) selectBlockRow(first, boardId, metaId, flip);
+      if (first) selectOpeningRow(first, flip);
     });
   }
 
-  function selectBlockRow(row, boardId, metaId, flip) {
-    // Clear selection only within this block's table — not across both.
-    const tableEl = row.getElement().closest(".tabulator");
-    if (tableEl) {
-      tableEl.querySelectorAll(".tabulator-row.row-selected")
-        .forEach(el => el.classList.remove("row-selected"));
-    }
+  function selectOpeningRow(row, flip) {
+    document.querySelectorAll("#opening-variations-table .tabulator-row.row-selected")
+      .forEach(el => el.classList.remove("row-selected"));
     row.getElement().classList.add("row-selected");
-    updateBlockBoard(row.getData(), boardId, metaId, flip);
+    updateOpeningBoard(row.getData(), flip);
   }
 
-  function updateBlockBoard(data, boardId, metaId, flip) {
-    const board = document.getElementById(boardId);
-    const meta = document.getElementById(metaId);
+  function updateOpeningBoard(data, flip) {
+    const board = document.getElementById("opening-board");
+    const meta = document.getElementById("opening-board-meta");
     if (!board || !meta) return;
-    board.innerHTML = boardSquaresHTML(data.play_signature, flip);
+    board.innerHTML = boardSquaresHTML(data.canonical_play_signature, flip);
     const gap = data.rating_gap;
     const gapStr = gap == null ? "—" : (gap >= 0 ? "+" : "") + gap;
-    const tagRow = data.tag ? `<div class="row"><span class="k">Tag</span><span class="v">${data.tag}</span></div>` : "";
-    const noteRow = data.note ? `<div class="row"><span class="k">Note</span><span class="v">${data.note}</span></div>` : "";
+    const variationLabel = data.variation || "main line";
+    const positionsLabel = data.position_count > 1
+      ? `${data.position_count} positions reached via transpositions`
+      : `single canonical position`;
     meta.innerHTML = `
-      <div class="name">${data.display_name}</div>
-      <div class="stats">${data.color} · ECO ${data.eco}</div>
+      <div class="name">${variationLabel}</div>
+      <div class="stats">${data.color} · ECO ${data.eco} · ${positionsLabel}</div>
       <dl class="detail">
         <div class="row"><span class="k">Games</span><span class="v">${data.games}</span></div>
         <div class="row"><span class="k">Win</span><span class="v">${data.win_pct}%</span></div>
@@ -212,8 +248,6 @@
         <div class="row"><span class="k">Median len</span><span class="v">${data.med_len}</span></div>
         <div class="row"><span class="k">Avg opp</span><span class="v">${data.avg_opp_rating}</span></div>
         <div class="row"><span class="k">Δ opp</span><span class="v">${gapStr}</span></div>
-        ${tagRow}
-        ${noteRow}
       </dl>
     `;
   }
