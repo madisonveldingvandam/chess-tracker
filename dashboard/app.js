@@ -12,6 +12,7 @@
     return;
   }
   renderKPI(D);
+  renderBehavior(D.behavior);
   renderLeaks(D.leak_summary);
   renderRule(D.next_session_rule);
   renderRecentLosses(D.recent_losses);
@@ -424,6 +425,69 @@
     if (flip) cells.reverse();
     return cells.join("");
   }
+  function renderBehavior(b) {
+    const root = document.getElementById("behavior-cards");
+    if (!root || !b) return;
+    const ls = b.loss_streaks || {};
+    const rg = b.revenge_gap || {};
+    const dd = (b.daily_drawdown || []).slice(-7);  // last 7 days
+    const tod = (b.time_of_day || []);
+    const todWorst = [...tod].sort((a, b) => a.mean_session_delta - b.mean_session_delta)[0];
+    const todBest = [...tod].sort((a, b) => b.mean_session_delta - a.mean_session_delta)[0];
+
+    const cell = (label, value, sub, alert=false) =>
+      `<div class="behavior-card${alert ? " alert" : ""}">
+         <div class="bh-label">${label}</div>
+         <div class="bh-value">${value}</div>
+         <div class="bh-sub">${sub}</div>
+       </div>`;
+
+    const cards = [];
+    cards.push(cell(
+      "Current loss streak",
+      String(ls.current_loss_streak ?? 0),
+      ls.current_timeout_loss_streak
+        ? `${ls.current_timeout_loss_streak} of them on time`
+        : "",
+      (ls.current_loss_streak ?? 0) >= 3
+    ));
+    cards.push(cell(
+      "Longest loss streak (24h)",
+      String(ls.longest_loss_streak_24h ?? 0),
+      ls.longest_timeout_loss_streak_24h
+        ? `timeout streak: ${ls.longest_timeout_loss_streak_24h}`
+        : "",
+      (ls.longest_loss_streak_24h ?? 0) >= 5
+    ));
+    const gap = rg.revenge_gap;
+    cards.push(cell(
+      "Revenge gap",
+      gap == null ? "—" : `${gap > 0 ? "+" : ""}${gap}pp`,
+      `${rg.wins_after_loss}/${rg.games_after_loss} after losses vs ${rg.wins_after_win}/${rg.games_after_win} after wins`,
+      gap != null && gap <= -8
+    ));
+    const worstDay = dd.length ? dd.reduce((acc, d) =>
+      d.max_drawdown < acc.max_drawdown ? d : acc, dd[0]) : null;
+    cards.push(cell(
+      "Worst day this week",
+      worstDay ? `${worstDay.max_drawdown}` : "—",
+      worstDay ? `${worstDay.date} (${worstDay.games} games)` : "",
+      worstDay && worstDay.max_drawdown <= -50
+    ));
+    cards.push(cell(
+      "Best time-of-day",
+      todBest ? `${String(todBest.hour).padStart(2, "0")}:00` : "—",
+      todBest ? `mean session Δ ${todBest.mean_session_delta > 0 ? "+" : ""}${todBest.mean_session_delta}` : ""
+    ));
+    cards.push(cell(
+      "Worst time-of-day",
+      todWorst ? `${String(todWorst.hour).padStart(2, "0")}:00` : "—",
+      todWorst ? `mean session Δ ${todWorst.mean_session_delta > 0 ? "+" : ""}${todWorst.mean_session_delta}` : "",
+      todWorst && todWorst.mean_session_delta <= -20
+    ));
+    root.innerHTML = cards.join("");
+  }
+
   function winPctCell(cell) {
     const v = cell.getValue();
     const cls = v >= 60 ? "cell-strong" : v <= 35 ? "cell-weak" : "";

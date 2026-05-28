@@ -341,3 +341,38 @@ section h3 {
 @media (max-width: 900px) {
   .drillin-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+#behavior-block {
+  margin: 1rem 0;
+}
+.behavior-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.behavior-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.75rem;
+}
+.behavior-card.alert {
+  border-color: var(--accent);
+}
+.behavior-card .bh-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.behavior-card .bh-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0.25rem 0;
+  color: var(--text);
+}
+.behavior-card .bh-sub {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
