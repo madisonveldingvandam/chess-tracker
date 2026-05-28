@@ -73,8 +73,9 @@ CLOCK_RECORDS = [
 ]
 
 
-# Designed for outlasted-but-flagged test: I was ahead on time in the opening,
-# burned hard mid-game, and ran out. Opp paced steadily and survives.
+# 8-ply game: the clock advantage is entirely in moves 1-3, never reaching
+# move 10. Under the tightened outlasted-but-flagged rule (≥5s edge at index
+# ≥ 9) this is a NEGATIVE case — the metric returns 0.
 _OUTLASTED_THEN_FLAG_MINE = [55.0, 50.0, 45.0, 35.0, 25.0, 15.0, 5.0, 0.0]
 _OPP_STEADY_PACER = [50.0, 45.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0]
 

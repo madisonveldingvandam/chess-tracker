@@ -8,6 +8,9 @@ from chess_tracker.pgn import GameRecord, opening_family, opening_variation
 _DRAW_RESULTS = {"agreed", "repetition", "stalemate", "insufficient",
                  "50move", "timevsinsufficient"}
 
+OUTLASTED_EDGE_SECONDS = 5.0   # minimum clock lead (seconds) to qualify as "outlasted"
+OUTLASTED_MIN_PLY_INDEX = 9    # first ply index checked (0-indexed; ply 9 = move 10)
+
 
 def _is_win(r: str) -> bool:
     return r == "win"
@@ -208,14 +211,12 @@ def compute_process_metrics(records: list[GameRecord]) -> dict:
     # at some ply from move 10 onward (my_clocks index ≥ 9). Tiny early
     # edges don't count — this isolates panic-conversion failures.
     outlasted = 0
-    EDGE_SECONDS = 5.0
-    MIN_PLY_INDEX = 9
     for r in records:
         if r.result != "timeout":
             continue
         common = min(len(r.my_clocks), len(r.opp_clocks))
-        for i in range(MIN_PLY_INDEX, common):
-            if r.my_clocks[i] - r.opp_clocks[i] >= EDGE_SECONDS:
+        for i in range(OUTLASTED_MIN_PLY_INDEX, common):
+            if r.my_clocks[i] - r.opp_clocks[i] >= OUTLASTED_EDGE_SECONDS:
                 outlasted += 1
                 break
 
