@@ -1,6 +1,8 @@
 """Parse a Chess.com game dict into a GameRecord."""
 from dataclasses import dataclass, field
+from io import StringIO
 import re
+import chess.pgn
 from chess_tracker.play_signature import (
     play_signature as _compute_play_signature,
     first_moves_san as _compute_first_moves_san,
@@ -131,7 +133,10 @@ def parse_game(g: dict, username: str) -> GameRecord:
     w_clocks = all_clocks[0::2]
     b_clocks = all_clocks[1::2]
 
-    plies = len(all_clocks)
+    # Move count from PGN tree, not from clock annotations (some plies may
+    # be missing [%clk] tags due to server-side lag refunds).
+    game_tree = chess.pgn.read_game(StringIO(pgn))
+    plies = sum(1 for _ in game_tree.mainline_moves()) if game_tree else 0
     fullmoves = (plies + 1) // 2
 
     eco_url_m = _ECO_URL_RE.search(pgn)

@@ -149,3 +149,18 @@ def test_parse_game_extracts_time_control_and_rated():
     rec = parse_game(g, username="me")
     assert rec.time_control == "60"
     assert rec.rated is True
+
+
+def test_parse_game_move_count_from_pgn_tree_not_clocks():
+    """If a [%clk] tag is missing on one move, plies/fullmoves still reflect actual move count."""
+    g = {
+        "url": "u", "end_time": 1, "time_class": "bullet",
+        "time_control": "60", "rated": True,
+        "white": {"username": "me", "rating": 500, "result": "win"},
+        "black": {"username": "opp", "rating": 500, "result": "checkmated"},
+        # 4 plies, only 3 clock annotations
+        "pgn": "[ECO \"C20\"]\n1. e4 e5 2. Nf3 {[%clk 0:00:58]} Nc6 {[%clk 0:00:58]} *",
+    }
+    rec = parse_game(g, username="me")
+    assert rec.plies == 4
+    assert rec.fullmoves == 2
