@@ -35,6 +35,8 @@ class GameRecord:
     variation: str | None = None       # tier-2 suffix (e.g. "Zukertort Chigorin Variation"); "" for main lines
     time_control: str = "60"           # Chess.com raw TimeControl string, e.g. "60" = 1+0
     rated: bool = True
+    prev_rating: int | None = None     # postgame rating of the prior chronological game; None for first
+    rating_delta: int | None = None    # my_rating - prev_rating; None for first
 
     def __post_init__(self):
         # Derive family/variation from opening when not explicitly set.

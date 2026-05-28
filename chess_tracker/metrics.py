@@ -602,6 +602,9 @@ def compute_all(records: list[GameRecord], annotations: dict,
                 username: str, format: str = "bullet",
                 low_confidence_threshold: int = 15) -> dict:
     """Top-level dashboard payload. All panel data merged + annotations applied."""
+    from chess_tracker.enrich import enrich_with_deltas
+    enrich_with_deltas(records)
+
     play_signatures = compute_play_signatures(records)
     opening_notes = annotations.get("openings", {})
     for row in play_signatures:
