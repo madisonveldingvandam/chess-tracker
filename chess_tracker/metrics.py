@@ -447,6 +447,10 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
     where applicable, plus `variation_count` (how many distinct play_signatures
     fall under this family-color). Drives the main-page family tables;
     variations within a family live on the opening detail page.
+
+    Requires `enrich_with_deltas(records)` to have run first — otherwise
+    every row's `sum_rating_delta` / `avg_rating_delta` silently returns 0.
+    `compute_all` enriches before calling.
     """
     groups: dict[tuple[str, str], list[GameRecord]] = {}
     sig_keys: dict[tuple[str, str], set] = {}
@@ -521,6 +525,10 @@ def compute_opening_variations(records: list[GameRecord]) -> list[dict]:
     play_signatures) collapses into a single row. ``canonical_play_signature``
     is the most-frequent play_signature in the group — used to show a
     representative board on the opening detail page.
+
+    Requires `enrich_with_deltas(records)` to have run first — otherwise
+    every row's `sum_rating_delta` / `avg_rating_delta` silently returns 0.
+    `compute_all` enriches before calling.
     """
     groups: dict[tuple[str, str, str], list[GameRecord]] = {}
     for r in records:
