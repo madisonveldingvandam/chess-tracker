@@ -196,3 +196,23 @@ def compute_daily_drawdown(records: list[GameRecord]) -> list[dict]:
             "games_after_drawdown_100": games_after,
         })
     return out
+
+
+def compute_mate_loss_buckets(records: list[GameRecord]) -> list[dict]:
+    """Checkmated losses grouped by fullmoves bucket and side."""
+    def bucket(fm):
+        if fm <= 15:
+            return "≤15"
+        if fm <= 25:
+            return "16-25"
+        return ">25"
+    buckets: dict[tuple[str, str], int] = {}
+    for r in records:
+        if r.result != "checkmated":
+            continue
+        key = (r.side, bucket(r.fullmoves))
+        buckets[key] = buckets.get(key, 0) + 1
+    return [
+        {"side": side, "bucket": b, "count": n}
+        for (side, b), n in sorted(buckets.items(), key=lambda kv: (kv[0][0], kv[0][1]))
+    ]

@@ -1,7 +1,7 @@
 """Tests for the behavioral-signals layer."""
 from chess_tracker.pgn import GameRecord
 from chess_tracker.behavior import compute_loss_streaks, compute_revenge_gap, compute_daily_drawdown
-from chess_tracker.behavior import compute_time_of_day
+from chess_tracker.behavior import compute_time_of_day, compute_mate_loss_buckets
 
 
 def _mk(t, result):
@@ -131,3 +131,37 @@ def test_time_of_day_groups_sessions_by_start_hour():
     assert sum(b["sessions"] for b in buckets) == 2
     # Total games preserved across buckets.
     assert sum(b["games"] for b in buckets) == 6
+
+
+def test_mate_loss_buckets_split_by_length_and_side():
+    """Checkmated losses bucketed by fullmoves: ≤15, 16-25, >25; split by side."""
+    def _mk_mate(side, fullmoves, t=1):
+        return GameRecord(
+            url=f"u{t}-{fullmoves}", end_time=t, time_class="bullet",
+            side=side, my_rating=500, opp_rating=500,
+            result="checkmated", opp_result="win",
+            plies=fullmoves*2, fullmoves=fullmoves, opening="x", eco="A00",
+        )
+    records = [
+        _mk_mate("white", 10, t=1),
+        _mk_mate("white", 12, t=2),
+        _mk_mate("black", 10, t=3),
+        _mk_mate("white", 22, t=4),
+        _mk_mate("white", 40, t=5),
+        # Non-mate losses should be ignored.
+        GameRecord(
+            url="u-x", end_time=6, time_class="bullet",
+            side="white", my_rating=500, opp_rating=500,
+            result="timeout", opp_result="win",
+            plies=40, fullmoves=20, opening="x", eco="A00",
+        ),
+    ]
+    out = compute_mate_loss_buckets(records)
+    # Expect rows keyed by (side, bucket); only mate-losses counted.
+    table = {(r["side"], r["bucket"]): r["count"] for r in out}
+    assert table[("white", "≤15")] == 2
+    assert table[("black", "≤15")] == 1
+    assert table[("white", "16-25")] == 1
+    assert table[("white", ">25")] == 1
+    # Total = 5 mates
+    assert sum(r["count"] for r in out) == 5
