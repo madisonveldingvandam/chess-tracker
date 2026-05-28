@@ -597,3 +597,26 @@ def test_outlasted_but_flagged_requires_5s_edge_after_move_10():
     )
     pm = compute_process_metrics([too_early, real_choke])
     assert pm["outlasted_but_flagged_count"] == 1
+
+
+def test_abandonment_leak_fires_on_any_abandonment_in_window():
+    from chess_tracker.pgn import GameRecord
+    from chess_tracker.metrics import detect_leaks
+
+    def _mk(t, result):
+        return GameRecord(
+            url=f"u{t}", end_time=t, time_class="bullet",
+            side="white", my_rating=500, opp_rating=500,
+            result=result, opp_result="win",
+            plies=20, fullmoves=10, opening="x", eco="A00",
+        )
+
+    # 30 games: 29 timeouts (boring losses), 1 abandonment. Should fire abandonment leak.
+    records = [_mk(1_700_000_000 + i*60, "timeout") for i in range(29)]
+    records.append(_mk(1_700_001_800, "abandoned"))
+    leaks = detect_leaks(records)
+    names = [L["name"] for L in leaks]
+    assert "abandonment" in names
+    ab = next(L for L in leaks if L["name"] == "abandonment")
+    assert ab["severity"] == "critical"
+    assert "1" in ab["evidence"]  # mentions the count

@@ -324,6 +324,16 @@ def detect_leaks(records: list[GameRecord]) -> list[dict]:
                 "suggested_action": "Middlegame tactics — file recurring patterns in the error log.",
             })
 
+    # Any abandonment in last 30 games is a high-confidence tilt signal.
+    abandoned = [r for r in window if r.result == "abandoned"]
+    if abandoned:
+        leaks.append({
+            "name": "abandonment",
+            "severity": "critical",
+            "evidence": f"{len(abandoned)} abandoned game(s) in the last {len(window)} games",
+            "suggested_action": "Walk away after the urge to close the tab — that is the stop signal.",
+        })
+
     # Post-peak decay & tilt-session use full history; 30-game window starves the 21+ bucket.
     decay = compute_session_decay(records)
     fired, peak, last = _post_peak_decay(decay)
