@@ -344,11 +344,13 @@
       : topLossTypes.map(([t, n]) => `${n} ${t}`).join(", ");
     const lossesAlert = losses.length >= 10;
 
-    // Process card: alert when opening_velocity_median < 18
+    // Process card: alert when opening_velocity_median > 8 (seconds spent
+    // on first 8 moves; matches the leak detector's "time_burn_opening"
+    // threshold of >8s). Lower velocity = faster opening play = better.
     const velocity = pm.opening_velocity_median;
     const processHeadline = velocity == null ? "—" : `${velocity}s @ 8`;
-    const processSub = velocity == null ? "insufficient data" : "Target ≥ 18s";
-    const processAlert = velocity != null && velocity < 18;
+    const processSub = velocity == null ? "insufficient data" : "Target ≤ 8s";
+    const processAlert = velocity != null && velocity > 8;
 
     // Sessions card: alert when last session was tilted
     const sessionCount = sessions.length;
