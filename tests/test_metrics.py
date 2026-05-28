@@ -385,6 +385,21 @@ def test_compute_all_play_signatures_has_first_moves_field():
         assert row["first_moves"] is None
 
 
+def test_compute_all_play_signatures_has_family_and_variation_fields():
+    """Each play_signature row carries tier-1 (family) and tier-2 (variation)
+    derived from display_name, so the dashboard can show them as columns."""
+    annotations = {"openings": {}, "games": {}, "error_log": []}
+    payload = compute_all(RECORDS, annotations, username="m_v-v")
+    for row in payload["play_signatures"]:
+        assert "family" in row
+        assert "variation" in row
+    # London System fixture: family stops at "System", no variation
+    london = next(r for r in payload["play_signatures"]
+                  if r["display_name"] == "London System")
+    assert london["family"] == "London System"
+    assert london["variation"] == ""
+
+
 def test_compute_all_merges_opening_annotations():
     annotations = {
         "openings": {"London System": {"tag": "in_repertoire", "note": "main d4"}},

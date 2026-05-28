@@ -1,6 +1,11 @@
 import json
 from pathlib import Path
-from chess_tracker.pgn import parse_game, opening_family
+from chess_tracker.pgn import (
+    parse_game,
+    opening_family,
+    opening_variation,
+    _clean_opening_label,
+)
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures/sample_game.json").read_text())
 
@@ -31,10 +36,100 @@ def test_parse_game_returns_record_with_required_fields():
         assert "/" in rec.play_signature
 
 
-def test_opening_family_strips_move_suffix():
-    assert opening_family("Queens-Pawn-Opening-Zukertort-Variation-3.Bf4") == \
+def test_clean_opening_label_strips_move_suffix():
+    """Private helper: just removes trailing move-number tokens."""
+    assert _clean_opening_label("Queens-Pawn-Opening-Zukertort-Variation-3.Bf4") == \
         "Queens Pawn Opening Zukertort Variation"
-    assert opening_family("Italian-Game-Knight-Attack") == "Italian Game Knight Attack"
-    assert opening_family("Caro-Kann-Defense-2...d5") == "Caro Kann Defense"
+    assert _clean_opening_label("Italian-Game-Knight-Attack") == "Italian Game Knight Attack"
+    assert _clean_opening_label("Caro-Kann-Defense-2...d5") == "Caro Kann Defense"
     # Real-fixture form: move text glued to the family name with `...`
+    assert _clean_opening_label("Scotch-Game...4.Nxd4-Nxd4-5.Qxd4-d6") == "Scotch Game"
+
+
+def test_opening_family_cuts_at_category_keyword():
+    """Tier-1 stem stops at the first variation-category keyword (inclusive).
+
+    Note on Queens Gambit: 'Accepted' / 'Declined' / 'Slav' etc. are
+    variations of 'Queens Gambit' (the family), so the stem stops at
+    'Gambit'. Chess.com's game review groups them the same way.
+    """
+    assert opening_family("Queens Pawn Opening Zukertort Chigorin Variation") == \
+        "Queens Pawn Opening"
+    assert opening_family("Italian Game Knight Attack") == "Italian Game"
+    assert opening_family("Caro Kann Defense") == "Caro Kann Defense"
+    assert opening_family("Englund Gambit") == "Englund Gambit"
+    assert opening_family("London System") == "London System"
+    assert opening_family("Queens Gambit Accepted") == "Queens Gambit"
+    assert opening_family("Queens Gambit Declined") == "Queens Gambit"
+
+
+def test_opening_variation_distinguishes_queens_gambit_branches():
+    """Accepted / Declined are variations of the Queens Gambit family."""
+    assert opening_variation("Queens Gambit Accepted") == "Accepted"
+    assert opening_variation("Queens Gambit Declined") == "Declined"
+
+
+def test_opening_family_accepts_raw_slugs_idempotently():
+    """Should work on chess.com slugs directly — equivalent to cleaning first."""
+    assert opening_family("Queens-Pawn-Opening-Zukertort-Variation-3.Bf4") == \
+        "Queens Pawn Opening"
     assert opening_family("Scotch-Game...4.Nxd4-Nxd4-5.Qxd4-d6") == "Scotch Game"
+
+
+def test_opening_family_handles_edge_inputs():
+    assert opening_family(None) is None
+    assert opening_family("") == ""
+    # No category keyword present — return cleaned input unchanged
+    assert opening_family("Bird") == "Bird"
+
+
+def test_opening_variation_returns_suffix_after_family_stem():
+    assert opening_variation("Queens Pawn Opening Zukertort Chigorin Variation") == \
+        "Zukertort Chigorin Variation"
+    assert opening_variation("Italian Game Knight Attack") == "Knight Attack"
+    # Main-line / no variation suffix → empty string
+    assert opening_variation("Caro Kann Defense") == ""
+    assert opening_variation("Englund Gambit") == ""
+    assert opening_variation("London System") == ""
+
+
+def test_opening_variation_accepts_raw_slugs():
+    assert opening_variation("Queens-Pawn-Opening-Zukertort-Variation-3.Bf4") == \
+        "Zukertort Variation"
+
+
+def test_opening_variation_handles_edge_inputs():
+    assert opening_variation(None) is None
+    assert opening_variation("") == ""
+    # No category keyword — no suffix can be extracted
+    assert opening_variation("Bird") == ""
+
+
+def test_game_record_auto_derives_family_and_variation_from_opening():
+    """__post_init__ should populate family/variation from opening when not set."""
+    from chess_tracker.pgn import GameRecord
+    rec = GameRecord(
+        url="x", end_time=0, time_class="bullet", side="white",
+        my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+        plies=20, fullmoves=10,
+        opening="Queens Pawn Opening Zukertort Chigorin Variation",
+        eco="A45",
+    )
+    assert rec.family == "Queens Pawn Opening"
+    assert rec.variation == "Zukertort Chigorin Variation"
+
+
+def test_game_record_family_and_variation_explicit_override():
+    """Explicit family/variation should not be overwritten by __post_init__."""
+    from chess_tracker.pgn import GameRecord
+    rec = GameRecord(
+        url="x", end_time=0, time_class="bullet", side="white",
+        my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+        plies=20, fullmoves=10,
+        opening="Whatever",
+        eco="A00",
+        family="Explicit Family",
+        variation="Explicit Variation",
+    )
+    assert rec.family == "Explicit Family"
+    assert rec.variation == "Explicit Variation"

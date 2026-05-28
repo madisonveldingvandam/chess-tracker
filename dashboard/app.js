@@ -160,8 +160,8 @@
         if (row.getData().low_confidence) row.getElement().classList.add("row-low-conf");
       },
       columns: [
-        {title: "Opening", field: "display_name", headerFilter: "input", minWidth: 200},
-        {title: "First moves", field: "first_moves", headerFilter: "input",
+        {title: "Opening", field: "family", headerFilter: "input", minWidth: 200},
+        {title: "Variation", field: "variation", headerFilter: "input",
          minWidth: 240,
          formatter: c => c.getValue() || `<span class="ind-off">—</span>`},
         {title: "ECO", field: "eco", width: 70},

@@ -2,7 +2,7 @@
 from collections import Counter
 from datetime import datetime
 import statistics
-from chess_tracker.pgn import GameRecord
+from chess_tracker.pgn import GameRecord, opening_family, opening_variation
 
 
 _DRAW_RESULTS = {"agreed", "repetition", "stalemate", "insufficient",
@@ -446,6 +446,8 @@ def compute_play_signatures(records: list[GameRecord]) -> list[dict]:
             "play_signature": sig,
             "first_moves": first_moves,
             "display_name": display_name,
+            "family": opening_family(display_name),
+            "variation": opening_variation(display_name),
             "color": color,
             "eco": eco_top,
             "games": n,
