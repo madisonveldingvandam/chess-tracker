@@ -31,6 +31,8 @@ class GameRecord:
     first_moves: str | None = None     # SAN of first 8 plies, e.g. "1.d4 d5 …"
     family: str | None = None          # tier-1 stem (e.g. "Queens Pawn Opening"); auto-derived from opening
     variation: str | None = None       # tier-2 suffix (e.g. "Zukertort Chigorin Variation"); "" for main lines
+    time_control: str = "60"           # Chess.com raw TimeControl string, e.g. "60" = 1+0
+    rated: bool = True
 
     def __post_init__(self):
         # Derive family/variation from opening when not explicitly set.
@@ -154,4 +156,6 @@ def parse_game(g: dict, username: str) -> GameRecord:
         opp_clocks=b_clocks if me_white else w_clocks,
         play_signature=_compute_play_signature(pgn),
         first_moves=_compute_first_moves_san(pgn),
+        time_control=str(g.get("time_control", "60")),
+        rated=bool(g.get("rated", True)),
     )

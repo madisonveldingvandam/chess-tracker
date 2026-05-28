@@ -37,3 +37,46 @@ def test_refresh_main_writes_computed_and_dashboard(tmp_path, monkeypatch):
         assert out.exists(), f"missing {name}.html"
         html = out.read_text()
         assert "window.DATA" in html
+
+
+def test_refresh_drops_non_60_and_unrated_bullet(tmp_path, monkeypatch):
+    """Only rated 1+0 standard-chess games survive the bullet filter."""
+    from refresh import main
+    archives = {
+        "games": [
+            # Keep: rated 60-second standard chess bullet
+            {"url": "u1", "end_time": 1, "time_class": "bullet",
+             "time_control": "60", "rated": True, "rules": "chess",
+             "white": {"username": "me", "rating": 500, "result": "win"},
+             "black": {"username": "opp", "rating": 500, "result": "checkmated"},
+             "pgn": "[ECO \"A00\"]\n*"},
+            # Drop: 2+1 bullet
+            {"url": "u2", "end_time": 2, "time_class": "bullet",
+             "time_control": "120+1", "rated": True, "rules": "chess",
+             "white": {"username": "me", "rating": 500, "result": "win"},
+             "black": {"username": "opp", "rating": 500, "result": "checkmated"},
+             "pgn": "*"},
+            # Drop: unrated
+            {"url": "u3", "end_time": 3, "time_class": "bullet",
+             "time_control": "60", "rated": False, "rules": "chess",
+             "white": {"username": "me", "rating": 500, "result": "win"},
+             "black": {"username": "opp", "rating": 500, "result": "checkmated"},
+             "pgn": "*"},
+            # Drop: variant
+            {"url": "u4", "end_time": 4, "time_class": "bullet",
+             "time_control": "60", "rated": True, "rules": "kingofthehill",
+             "white": {"username": "me", "rating": 500, "result": "win"},
+             "black": {"username": "opp", "rating": 500, "result": "checkmated"},
+             "pgn": "*"},
+        ]
+    }
+    monkeypatch.setattr("refresh.fetch_archives_index", lambda u: ["arc1"])
+    monkeypatch.setattr("refresh.fetch_archive", lambda url, cache_dir, force: archives)
+    rc = main(["--username", "me",
+               "--data-dir", str(tmp_path / "data"),
+               "--dashboard-dir", str(tmp_path / "dash")])
+    assert rc == 0
+    import json
+    payload = json.loads((tmp_path / "data" / "computed.json").read_text())
+    # Only u1 should have made it through
+    assert payload["kpis"]["games_total"] == 1
