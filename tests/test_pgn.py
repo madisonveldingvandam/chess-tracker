@@ -146,7 +146,6 @@ def test_parse_game_extracts_time_control_and_rated():
         "black": {"username": "opp", "rating": 500, "result": "checkmated"},
         "pgn": '[ECO "C20"]\n[ECOUrl "https://www.chess.com/openings/Kings-Pawn-Opening"]\n1. e4 {[%clk 0:01:00]} e5 {[%clk 0:01:00]} *',
     }
-    from chess_tracker.pgn import parse_game
     rec = parse_game(g, username="me")
     assert rec.time_control == "60"
     assert rec.rated is True

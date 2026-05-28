@@ -4,7 +4,7 @@ from chess_tracker.pgn import GameRecord
 # Helper to keep fixtures terse
 def _r(end_time, result, opp_result, opening, my_rating=500, opp_rating=500,
        side="white", fullmoves=30, my_clocks=None, opp_clocks=None, eco="A00",
-       play_signature=None):
+       play_signature=None, time_control: str = "60", rated: bool = True):
     return GameRecord(
         url=f"https://chess.com/game/{end_time}",
         end_time=end_time, time_class="bullet",
@@ -15,6 +15,8 @@ def _r(end_time, result, opp_result, opening, my_rating=500, opp_rating=500,
         my_clocks=my_clocks or [60.0, 30.0, 10.0],
         opp_clocks=opp_clocks or [60.0, 30.0, 5.0],
         play_signature=play_signature,
+        time_control=time_control,
+        rated=rated,
     )
 
 
