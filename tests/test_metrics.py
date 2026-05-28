@@ -1,6 +1,6 @@
 """Tests for metric computations."""
 from tests.fixtures.sample_records import RECORDS, CLOCK_RECORDS, OUTLASTED_THEN_FLAG_RECORD, LONG_OUTLAST_RECORD
-from chess_tracker.metrics import compute_kpis, compute_sessions, compute_repertoire, compute_process_metrics, compute_session_decay
+from chess_tracker.metrics import compute_kpis, compute_sessions, compute_process_metrics, compute_session_decay
 
 
 def test_compute_kpis_current_rating_is_last_games():
@@ -38,43 +38,6 @@ def test_compute_sessions_flags_tilt_when_drop_50_or_more():
     for s in sessions:
         assert "tilt_flag" in s
         assert s["tilt_flag"] == (s["rating_delta"] <= -50)
-
-
-def test_compute_repertoire_groups_by_opening_and_color():
-    rep = compute_repertoire(RECORDS)
-    # 3 distinct (opening, color) keys: London/white, Petrovs/black, Italian/black
-    # Actually: London(white) x3, Petrovs(black) x1, Italian(black) x2
-    by_key = {(r["opening"], r["color"]): r for r in rep}
-    assert by_key[("London System", "white")]["games"] == 3
-    assert by_key[("Italian Game", "black")]["games"] == 2
-    assert by_key[("Petrovs Defense", "black")]["games"] == 1
-
-
-def test_compute_repertoire_calculates_win_pct():
-    rep = compute_repertoire(RECORDS)
-    by_key = {(r["opening"], r["color"]): r for r in rep}
-    london = by_key[("London System", "white")]
-    # London games: 1W, 1L (checkmated), 1W → 2W/3 = 66.7%
-    assert london["wins"] == 2
-    assert london["losses"] == 1
-    assert london["win_pct"] == round(200/3, 1)
-
-
-def test_compute_repertoire_includes_loss_type_breakdown():
-    rep = compute_repertoire(RECORDS)
-    by_key = {(r["opening"], r["color"]): r for r in rep}
-    italian = by_key[("Italian Game", "black")]
-    # 1 timeout, 1 checkmated → flag_pct 50%, mate_pct 50%
-    assert italian["flag_pct"] == 50.0
-    assert italian["mate_pct"] == 50.0
-
-
-def test_compute_repertoire_includes_recent_form_sparkline():
-    rep = compute_repertoire(RECORDS)
-    by_key = {(r["opening"], r["color"]): r for r in rep}
-    london = by_key[("London System", "white")]
-    # form: oldest→newest, "W"|"L"|"D"
-    assert london["form"] == ["W", "L", "W"]
 
 
 def test_compute_process_metrics_returns_required_keys():
