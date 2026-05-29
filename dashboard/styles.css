@@ -102,6 +102,7 @@ section h3 {
   margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted);
 }
 .plan-side-header {
+  grid-column: 1 / -1;   /* full-width band: forces its own row above the side's cards */
   text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent) !important;
 }
 .plan-counts { color: var(--muted); font-size: 0.78rem; margin-top: 0.2rem; }
