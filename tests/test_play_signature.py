@@ -62,3 +62,24 @@ def test_first_moves_san_uses_san_notation_consistently():
     direct     = "1. d4 Nf6 2. c4 e6 3. Nc3 d5 4. Nf3 Be7 *"
     transposed = "1. d4 d5  2. c4 e6 3. Nc3 Nf6 4. Nf3 Be7 *"
     assert first_moves_san(_parse(direct)) != first_moves_san(_parse(transposed))
+
+
+# --- opening_moves_san (best-effort, up to N plies) -------------------------
+from chess_tracker.play_signature import opening_moves_san
+
+
+def test_opening_moves_san_returns_up_to_12_plies():
+    pgn = ('[Event "x"]\n\n1. d4 d5 2. Nf3 Nf6 3. e3 e6 4. Bd3 c5 '
+           '5. b3 Nc6 6. Bb2 Bd6 7. O-O O-O 1-0')
+    assert opening_moves_san(_parse(pgn)) == (
+        "1.d4 d5 2.Nf3 Nf6 3.e3 e6 4.Bd3 c5 5.b3 Nc6 6.Bb2 Bd6")
+
+
+def test_opening_moves_san_best_effort_for_short_game():
+    # Only 6 plies — returns what exists rather than None.
+    pgn = '[Event "x"]\n\n1. e4 e5 2. Nf3 Nc6 3. Nc3 Nf6 1-0'
+    assert opening_moves_san(_parse(pgn)) == "1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6"
+
+
+def test_opening_moves_san_returns_none_for_empty():
+    assert opening_moves_san(None) is None

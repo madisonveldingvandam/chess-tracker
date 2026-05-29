@@ -57,6 +57,32 @@ def first_moves_san(game: chess.pgn.Game | None, count: int = PLY_DEPTH) -> str 
     return " ".join(tokens)
 
 
+def opening_moves_san(game: chess.pgn.Game | None, count: int = 12) -> str | None:
+    """Like first_moves_san, but best-effort: return as many of the first
+    `count` plies as the game actually has (instead of None when shorter).
+
+    Used by the move-pattern opening matcher, which needs to see the b3/Bb2
+    fianchetto that lands around plies 9-11 — just past the 8-ply window.
+    Returns None only for a missing game or a game with zero moves.
+    """
+    if game is None:
+        return None
+    board = game.board()
+    tokens: list[str] = []
+    plies = 0
+    for move in game.mainline_moves():
+        if plies >= count:
+            break
+        san = board.san(move)
+        if plies % 2 == 0:
+            tokens.append(f"{plies // 2 + 1}.{san}")
+        else:
+            tokens.append(san)
+        board.push(move)
+        plies += 1
+    return " ".join(tokens) if tokens else None
+
+
 def fens_from_san(moves: str | None) -> tuple[list[str], list[str]]:
     """Replay a compact SAN line into board FENs for step-through display.
 
