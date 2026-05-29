@@ -8,6 +8,7 @@ from chess_tracker.behavior import (
     compute_loss_streaks, compute_revenge_gap, compute_daily_drawdown,
     compute_time_of_day, compute_mate_loss_buckets,
 )
+from chess_tracker.play_signature import fens_from_san
 
 
 _DRAW_RESULTS = {"agreed", "repetition", "stalemate", "insufficient",
@@ -743,12 +744,15 @@ def compute_plan_compliance(records: list[GameRecord], plan: dict,
             severity = "yellow"
         else:
             severity = "red"
+        fens, ply_labels = fens_from_san(op.get("moves", ""))
         out_openings.append({
             "name": op.get("name", target),
             "side": side,
             "vs_first_move": vs_move,
             "target_family": target,
             "moves": op.get("moves", ""),
+            "fens": fens,
+            "ply_labels": ply_labels,
             "plan": op.get("plan", ""),
             "applicable_games": total,
             "games_on_plan": len(played),
