@@ -9,6 +9,7 @@ from chess_tracker.behavior import (
     compute_time_of_day, compute_mate_loss_buckets,
 )
 from chess_tracker.play_signature import fens_from_san
+from chess_tracker.opening_match import match_opening
 
 
 _DRAW_RESULTS = {"agreed", "repetition", "stalemate", "insufficient",
@@ -730,9 +731,26 @@ def compute_plan_compliance(records: list[GameRecord], plan: dict,
             applicable = [r for r in applicable
                           if r.first_moves
                           and r.first_moves.lower().startswith(prefix)]
-        total = len(applicable)
-        played = [r for r in applicable if r.family == target]
-        deviated = [r for r in applicable if r.family != target]
+        match_rule = op.get("match")
+        gambit_breakdown = None
+        if match_rule:
+            verdicts = [(r, match_opening(r.opening_moves or r.first_moves,
+                                          match_rule)) for r in applicable]
+            applicable_recs = [r for r, m in verdicts if m["applicable"]]
+            played = [r for r, m in verdicts if m["applicable"] and m["on_plan"]]
+            deviated = [r for r, m in verdicts
+                        if m["applicable"] and not m["on_plan"]]
+            total = len(applicable_recs)
+            if match_rule.get("gambit_flags"):
+                gambit_breakdown = {}
+                for r, m in verdicts:
+                    if m["applicable"] and m["on_plan"]:
+                        for flag in m["flags"]:
+                            gambit_breakdown[flag] = gambit_breakdown.get(flag, 0) + 1
+        else:
+            total = len(applicable)
+            played = [r for r in applicable if r.family == target]
+            deviated = [r for r in applicable if r.family != target]
         played_wins = sum(1 for r in played if _is_win(r.result))
         dev_wins = sum(1 for r in deviated if _is_win(r.result))
         adherence_pct = (100 * len(played) / total) if total else 0.0
@@ -762,6 +780,7 @@ def compute_plan_compliance(records: list[GameRecord], plan: dict,
             "win_pct_when_deviated": round(100 * dev_wins / len(deviated), 1)
                 if deviated else None,
             "severity": severity,
+            "gambit_breakdown": gambit_breakdown,
         })
     return {
         "openings": out_openings,

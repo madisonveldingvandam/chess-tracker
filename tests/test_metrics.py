@@ -588,6 +588,97 @@ def test_compute_plan_compliance_filters_by_first_move():
     assert o["severity"] == "neutral"
 
 
+def test_compute_plan_compliance_move_pattern_white_entry():
+    """A `match` entry classifies by moves: Colle-Zukertort on-plan, London
+    (via Bf4) deviated, even though both can carry a 'Queens Pawn' family."""
+    from chess_tracker.metrics import compute_plan_compliance
+    from chess_tracker.pgn import GameRecord
+
+    def _w(opening_moves, result, et):
+        return GameRecord(
+            url="x", end_time=et, time_class="bullet", side="white",
+            my_rating=500, opp_rating=500, result=result,
+            opp_result="checkmated", plies=24, fullmoves=12,
+            opening="Queens Pawn Opening", eco="D02",
+            first_moves=" ".join(opening_moves.split()[:8]),
+            opening_moves=opening_moves,
+        )
+
+    cz = "1.d4 d5 2.Nf3 Nf6 3.e3 e6 4.Bd3 c5 5.b3 Nc6 6.Bb2 Bd6"
+    london = "1.d4 d5 2.Nf3 Nf6 3.Bf4 e6 4.e3 Bd6 5.Bd3 O-O 6.O-O c5"
+    recs = (
+        [_w(cz, "win", 1_700_000_000 + i) for i in range(3)] +      # 3 on-plan
+        [_w(london, "win", 1_700_000_100 + i) for i in range(2)]    # 2 deviated
+    )
+    plan = {"openings": [{
+        "name": "Colle-Zukertort System", "side": "white", "vs_first_move": "d4",
+        "target_family": "Colle Zukertort System",
+        "moves": cz, "plan": "...",
+        "match": {"white_requires_any": [["e3", "b3"], ["e3", "Bb2"]],
+                  "white_forbids": ["Bf4"], "window_plies": 12},
+    }]}
+    out = compute_plan_compliance(recs, plan, window=30)
+    o = out["openings"][0]
+    assert o["applicable_games"] == 5
+    assert o["games_on_plan"] == 3
+    assert o["adherence_pct"] == 60.0
+    assert o["severity"] == "green"
+
+
+def test_compute_plan_compliance_gambit_breakdown():
+    """Four Knights entry tallies gambit flags and ignores non-...e5 games."""
+    from chess_tracker.metrics import compute_plan_compliance
+    from chess_tracker.pgn import GameRecord
+
+    def _w(opening_moves, et):
+        return GameRecord(
+            url="x", end_time=et, time_class="bullet", side="white",
+            my_rating=500, opp_rating=500, result="win",
+            opp_result="checkmated", plies=20, fullmoves=10,
+            opening="Four Knights Game", eco="C47",
+            first_moves=" ".join(opening_moves.split()[:8]),
+            opening_moves=opening_moves,
+        )
+
+    recs = [
+        _w("1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6 4.Nxe5 Nxe5", 1_700_000_000),   # Halloween
+        _w("1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6 4.d4 exd4 5.Nd5 Nxd5", 1_700_000_001),  # Belgrade
+        _w("1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6 4.Bb5 Bb4", 1_700_000_002),     # plain FK
+        _w("1.e4 d5 2.exd5 Qxd5 3.Nc3 Qa5 4.d4 Nf6", 1_700_000_003),    # Scandinavian: N/A
+    ]
+    plan = {"openings": [{
+        "name": "Four Knights", "side": "white", "vs_first_move": "e4",
+        "target_family": "Four Knights Game", "moves": "...", "plan": "...",
+        "match": {"applicable_if_black_plays": "e5",
+                  "white_requires": ["Nf3", "Nc3"],
+                  "gambit_flags": {"Halloween": ["Nxe5"], "Belgrade": ["Nd5"]},
+                  "window_plies": 12},
+    }]}
+    out = compute_plan_compliance(recs, plan, window=30)
+    o = out["openings"][0]
+    assert o["applicable_games"] == 3          # Scandinavian excluded
+    assert o["games_on_plan"] == 3
+    assert o["gambit_breakdown"] == {"Halloween": 1, "Belgrade": 1}
+
+
+def test_compute_plan_compliance_family_entry_unchanged_has_no_breakdown():
+    """Entries without a `match` block keep the family path and omit breakdown."""
+    from chess_tracker.metrics import compute_plan_compliance
+    from chess_tracker.pgn import GameRecord
+
+    rec = GameRecord(
+        url="x", end_time=1_700_000_000, time_class="bullet", side="black",
+        my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+        plies=20, fullmoves=10, opening="Modern Defense", eco="B06",
+        first_moves="1.e4 g6 2.d4 Bg7 3.Nc3 d6 4.f4 c6")
+    plan = {"openings": [{"name": "Modern", "side": "black",
+                          "vs_first_move": "e4", "target_family": "Modern Defense"}]}
+    out = compute_plan_compliance([rec], plan)
+    o = out["openings"][0]
+    assert o["games_on_plan"] == 1
+    assert o["gambit_breakdown"] is None
+
+
 def test_opening_families_aggregates_across_play_signatures():
     """A family-color row sums all games sharing that family + color,
     regardless of which play_signature they came from."""
