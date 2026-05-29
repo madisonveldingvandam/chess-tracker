@@ -679,6 +679,23 @@ def test_compute_plan_compliance_family_entry_unchanged_has_no_breakdown():
     assert o["gambit_breakdown"] is None
 
 
+def test_shipped_plan_has_white_entries_with_match_rules():
+    """The shipped plan.json carries the two White move-pattern entries."""
+    from chess_tracker.plan import load_plan
+
+    plan = load_plan()
+    by_name = {o["name"]: o for o in plan["openings"]}
+    cz = by_name["Colle–Zukertort System"]
+    assert cz["side"] == "white" and cz["vs_first_move"] == "d4"
+    assert cz["match"]["white_forbids"] == ["Bf4"]
+    fk = by_name["Four Knights (Belgrade / Halloween)"]
+    assert fk["side"] == "white" and fk["vs_first_move"] == "e4"
+    assert set(fk["match"]["gambit_flags"]) == {"Halloween", "Belgrade"}
+    # Existing Black entries are still present and untouched (no match block).
+    assert "Englund Gambit" in by_name
+    assert "match" not in by_name["Englund Gambit"]
+
+
 def test_opening_families_aggregates_across_play_signatures():
     """A family-color row sums all games sharing that family + color,
     regardless of which play_signature they came from."""

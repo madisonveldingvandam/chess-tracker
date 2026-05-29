@@ -15,6 +15,33 @@
       "target_family": "Englund Gambit",
       "moves": "1.d4 e5  2.dxe5 Nc6  3.Nf3 Qe7  4.Bf4 Qb4+  5.Bd2 Qxb2",
       "plan": "Force tactical chaos, target b2/c3 weakness."
+    },
+    {
+      "name": "Colle–Zukertort System",
+      "side": "white",
+      "vs_first_move": "d4",
+      "target_family": "Colle Zukertort System",
+      "moves": "1.d4 d5  2.Nf3 Nf6  3.e3 e6  4.Bd3 c5  5.b3 Nc6  6.Bb2 Bd6",
+      "plan": "e3 + b3 + Bb2 fianchetto, dark bishop stays home (NO early Bf4). Aim the e4 break and kingside attack.",
+      "match": {
+        "white_requires_any": [["e3", "b3"], ["e3", "Bb2"]],
+        "white_forbids": ["Bf4"],
+        "window_plies": 12
+      }
+    },
+    {
+      "name": "Four Knights (Belgrade / Halloween)",
+      "side": "white",
+      "vs_first_move": "e4",
+      "target_family": "Four Knights Game",
+      "moves": "1.e4 e5  2.Nf3 Nc6  3.Nc3 Nf6  4.Nxe5 (Halloween)  /  4.d4 exd4 5.Nd5 (Belgrade)",
+      "plan": "Develop both knights (Four Knights). Spring Halloween 4.Nxe5 or Belgrade 4.d4 exd4 5.Nd5 for bullet surprise.",
+      "match": {
+        "applicable_if_black_plays": "e5",
+        "white_requires": ["Nf3", "Nc3"],
+        "gambit_flags": { "Halloween": ["Nxe5"], "Belgrade": ["Nd5"] },
+        "window_plies": 12
+      }
     }
   ],
   "principles": [
