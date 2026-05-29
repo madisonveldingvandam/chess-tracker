@@ -17,6 +17,7 @@
   renderLeaks(D.leak_summary);
   renderRule(D.next_session_rule);
   renderRecentLosses(D.recent_losses);
+  renderPuzzleDrill(D.recent_losses);
   renderLossSummary(D);
   renderReviewPicks(D.review_picks);
   renderErrorLog(D.error_log);
@@ -201,6 +202,158 @@
       navigator.clipboard.writeText(payload)
         .catch(() => { console.log(payload); alert("Copy failed — payload logged to console."); });
     };
+  }
+
+  // ---- Guided puzzle drill (losses.html) --------------------------------
+  // Each loss carries a precomputed `puzzle` (chess_tracker/puzzles.py): the
+  // position just before my worst move, my move, and the engine's better move.
+  // The board accepts ONLY the engine move; anything else is "the kind of move
+  // that lost the game" and reveals the answer. Because exactly one known-legal
+  // move is ever applied, applyUci (below) is all the chess logic we need — no
+  // move generator, no engine in the browser.
+  function renderPuzzleDrill(losses) {
+    const root = document.getElementById("puzzle-drill");
+    if (!root) return;
+    const puzzles = (losses || []).filter(L => L.puzzle);
+    if (puzzles.length === 0) {
+      root.innerHTML = `<p class="puzzle-empty">No puzzles yet — run refresh.py with Stockfish installed.</p>`;
+      return;
+    }
+    root.innerHTML = `
+      <div class="puzzle-list" id="puzzle-list"></div>
+      <div class="puzzle-stage">
+        <div class="puzzle-board" id="puzzle-board"></div>
+        <div class="puzzle-side">
+          <div class="puzzle-prompt" id="puzzle-prompt"></div>
+          <div class="puzzle-feedback" id="puzzle-feedback"></div>
+          <div class="puzzle-controls">
+            <button id="puzzle-show">Show answer</button>
+            <button id="puzzle-reset">Reset</button>
+          </div>
+        </div>
+      </div>`;
+
+    const listEl = document.getElementById("puzzle-list");
+    const boardEl = document.getElementById("puzzle-board");
+    const promptEl = document.getElementById("puzzle-prompt");
+    const fbEl = document.getElementById("puzzle-feedback");
+    listEl.innerHTML = puzzles.map((L, i) => {
+      const p = L.puzzle;
+      return `<button class="puzzle-item" data-idx="${i}">
+        <span class="pi-open">${escapeAttr(L.opening || "Unknown opening")}</span>
+        <span class="pi-meta">${escapeAttr(L.loss_type)} · move ${p.fullmove}</span>
+      </button>`;
+    }).join("");
+
+    const state = {};
+
+    function currentIdx() {
+      const active = listEl.querySelector(".puzzle-item.active");
+      return active ? +active.dataset.idx : 0;
+    }
+
+    function select(i) {
+      const p = puzzles[i].puzzle;
+      state.puzzle = p;
+      state.fen = p.fen_before;
+      state.flip = p.side === "black";
+      state.sel = null;
+      state.solved = false;
+      state.revealed = false;
+      state.lastMove = null;
+      listEl.querySelectorAll(".puzzle-item").forEach(b =>
+        b.classList.toggle("active", +b.dataset.idx === i));
+      promptEl.innerHTML =
+        `<strong>${p.side === "white" ? "White" : "Black"} to move.</strong> ` +
+        `You played <span class="bad">${escapeAttr(p.my_move_san)}</span> here — find the move that holds.`;
+      fbEl.innerHTML = "";
+      drawBoard();
+    }
+
+    function drawBoard() {
+      const grid = placementToGrid(state.fen.split(" ")[0]);
+      const order = [];
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) order.push([r, c]);
+      if (state.flip) order.reverse();
+      const best = state.puzzle.best_move_uci;
+      let html = "";
+      order.forEach(([r, c], idx) => {
+        const sq = FILES[c] + (8 - r);
+        const piece = grid[r][c];
+        const cls = ["psq", (r + c) % 2 ? "dark" : "light"];
+        if (state.sel === sq) cls.push("sel");
+        if (state.lastMove && (state.lastMove.from === sq || state.lastMove.to === sq)) cls.push("lastmove");
+        if (state.revealed && (best.slice(0, 2) === sq || best.slice(2, 4) === sq)) cls.push("hint");
+        let inner = "";
+        if (piece) {
+          const side = piece === piece.toUpperCase() ? "piece-w" : "piece-b";
+          inner += `<span class="${side}">${GLYPH[piece] || ""}</span>`;
+        }
+        if (idx % 8 === 0) inner += `<span class="coord rank">${8 - r}</span>`;
+        if (idx >= 56) inner += `<span class="coord file">${FILES[c]}</span>`;
+        html += `<div class="${cls.join(" ")}" data-sq="${sq}">${inner}</div>`;
+      });
+      boardEl.innerHTML = html;
+    }
+
+    function reveal() {
+      state.revealed = true;
+      drawBoard();
+    }
+
+    boardEl.addEventListener("click", (e) => {
+      if (state.solved) return;
+      const cell = e.target.closest(".psq");
+      if (!cell) return;
+      const sq = cell.dataset.sq;
+      const grid = placementToGrid(state.fen.split(" ")[0]);
+      const [r, c] = sqToRC(sq);
+      const piece = grid[r][c];
+      const whiteToMove = state.puzzle.side === "white";
+      const mine = piece && (whiteToMove ? piece === piece.toUpperCase() : piece === piece.toLowerCase());
+
+      if (state.sel === null) {
+        if (mine) { state.sel = sq; drawBoard(); }
+        return;
+      }
+      if (sq === state.sel) { state.sel = null; drawBoard(); return; }
+
+      let uci = state.sel + sq;
+      const [sr, sc] = sqToRC(state.sel);
+      const selPiece = grid[sr][sc];
+      const lastRank = whiteToMove ? "8" : "1";
+      if (selPiece && selPiece.toLowerCase() === "p" && sq[1] === lastRank) uci += "q";
+
+      const best = state.puzzle.best_move_uci;
+      if (uci === best || (best.length === 5 && uci === best.slice(0, 4) + "q")) {
+        state.fen = applyUci(state.fen, best);
+        state.lastMove = { from: best.slice(0, 2), to: best.slice(2, 4) };
+        state.sel = null;
+        state.solved = true;
+        drawBoard();
+        fbEl.innerHTML = `<span class="ok">✓ Correct — ${escapeAttr(state.puzzle.best_move_san)} holds the position.</span>`;
+      } else {
+        state.sel = null;
+        reveal();
+        fbEl.innerHTML =
+          `<span class="bad">✗ That's the kind of move that lost the game.</span> ` +
+          `The move that holds was <strong>${escapeAttr(state.puzzle.best_move_san)}</strong> (highlighted).`;
+      }
+    });
+
+    listEl.addEventListener("click", (e) => {
+      const b = e.target.closest(".puzzle-item");
+      if (b) select(+b.dataset.idx);
+    });
+    document.getElementById("puzzle-show").onclick = () => {
+      if (!state.solved) reveal();
+      fbEl.innerHTML = `Best move: <strong>${escapeAttr(state.puzzle.best_move_san)}</strong> (highlighted).`;
+    };
+    document.getElementById("puzzle-reset").onclick = () => select(currentIdx());
+
+    // Defer the first paint: GLYPH/FILES are `const`s declared later in this
+    // IIFE, so drawing synchronously here would hit the temporal dead zone.
+    queueMicrotask(() => select(0));
   }
 
   function renderErrorLog(rows) {
@@ -523,6 +676,60 @@
     if (flip) cells.reverse();
     return cells.join("");
   }
+
+  // ---- FEN / move helpers for the puzzle drill --------------------------
+  const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
+  // FEN piece-placement -> 8x8 grid. grid[0] is rank 8 (top), grid[7] is rank 1.
+  function placementToGrid(placement) {
+    return placement.split("/").map(row => {
+      const cells = [];
+      for (const ch of row) {
+        if (ch >= "1" && ch <= "8") for (let i = 0; i < +ch; i++) cells.push(null);
+        else cells.push(ch);
+      }
+      return cells;
+    });
+  }
+  function gridToPlacement(grid) {
+    return grid.map(row => {
+      let out = "", empty = 0;
+      for (const cell of row) {
+        if (cell === null) { empty++; continue; }
+        if (empty) { out += empty; empty = 0; }
+        out += cell;
+      }
+      return out + (empty || "");
+    }).join("/");
+  }
+  // square name (e.g. "e4") -> [row, file] with row 0 = rank 8.
+  function sqToRC(sq) {
+    return [8 - +sq[1], FILES.indexOf(sq[0])];
+  }
+  // Apply ONE known-legal UCI move to a FEN, returning the new FEN. Handles
+  // captures, promotion, castling (moves the rook too) and en passant. Safe
+  // because we only ever feed it the engine's best move.
+  function applyUci(fen, uci) {
+    const parts = fen.split(" ");
+    const grid = placementToGrid(parts[0]);
+    const [fr, ff] = sqToRC(uci.slice(0, 2));
+    const [tr, tf] = sqToRC(uci.slice(2, 4));
+    const piece = grid[fr][ff];
+    const isWhite = piece === piece.toUpperCase();
+    if (piece.toLowerCase() === "p" && ff !== tf && grid[tr][tf] === null) {
+      grid[fr][tf] = null;  // en passant: captured pawn is on from-rank, to-file
+    }
+    if (piece.toLowerCase() === "k" && Math.abs(tf - ff) === 2) {
+      if (tf > ff) { grid[fr][5] = grid[fr][7]; grid[fr][7] = null; }  // O-O
+      else         { grid[fr][3] = grid[fr][0]; grid[fr][0] = null; }  // O-O-O
+    }
+    const promo = uci[4];
+    grid[tr][tf] = promo ? (isWhite ? promo.toUpperCase() : promo.toLowerCase()) : piece;
+    grid[fr][ff] = null;
+    parts[0] = gridToPlacement(grid);
+    parts[1] = isWhite ? "b" : "w";  // flip side to move (render reads placement only)
+    return parts.join(" ");
+  }
+
   function renderBehavior(b) {
     const root = document.getElementById("behavior-cards");
     if (!root || !b) return;

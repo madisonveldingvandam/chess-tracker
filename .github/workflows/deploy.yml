@@ -35,6 +35,13 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      # Stockfish powers the per-loss "Drill your mistakes" puzzles. Without it
+      # refresh.py degrades gracefully (puzzles render empty); with it the pass
+      # adds ~60s to the build. Ubuntu installs the binary to /usr/games, which
+      # is on PATH, so chess_tracker.puzzles.find_engine_path() picks it up.
+      - name: Install Stockfish
+        run: sudo apt-get update && sudo apt-get install -y stockfish
+
       - name: Cache Chess.com archives
         uses: actions/cache@v4
         with:

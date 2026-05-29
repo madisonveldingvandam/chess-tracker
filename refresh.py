@@ -9,6 +9,7 @@ from chess_tracker.pgn import parse_game
 from chess_tracker.metrics import compute_all
 from chess_tracker.annotations import load_annotations
 from chess_tracker.plan import load_plan
+from chess_tracker.puzzles import attach_puzzles, find_engine_path
 from chess_tracker.render import render_all_pages, DEFAULT_TEMPLATE_DIR
 
 
@@ -18,6 +19,8 @@ def main(argv=None) -> int:
     ap.add_argument("--format", default="bullet", choices=["bullet"])
     ap.add_argument("--force", action="store_true",
                     help="Re-fetch all archives, not just current month.")
+    ap.add_argument("--no-puzzles", action="store_true",
+                    help="Skip the Stockfish pass that attaches a puzzle to each recent loss.")
     ap.add_argument("--data-dir", default="data")
     ap.add_argument("--dashboard-dir", default="dashboard")
     ap.add_argument("--template-dir", default=str(DEFAULT_TEMPLATE_DIR))
@@ -59,6 +62,25 @@ def main(argv=None) -> int:
     payload = compute_all(records, annotations,
                           username=args.username, format=args.format,
                           plan=plan)
+
+    if args.no_puzzles:
+        for loss in payload.get("recent_losses", []):
+            loss["puzzle"] = None
+        print("[4.5/5] Puzzle pass skipped (--no-puzzles).")
+    elif find_engine_path() is None:
+        for loss in payload.get("recent_losses", []):
+            loss["puzzle"] = None
+        print("[4.5/5] No Stockfish found; losses carry no puzzles "
+              "(set $STOCKFISH_PATH or install stockfish).")
+    else:
+        # Loss dicts only keep the opening's first plies; the full PGN lives in
+        # the raw game dicts. Key both by URL so attach_puzzles can find them.
+        pgn_by_url = {g["url"]: g["pgn"] for g in in_format if g.get("url") and g.get("pgn")}
+        side_by_url = {r.url: r.side for r in records if r.url}
+        n = attach_puzzles(payload.get("recent_losses", []), pgn_by_url, side_by_url)
+        print(f"[4.5/5] Stockfish puzzle pass: {n} of "
+              f"{len(payload.get('recent_losses', []))} recent losses got a puzzle.")
+
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "computed.json").write_text(json.dumps(payload, indent=2))
 
