@@ -323,7 +323,7 @@ def _pad_with_win(n: int, start: int = 1_700_100_000) -> list[GameRecord]:
     ]
 
 
-def test_outlasted_but_flagged_leak_fires_critical_at_70_percent():
+def test_outlasted_but_flagged_leak_fires_critical_at_high_pct():
     """4 of 5 timeout losses are outlasted (80%) → critical."""
     recs = ([LONG_OUTLAST_RECORD] * 4
             + [OUTLASTED_THEN_FLAG_RECORD]   # timeout that does NOT count
@@ -336,10 +336,34 @@ def test_outlasted_but_flagged_leak_fires_critical_at_70_percent():
     assert "80%" in obf[0]["evidence"]
 
 
-def test_outlasted_but_flagged_leak_fires_warn_between_50_and_70_percent():
-    """2 of 4 timeout losses outlasted (50%) → warn (not critical)."""
+def test_outlasted_but_flagged_leak_fires_critical_at_45_percent_boundary():
+    """3 of 6 timeout losses outlasted (50%) → critical under the
+    recalibrated threshold (>= 45%)."""
+    recs = ([LONG_OUTLAST_RECORD] * 3
+            + [OUTLASTED_THEN_FLAG_RECORD] * 3
+            + _pad_with_win(20))
+    leaks = detect_leaks(recs)
+    obf = [l for l in leaks if l["name"] == "outlasted_but_flagged"]
+    assert len(obf) == 1
+    assert obf[0]["severity"] == "critical"
+
+
+def test_outlasted_but_flagged_leak_fires_warn_between_30_and_45_percent():
+    """2 of 5 timeout losses outlasted (40%) → warn (not critical)."""
     recs = ([LONG_OUTLAST_RECORD] * 2
-            + [OUTLASTED_THEN_FLAG_RECORD] * 2
+            + [OUTLASTED_THEN_FLAG_RECORD] * 3
+            + _pad_with_win(20))
+    leaks = detect_leaks(recs)
+    obf = [l for l in leaks if l["name"] == "outlasted_but_flagged"]
+    assert len(obf) == 1
+    assert obf[0]["severity"] == "warn"
+
+
+def test_outlasted_but_flagged_leak_fires_warn_at_30_percent_boundary():
+    """3 of 10 timeout losses outlasted (30%) → warn under the
+    recalibrated threshold (>= 30%)."""
+    recs = ([LONG_OUTLAST_RECORD] * 3
+            + [OUTLASTED_THEN_FLAG_RECORD] * 7
             + _pad_with_win(20))
     leaks = detect_leaks(recs)
     obf = [l for l in leaks if l["name"] == "outlasted_but_flagged"]
@@ -354,10 +378,11 @@ def test_outlasted_but_flagged_leak_suppressed_below_min_n_timeouts():
     assert "outlasted_but_flagged" not in [l["name"] for l in leaks]
 
 
-def test_outlasted_but_flagged_leak_quiet_when_under_50_percent():
-    """1 of 4 timeout losses outlasted (25%) → no leak fired."""
+def test_outlasted_but_flagged_leak_quiet_when_under_30_percent():
+    """1 of 5 timeout losses outlasted (20%) → no leak fired (below the
+    recalibrated 30% warn floor)."""
     recs = ([LONG_OUTLAST_RECORD]
-            + [OUTLASTED_THEN_FLAG_RECORD] * 3
+            + [OUTLASTED_THEN_FLAG_RECORD] * 4
             + _pad_with_win(20))
     leaks = detect_leaks(recs)
     assert "outlasted_but_flagged" not in [l["name"] for l in leaks]

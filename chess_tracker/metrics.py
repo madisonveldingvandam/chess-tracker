@@ -278,14 +278,17 @@ def detect_leaks(records: list[GameRecord]) -> list[dict]:
 
         # Outlasted-but-flagged: of the timeouts in the window, how many had
         # us ahead on the clock at some recorded ply? Min-4 timeouts gate
-        # avoids 1/1 or 2/2 noise. >= 70% → critical, >= 50% → warn.
+        # avoids 1/1 or 2/2 noise. >= 45% → critical, >= 30% → warn —
+        # calibrated against 627 rolling 30-game windows of bullet history
+        # (P90 ~29%, P99 ~40%, observed max 50%); the prior 70/50 cut never
+        # fired against this player's actual distribution.
         timeouts = sum(1 for r in losses_recs if r.result == "timeout")
         if timeouts >= 4:
             outlasted = pm["outlasted_but_flagged_count"]
             pct = 100 * outlasted / timeouts
-            if pct >= 70:
+            if pct >= 45:
                 sev = "critical"
-            elif pct >= 50:
+            elif pct >= 30:
                 sev = "warn"
             else:
                 sev = None

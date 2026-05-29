@@ -358,6 +358,20 @@ section h3 {
 }
 .home-link:hover { color: var(--text); }
 
+/* Manual-refresh link — fires the GitHub Actions deploy workflow. Floated to
+   the far right of the KPI strip; it is the last flex child appended by
+   renderKPI, so margin-left:auto pushes only it. */
+.refresh-link {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.refresh-link:hover { color: var(--text); border-color: var(--muted); }
+
 /* Drill-in cards (landing only) */
 .drillin-grid {
   display: grid;

@@ -1,5 +1,12 @@
 # Refresh button — design
 
+> **SUPERSEDED (2026-05-29).** The `refresh.py --serve` localhost design below
+> assumes a local-server reading workflow that no longer applies after GitHub
+> Pages auto-deploy landed (`21e30ae`). Replaced by Option B in
+> [../../research/2026-05-29-refresh-button-options.md](../../research/2026-05-29-refresh-button-options.md):
+> a ↻ Refresh link in the KPI strip pointing at the Actions deploy workflow.
+> Kept for reference only.
+
 **Date:** 2026-05-27
 **Scope:** Add a "Refresh" affordance to the dashboard that triggers `refresh.py`'s pipeline on demand, without leaving the browser. Requires a small stdlib HTTP server mode in `refresh.py` because the static-file-only workflow (`python3 -m http.server 8000`) cannot run Python. No new dependencies.
 

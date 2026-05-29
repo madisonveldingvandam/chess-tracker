@@ -19,6 +19,13 @@ Browsers block `file://` subresources, so view via a local HTTP server:
 
 Then open <http://localhost:8000/dashboard/index.html>.
 
+The published dashboard at <https://madisonveldingvandam.github.io/chess-tracker/>
+redeploys automatically every 6 hours and on every push to `main`. To refresh it
+between those ticks — e.g. right after a session — use the **↻ Refresh** link in
+the dashboard's KPI strip (or open the
+[deploy workflow](https://github.com/madisonveldingvandam/chess-tracker/actions/workflows/deploy.yml)
+directly) and click **Run workflow**. The rebuild takes ~1 minute.
+
 ## What you'll see
 
 1. **KPI strip** — current rating, total games, recent form
