@@ -665,29 +665,36 @@
   // achieved by reversing the cells array, which swaps both ranks and files
   // in one step. Square colors stay correct because a square's color is a
   // property of its FEN coordinates, not its display position.
+  //
+  // File/rank coordinates are drawn Lichess-style inside the edge squares of
+  // the *displayed* orientation: rank digits down the left column, file letters
+  // along the bottom row. Because labelling keys off display position (post
+  // flip), the a1-corner stays bottom-left for White and top-right for Black.
   function boardSquaresHTML(fen, flip = false) {
     if (!fen) return "";
-    const cells = [];
+    const cells = [];  // {r, f, inner} in board order (rank 8 first)
     let r = 0;
     for (const row of fen.split(" ")[0].split("/")) {
       let f = 0;
       for (const ch of row) {
         if (ch >= "1" && ch <= "8") {
-          for (let i = 0; i < +ch; i++) {
-            cells.push(`<div class="${(r+f)%2 ? "dark" : "light"}"></div>`);
-            f++;
-          }
+          for (let i = 0; i < +ch; i++) { cells.push({ r, f, inner: "" }); f++; }
         } else {
-          const sq = (r+f)%2 ? "dark" : "light";
           const side = ch === ch.toUpperCase() ? "piece-w" : "piece-b";
-          cells.push(`<div class="${sq}"><span class="${side}">${GLYPH[ch] || ""}</span></div>`);
+          cells.push({ r, f, inner: `<span class="${side}">${GLYPH[ch] || ""}</span>` });
           f++;
         }
       }
       r++;
     }
     if (flip) cells.reverse();
-    return cells.join("");
+    return cells.map((c, idx) => {
+      const sq = (c.r + c.f) % 2 ? "dark" : "light";
+      let inner = c.inner;
+      if (idx % 8 === 0) inner += `<span class="coord rank">${8 - c.r}</span>`;
+      if (idx >= 56) inner += `<span class="coord file">${FILES[c.f]}</span>`;
+      return `<div class="${sq}">${inner}</div>`;
+    }).join("");
   }
 
   // ---- FEN / move helpers for the puzzle drill --------------------------

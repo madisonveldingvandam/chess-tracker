@@ -228,12 +228,22 @@ section h3 {
   width: 320px; height: 320px;
 }
 .board-large > div {
+  position: relative;
   display: flex; align-items: center; justify-content: center;
   font-size: 39px; line-height: 40px;   /* pieces 30% larger than the 30px default */
   user-select: none;
 }
 .board-large .light { background: var(--board-light); }
 .board-large .dark  { background: var(--board-dark); }
+/* Edge coordinates, Lichess-style (matches the puzzle board). */
+.board-large .coord {
+  position: absolute; font-size: 9px; line-height: 1;
+  opacity: 0.65; font-weight: 600; pointer-events: none;
+}
+.board-large .light .coord { color: var(--board-dark); }
+.board-large .dark  .coord { color: var(--board-light); }
+.board-large .coord.rank { top: 2px; left: 2px; }
+.board-large .coord.file { bottom: 1px; right: 3px; }
 .board-large .piece-b { color: var(--piece-fg); }
 .board-large .piece-w {
   color: var(--text);
