@@ -276,6 +276,27 @@ def detect_leaks(records: list[GameRecord]) -> list[dict]:
                 "suggested_action": "Middlegame tactics — file recurring patterns in the error log.",
             })
 
+        # Outlasted-but-flagged: of the timeouts in the window, how many had
+        # us ahead on the clock at some recorded ply? Min-4 timeouts gate
+        # avoids 1/1 or 2/2 noise. >= 70% → critical, >= 50% → warn.
+        timeouts = sum(1 for r in losses_recs if r.result == "timeout")
+        if timeouts >= 4:
+            outlasted = pm["outlasted_but_flagged_count"]
+            pct = 100 * outlasted / timeouts
+            if pct >= 70:
+                sev = "critical"
+            elif pct >= 50:
+                sev = "warn"
+            else:
+                sev = None
+            if sev is not None:
+                leaks.append({
+                    "name": "outlasted_but_flagged",
+                    "severity": sev,
+                    "evidence": f"{outlasted} of {timeouts} timeout losses ({pct:.0f}%) had you ahead on the clock at some ply",
+                    "suggested_action": "Convert clock leads: simplify and trade in winning positions instead of grinding for more.",
+                })
+
     # Any abandonment in last 30 games is a high-confidence tilt signal.
     abandoned = [r for r in window if r.result == "abandoned"]
     if abandoned:

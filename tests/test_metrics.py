@@ -307,6 +307,73 @@ def test_detect_leaks_includes_post_peak_decay_when_peak_crashes():
     assert "21+" in leak["evidence"]
 
 
+# --- outlasted_but_flagged leak rule -----------------------------------------
+
+def _pad_with_win(n: int, start: int = 1_700_100_000) -> list[GameRecord]:
+    """Filler win-records to fill out the 30-game window without affecting
+    the outlasted-but-flagged math (only timeout-losses count)."""
+    return [
+        GameRecord(
+            url="x", end_time=start + i, time_class="bullet", side="white",
+            my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+            plies=20, fullmoves=10, opening="Test", eco="A00",
+            my_clocks=[30.0], opp_clocks=[30.0],
+        )
+        for i in range(n)
+    ]
+
+
+def test_outlasted_but_flagged_leak_fires_critical_at_70_percent():
+    """4 of 5 timeout losses are outlasted (80%) → critical."""
+    recs = ([LONG_OUTLAST_RECORD] * 4
+            + [OUTLASTED_THEN_FLAG_RECORD]   # timeout that does NOT count
+            + _pad_with_win(20))
+    leaks = detect_leaks(recs)
+    obf = [l for l in leaks if l["name"] == "outlasted_but_flagged"]
+    assert len(obf) == 1
+    assert obf[0]["severity"] == "critical"
+    assert "4 of 5" in obf[0]["evidence"]
+    assert "80%" in obf[0]["evidence"]
+
+
+def test_outlasted_but_flagged_leak_fires_warn_between_50_and_70_percent():
+    """2 of 4 timeout losses outlasted (50%) → warn (not critical)."""
+    recs = ([LONG_OUTLAST_RECORD] * 2
+            + [OUTLASTED_THEN_FLAG_RECORD] * 2
+            + _pad_with_win(20))
+    leaks = detect_leaks(recs)
+    obf = [l for l in leaks if l["name"] == "outlasted_but_flagged"]
+    assert len(obf) == 1
+    assert obf[0]["severity"] == "warn"
+
+
+def test_outlasted_but_flagged_leak_suppressed_below_min_n_timeouts():
+    """3 of 3 outlasted (100%) but < 4 timeouts → no leak fired."""
+    recs = [LONG_OUTLAST_RECORD] * 3 + _pad_with_win(20)
+    leaks = detect_leaks(recs)
+    assert "outlasted_but_flagged" not in [l["name"] for l in leaks]
+
+
+def test_outlasted_but_flagged_leak_quiet_when_under_50_percent():
+    """1 of 4 timeout losses outlasted (25%) → no leak fired."""
+    recs = ([LONG_OUTLAST_RECORD]
+            + [OUTLASTED_THEN_FLAG_RECORD] * 3
+            + _pad_with_win(20))
+    leaks = detect_leaks(recs)
+    assert "outlasted_but_flagged" not in [l["name"] for l in leaks]
+
+
+def test_outlasted_but_flagged_leak_evidence_carries_action():
+    """The leak entry must include a non-empty suggested_action string."""
+    recs = ([LONG_OUTLAST_RECORD] * 4
+            + [OUTLASTED_THEN_FLAG_RECORD]
+            + _pad_with_win(20))
+    leaks = detect_leaks(recs)
+    obf = next(l for l in leaks if l["name"] == "outlasted_but_flagged")
+    assert obf["suggested_action"]
+    assert len(obf["suggested_action"]) > 20  # not a stub
+
+
 def test_recent_losses_includes_suggested_entry():
     losses = recent_losses_with_suggestions(RECORDS, limit=10)
     for L in losses:
