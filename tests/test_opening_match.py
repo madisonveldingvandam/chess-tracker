@@ -74,3 +74,22 @@ def test_empty_moves_not_on_plan():
     assert m["on_plan"] is False
     m2 = match_opening(None, FK_RULE)
     assert m2["applicable"] is False  # can't confirm black ...e5
+
+
+def test_cz_not_applicable_when_black_plays_e5():
+    # Opponent answers 1.d4 with the Englund (1...e5): a Colle setup is
+    # impossible, so the game must not count toward CZ adherence.
+    rule = {**CZ_RULE, "not_applicable_if_black_plays": "e5"}
+    m = match_opening("1.d4 e5 2.dxe5 Nc6 3.Nf3 d5 4.Nc3 Bg4 5.h3 Bxf3", rule)
+    assert m["applicable"] is False
+    # A normal 1...d5 game still applies and can be on-plan.
+    m2 = match_opening(
+        "1.d4 d5 2.Nf3 Nf6 3.e3 e6 4.Bd3 c5 5.b3 Nc6 6.Bb2 Bd6", rule)
+    assert m2["applicable"] is True
+    assert m2["on_plan"] is True
+
+
+def test_negative_guard_absent_keeps_all_applicable():
+    # Without the negative guard, a 1.d4 e5 game stays applicable (prior behavior).
+    m = match_opening("1.d4 e5 2.dxe5 Nc6 3.Nf3 d5 4.Nc3 Bg4", CZ_RULE)
+    assert m["applicable"] is True

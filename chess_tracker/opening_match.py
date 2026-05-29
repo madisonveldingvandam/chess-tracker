@@ -7,6 +7,8 @@ game from its early SAN moves instead. Pure functions, no chess engine.
 A `match` rule (from plan.json) may carry:
   applicable_if_black_plays: SAN of Black's first move that must occur for the
                              plan to be reachable at all (e.g. "e5").
+  not_applicable_if_black_plays: SAN of Black's first move that makes the plan
+                             unreachable (e.g. "e5" precludes a Colle setup).
   white_requires:     all of these White moves must be present.
   white_requires_any: a list of groups; at least one group must be fully present.
   white_forbids:      none of these White moves may be present.
@@ -57,6 +59,12 @@ def match_opening(opening_moves: str | None, rule: dict) -> dict:
         applicable = bool(black) and black[0] == _norm(guard)
     else:
         applicable = True
+
+    # Negative guard: Black's first move that makes the plan unreachable
+    # (e.g. the Colle is impossible if Black answers 1.d4 with 1...e5).
+    neg_guard = rule.get("not_applicable_if_black_plays")
+    if neg_guard is not None and black and black[0] == _norm(neg_guard):
+        applicable = False
 
     on_plan = applicable
     if on_plan and rule.get("white_requires"):

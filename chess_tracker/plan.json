@@ -24,6 +24,7 @@
       "moves": "1.d4 d5  2.Nf3 Nf6  3.e3 e6  4.Bd3 c5  5.b3 Nc6  6.Bb2 Bd6",
       "plan": "e3 + b3 + Bb2 fianchetto, dark bishop stays home (NO early Bf4). Aim the e4 break and kingside attack.",
       "match": {
+        "not_applicable_if_black_plays": "e5",
         "white_requires_any": [["e3", "b3"], ["e3", "Bb2"]],
         "white_forbids": ["Bf4"],
         "window_plies": 12
