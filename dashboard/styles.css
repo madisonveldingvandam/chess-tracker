@@ -101,7 +101,11 @@ section h3 {
 .plan-head .plan-adherence {
   margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted);
 }
+.plan-side-header {
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent) !important;
+}
 .plan-counts { color: var(--muted); font-size: 0.78rem; margin-top: 0.2rem; }
+.plan-gambits { color: var(--accent); font-size: 0.78rem; margin-top: 0.2rem; }
 .plan-winrates { margin-top: 0.4rem; font-size: 0.82rem; }
 .plan-winrates strong { font-variant-numeric: tabular-nums; }
 .plan-delta { color: var(--muted); font-size: 0.78rem; }

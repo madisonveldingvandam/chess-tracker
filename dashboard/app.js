@@ -69,7 +69,14 @@
     if (openings.length === 0) {
       root.innerHTML = `<p style="color:var(--muted)">No openings in plan. Edit chess_tracker/plan.json to add some.</p>`;
     } else {
-      root.innerHTML = openings.map((o, i) => {
+      const ordered = [...openings].sort((a, b) =>
+        (a.side === "black" ? 0 : 1) - (b.side === "black" ? 0 : 1));
+      let lastSide = null;
+      root.innerHTML = ordered.map((o, i) => {
+        const header = o.side !== lastSide
+          ? `<h3 class="plan-side-header">${o.side === "black" ? "As Black" : "As White"}</h3>`
+          : "";
+        lastSide = o.side;
         const vs = o.vs_first_move ? `vs 1.${o.vs_first_move}` : `as ${o.side}`;
         const won = o.win_pct_when_played;
         const dev = o.win_pct_when_deviated;
@@ -79,6 +86,7 @@
           ? ` <span class="plan-delta">(${won >= dev ? "+" : ""}${(won - dev).toFixed(1)}pp on plan)</span>`
           : "";
         return `
+          ${header}
           <div class="plan-card severity-${o.severity}">
             <div class="plan-head">
               <span class="plan-vs">${vs}</span>
@@ -88,6 +96,11 @@
             <div class="plan-counts">
               ${o.games_on_plan} of ${o.applicable_games} games played on plan
             </div>
+            ${(o.gambit_breakdown && Object.keys(o.gambit_breakdown).length)
+              ? `<div class="plan-gambits">of on-plan: ${
+                  Object.entries(o.gambit_breakdown)
+                    .map(([k, v]) => `${v} ${k}`).join(" · ")}</div>`
+              : ""}
             <div class="plan-winrates">
               Win when played: <strong>${wonStr}</strong>
               · Win when deviated: <strong>${devStr}</strong>
@@ -113,7 +126,7 @@
       // Wire up each card's move-by-move board. State (current ply) lives in
       // this closure per card; the board reuses boardSquaresHTML by swapping
       // FENs. Black-defense lines render from Black's perspective.
-      openings.forEach((o, i) => {
+      ordered.forEach((o, i) => {
         const fens = o.fens || [];
         if (fens.length < 2) return;
         const labels = o.ply_labels || [];
