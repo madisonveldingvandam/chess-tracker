@@ -5,24 +5,24 @@
       "side": "black",
       "vs_first_move": "e4",
       "target_family": "Modern Defense",
-      "moves": "1.e4 g6  2.d4 Bg7  3.Nc3 d6  4.f4 c6",
-      "plan": "Fianchetto bishop, hold center, look for ...b5 or ...e5 break."
+      "moves": "1.e4 g6  2.d4 Bg7  3.Nc3 d6  4.f4 c6  5.Nf3 Bg4  6.Be3 Nd7  7.h3 Bxf3  8.Qxf3 e5  9.fxe5 dxe5  10.d5 Nc5",
+      "plan": "Fianchetto bishop, hold center, then strike with the ...e5 break — trade the light bishop and land the knight on c5 hitting e4."
     },
     {
       "name": "Englund Gambit",
       "side": "black",
       "vs_first_move": "d4",
       "target_family": "Englund Gambit",
-      "moves": "1.d4 e5  2.dxe5 Nc6  3.Nf3 Qe7  4.Bf4 Qb4+  5.Bd2 Qxb2",
-      "plan": "Force tactical chaos, target b2/c3 weakness."
+      "moves": "1.d4 e5  2.dxe5 Nc6  3.Nf3 Qe7  4.Bf4 Qb4+  5.Bd2 Qxb2  6.Bc3 Bb4  7.Qd2 Bxc3  8.Qxc3 Qc1#",
+      "plan": "Force tactical chaos, target the b2/c3 weakness. If White gets greedy (6.Bc3?), the trap mates: ...Bb4, ...Bxc3, ...Qc1#."
     },
     {
       "name": "Colle–Zukertort System",
       "side": "white",
       "vs_first_move": "d4",
       "target_family": "Colle Zukertort System",
-      "moves": "1.d4 d5  2.Nf3 Nf6  3.e3 e6  4.Bd3 c5  5.b3 Nc6  6.Bb2 Bd6",
-      "plan": "e3 + b3 + Bb2 fianchetto, dark bishop stays home (NO early Bf4). Aim the e4 break and kingside attack.",
+      "moves": "1.d4 d5  2.Nf3 Nf6  3.e3 e6  4.Bd3 c5  5.b3 Nc6  6.Bb2 Bd6  7.O-O O-O  8.Nbd2 b6  9.Ne5 Bb7  10.f4 Qc7",
+      "plan": "e3 + b3 + Bb2 fianchetto, dark bishop stays home (NO early Bf4). Castle, plant the knight on e5, then f4 and a kingside pawn storm / Bxh7 attack.",
       "match": {
         "not_applicable_if_black_plays": "e5",
         "white_requires_any": [["e3", "b3"], ["e3", "Bb2"]],
@@ -35,8 +35,11 @@
       "side": "white",
       "vs_first_move": "e4",
       "target_family": "Four Knights Game",
-      "moves": "1.e4 e5  2.Nf3 Nc6  3.Nc3 Nf6  4.Nxe5 (Halloween)  /  4.d4 exd4 5.Nd5 (Belgrade)",
-      "plan": "Develop both knights (Four Knights). Spring Halloween 4.Nxe5 or Belgrade 4.d4 exd4 5.Nd5 for bullet surprise.",
+      "lines": [
+        { "label": "Halloween Gambit", "moves": "1.e4 e5  2.Nf3 Nc6  3.Nc3 Nf6  4.Nxe5 Nxe5  5.d4 Ng6  6.e5 Ng8  7.Bc4 d5  8.exd6 Bxd6" },
+        { "label": "Belgrade Gambit", "moves": "1.e4 e5  2.Nf3 Nc6  3.Nc3 Nf6  4.d4 exd4  5.Nd5 Nxd5  6.exd5 Qe7+  7.Be2 Nb4  8.O-O Nxd5" }
+      ],
+      "plan": "Develop both knights (Four Knights), then spring a gambit for bullet surprise. Halloween: 4.Nxe5 sacking a knight to roll the centre pawns. Belgrade: 4.d4 exd4 5.Nd5 for a fast initiative.",
       "match": {
         "applicable_if_black_plays": "e5",
         "white_requires": ["Nf3", "Nc3"],

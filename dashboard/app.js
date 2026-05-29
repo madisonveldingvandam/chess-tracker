@@ -108,16 +108,22 @@
             </div>
             <details class="plan-detail">
               <summary>Show moves &amp; plan</summary>
-              <code class="plan-moves">${o.moves || "—"}</code>
-              ${(o.fens && o.fens.length > 1) ? `
-              <div class="plan-board-wrap">
-                <div id="plan-board-${i}" class="board-large plan-board"></div>
-                <div class="plan-board-controls">
-                  <button type="button" class="plan-step" id="plan-prev-${i}" aria-label="Previous move">◀</button>
-                  <span class="plan-board-cap" id="plan-cap-${i}"></span>
-                  <button type="button" class="plan-step" id="plan-next-${i}" aria-label="Next move">▶</button>
-                </div>
-              </div>` : ""}
+              ${(o.board_lines && o.board_lines.length
+                  ? o.board_lines
+                  : [{ moves: o.moves, fens: o.fens, ply_labels: o.ply_labels }]
+                ).map((bl, j) => `
+                ${bl.label ? `<div class="plan-line-label">${bl.label}</div>` : ""}
+                <code class="plan-moves">${bl.moves || "—"}</code>
+                ${(bl.fens && bl.fens.length > 1) ? `
+                <div class="plan-board-wrap">
+                  <div id="plan-board-${i}-${j}" class="board-large plan-board"></div>
+                  <div class="plan-board-controls">
+                    <button type="button" class="plan-step" id="plan-prev-${i}-${j}" aria-label="Previous move">◀</button>
+                    <span class="plan-board-cap" id="plan-cap-${i}-${j}"></span>
+                    <button type="button" class="plan-step" id="plan-next-${i}-${j}" aria-label="Next move">▶</button>
+                  </div>
+                </div>` : ""}
+              `).join("")}
               <p class="plan-plan">${o.plan || ""}</p>
             </details>
           </div>
@@ -127,30 +133,35 @@
       // this closure per card; the board reuses boardSquaresHTML by swapping
       // FENs. Black-defense lines render from Black's perspective.
       ordered.forEach((o, i) => {
-        const fens = o.fens || [];
-        if (fens.length < 2) return;
-        const labels = o.ply_labels || [];
         const flip = o.side === "black";
-        const boardEl = document.getElementById(`plan-board-${i}`);
-        const capEl = document.getElementById(`plan-cap-${i}`);
-        const prevEl = document.getElementById(`plan-prev-${i}`);
-        const nextEl = document.getElementById(`plan-next-${i}`);
-        if (!boardEl) return;
-        let idx = fens.length - 1;  // open on the final position of the line
-        const paint = () => {
-          boardEl.innerHTML = boardSquaresHTML(fens[idx], flip);
-          capEl.textContent = idx === 0
-            ? "Start position"
-            : `after ${labels[idx - 1]} · move ${idx} of ${fens.length - 1}`;
-          prevEl.disabled = idx === 0;
-          nextEl.disabled = idx === fens.length - 1;
-        };
-        prevEl.addEventListener("click", () => { if (idx > 0) { idx--; paint(); } });
-        nextEl.addEventListener("click", () => { if (idx < fens.length - 1) { idx++; paint(); } });
-        // Defer the first paint: GLYPH is a `const` declared later in this IIFE,
-        // so drawing synchronously here would hit the temporal dead zone (same
-        // pattern as the puzzle board's deferred select(0)).
-        queueMicrotask(paint);
+        const lines = (o.board_lines && o.board_lines.length)
+          ? o.board_lines
+          : [{ fens: o.fens, ply_labels: o.ply_labels }];
+        lines.forEach((bl, j) => {
+          const fens = bl.fens || [];
+          if (fens.length < 2) return;
+          const labels = bl.ply_labels || [];
+          const boardEl = document.getElementById(`plan-board-${i}-${j}`);
+          const capEl = document.getElementById(`plan-cap-${i}-${j}`);
+          const prevEl = document.getElementById(`plan-prev-${i}-${j}`);
+          const nextEl = document.getElementById(`plan-next-${i}-${j}`);
+          if (!boardEl) return;
+          let idx = fens.length - 1;  // open on the final position of the line
+          const paint = () => {
+            boardEl.innerHTML = boardSquaresHTML(fens[idx], flip);
+            capEl.textContent = idx === 0
+              ? "Start position"
+              : `after ${labels[idx - 1]} · move ${idx} of ${fens.length - 1}`;
+            prevEl.disabled = idx === 0;
+            nextEl.disabled = idx === fens.length - 1;
+          };
+          prevEl.addEventListener("click", () => { if (idx > 0) { idx--; paint(); } });
+          nextEl.addEventListener("click", () => { if (idx < fens.length - 1) { idx++; paint(); } });
+          // Defer the first paint: GLYPH is a `const` declared later in this IIFE,
+          // so drawing synchronously here would hit the temporal dead zone (same
+          // pattern as the puzzle board's deferred select(0)).
+          queueMicrotask(paint);
+        });
       });
     }
     if (princRoot) {

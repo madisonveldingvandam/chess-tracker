@@ -696,6 +696,54 @@ def test_shipped_plan_has_white_entries_with_match_rules():
     assert "match" not in by_name["Englund Gambit"]
 
 
+def test_compute_plan_compliance_multi_line_boards():
+    """An entry with a `lines` array yields per-line board_lines with fens."""
+    from chess_tracker.metrics import compute_plan_compliance
+    from chess_tracker.pgn import GameRecord
+
+    rec = GameRecord(
+        url="x", end_time=1, time_class="bullet", side="white",
+        my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+        plies=10, fullmoves=5, opening="Four Knights Game", eco="C47",
+        first_moves="1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6",
+        opening_moves="1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6 4.Nxe5 Nxe5")
+    plan = {"openings": [{
+        "name": "Four Knights", "side": "white", "vs_first_move": "e4",
+        "target_family": "Four Knights Game", "plan": "...",
+        "lines": [
+            {"label": "Halloween", "moves": "1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6 4.Nxe5"},
+            {"label": "Belgrade", "moves": "1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6 4.d4 exd4 5.Nd5"},
+        ],
+        "match": {"applicable_if_black_plays": "e5",
+                  "white_requires": ["Nf3", "Nc3"], "window_plies": 12},
+    }]}
+    out = compute_plan_compliance([rec], plan)
+    o = out["openings"][0]
+    assert o["board_lines"] is not None
+    assert [bl["label"] for bl in o["board_lines"]] == ["Halloween", "Belgrade"]
+    assert len(o["board_lines"][0]["fens"]) > 1   # Halloween renders a board
+    assert len(o["board_lines"][1]["fens"]) > 1   # Belgrade renders a board
+
+
+def test_compute_plan_compliance_single_line_has_no_board_lines():
+    """An entry without `lines` keeps the single board path; board_lines None."""
+    from chess_tracker.metrics import compute_plan_compliance
+    from chess_tracker.pgn import GameRecord
+
+    rec = GameRecord(
+        url="x", end_time=1, time_class="bullet", side="black",
+        my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+        plies=8, fullmoves=4, opening="Modern Defense", eco="B06",
+        first_moves="1.e4 g6 2.d4 Bg7 3.Nc3 d6 4.f4 c6")
+    plan = {"openings": [{"name": "Modern", "side": "black",
+                          "vs_first_move": "e4", "target_family": "Modern Defense",
+                          "moves": "1.e4 g6 2.d4 Bg7"}]}
+    out = compute_plan_compliance([rec], plan)
+    o = out["openings"][0]
+    assert o["board_lines"] is None
+    assert len(o["fens"]) > 1
+
+
 def test_opening_families_aggregates_across_play_signatures():
     """A family-color row sums all games sharing that family + color,
     regardless of which play_signature they came from."""

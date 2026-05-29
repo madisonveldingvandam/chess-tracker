@@ -763,6 +763,19 @@ def compute_plan_compliance(records: list[GameRecord], plan: dict,
         else:
             severity = "red"
         fens, ply_labels = fens_from_san(op.get("moves", ""))
+        # Multi-line cards (e.g. Four Knights = Halloween + Belgrade): precompute
+        # a board per named line. None for ordinary single-line openings.
+        board_lines = None
+        if op.get("lines"):
+            board_lines = []
+            for ln in op["lines"]:
+                f, pl = fens_from_san(ln.get("moves", ""))
+                board_lines.append({
+                    "label": ln.get("label", ""),
+                    "moves": ln.get("moves", ""),
+                    "fens": f,
+                    "ply_labels": pl,
+                })
         out_openings.append({
             "name": op.get("name", target),
             "side": side,
@@ -771,6 +784,7 @@ def compute_plan_compliance(records: list[GameRecord], plan: dict,
             "moves": op.get("moves", ""),
             "fens": fens,
             "ply_labels": ply_labels,
+            "board_lines": board_lines,
             "plan": op.get("plan", ""),
             "applicable_games": total,
             "games_on_plan": len(played),

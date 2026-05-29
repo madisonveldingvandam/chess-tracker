@@ -109,6 +109,10 @@ section h3 {
 }
 .plan-counts { color: var(--muted); font-size: 0.78rem; margin-top: 0.2rem; }
 .plan-gambits { color: var(--accent); font-size: 0.78rem; margin-top: 0.2rem; }
+.plan-line-label {
+  margin-top: 0.6rem; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.78rem;
+}
 .plan-winrates { margin-top: 0.4rem; font-size: 0.82rem; }
 .plan-winrates strong { font-variant-numeric: tabular-nums; }
 .plan-delta { color: var(--muted); font-size: 0.78rem; }
