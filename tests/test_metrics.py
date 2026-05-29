@@ -688,9 +688,12 @@ def test_shipped_plan_has_white_entries_with_match_rules():
     cz = by_name["Colle–Zukertort System"]
     assert cz["side"] == "white" and cz["vs_first_move"] == "d4"
     assert cz["match"]["white_forbids"] == ["Bf4"]
-    fk = by_name["Four Knights (Belgrade / Halloween)"]
+    fk = by_name["Four Knights Game"]
     assert fk["side"] == "white" and fk["vs_first_move"] == "e4"
-    assert set(fk["match"]["gambit_flags"]) == {"Halloween", "Belgrade"}
+    # Sound mainline now — no gambit branches, single board line.
+    assert fk["match"]["white_requires"] == ["Nf3", "Nc3"]
+    assert "gambit_flags" not in fk["match"]
+    assert "lines" not in fk
     # Existing Black entries are still present and untouched (no match block).
     assert "Englund Gambit" in by_name
     assert "match" not in by_name["Englund Gambit"]

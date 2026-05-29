@@ -31,19 +31,15 @@
       }
     },
     {
-      "name": "Four Knights (Belgrade / Halloween)",
+      "name": "Four Knights Game",
       "side": "white",
       "vs_first_move": "e4",
       "target_family": "Four Knights Game",
-      "lines": [
-        { "label": "Halloween Gambit", "moves": "1.e4 e5  2.Nf3 Nc6  3.Nc3 Nf6  4.Nxe5 Nxe5  5.d4 Ng6  6.e5 Ng8  7.Bc4 d5  8.exd6 Bxd6" },
-        { "label": "Belgrade Gambit", "moves": "1.e4 e5  2.Nf3 Nc6  3.Nc3 Nf6  4.d4 exd4  5.Nd5 Nxd5  6.exd5 Qe7+  7.Be2 Nb4  8.O-O Nxd5" }
-      ],
-      "plan": "Develop both knights (Four Knights), then spring a gambit for bullet surprise. Halloween: 4.Nxe5 sacking a knight to roll the centre pawns. Belgrade: 4.d4 exd4 5.Nd5 for a fast initiative.",
+      "moves": "1.e4 e5  2.Nf3 Nc6  3.Nc3 Nf6  4.Bb5 Bb4  5.O-O O-O  6.d3 d6  7.Bg5 Bxc3  8.bxc3 Qe7  9.Re1 Nd8  10.d4 Ne6",
+      "plan": "Sound classical Four Knights (Spanish, 4.Bb5): develop both knights, castle, then the d4 central break. No material sacrifice — holds up against accurate / engine defence, unlike the gambits.",
       "match": {
         "applicable_if_black_plays": "e5",
         "white_requires": ["Nf3", "Nc3"],
-        "gambit_flags": { "Halloween": ["Nxe5"], "Belgrade": ["Nd5"] },
         "window_plies": 12
       }
     }
