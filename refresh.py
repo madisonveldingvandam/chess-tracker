@@ -8,6 +8,7 @@ from chess_tracker.api import fetch_archives_index, fetch_archive
 from chess_tracker.pgn import parse_game
 from chess_tracker.metrics import compute_all
 from chess_tracker.annotations import load_annotations
+from chess_tracker.plan import load_plan
 from chess_tracker.render import render_all_pages, DEFAULT_TEMPLATE_DIR
 
 
@@ -52,10 +53,12 @@ def main(argv=None) -> int:
     records = [parse_game(g, username=args.username) for g in in_format]
     print(f"      {len(records)} rated 1+0 {args.format} games parsed")
 
-    print("[4/5] Computing metrics + merging annotations...")
+    print("[4/5] Computing metrics + merging annotations + plan...")
     annotations = load_annotations(annotations_path)
+    plan = load_plan()
     payload = compute_all(records, annotations,
-                          username=args.username, format=args.format)
+                          username=args.username, format=args.format,
+                          plan=plan)
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "computed.json").write_text(json.dumps(payload, indent=2))
 

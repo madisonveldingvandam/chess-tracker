@@ -71,6 +71,58 @@ section h3 {
 .leak .leak-evidence { color: var(--text); font-size: 0.85rem; margin-top: 0.15rem; }
 .leak .leak-action { font-size: 0.85rem; margin-top: 0.3rem; }
 
+/* Plan & adherence block (index.html top) */
+#plan-block { margin-bottom: 1.25rem; }
+#plan-block h3 { margin: 1rem 0 0.4rem; font-size: 0.95rem; font-weight: 400; color: var(--muted); }
+.plan-grid {
+  display: grid; gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+}
+.plan-card {
+  padding: 0.7rem 0.9rem;
+  background: var(--surface);
+  border-left: 2px solid var(--border);
+  border-radius: 2px;
+  font-size: 0.85rem;
+}
+.plan-card.severity-green   { border-left-color: var(--accent); border-left-width: 3px; }
+.plan-card.severity-yellow  { border-left-color: var(--text); border-left-width: 3px; }
+.plan-card.severity-red     {
+  border-left-color: var(--text); border-left-width: 3px;
+  background: var(--accent-bg);
+}
+.plan-card.severity-neutral { border-left-color: var(--border); }
+.plan-head {
+  display: flex; align-items: baseline; gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.plan-head .plan-vs { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; }
+.plan-head .plan-name { font-weight: 400; }
+.plan-head .plan-adherence {
+  margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted);
+}
+.plan-counts { color: var(--muted); font-size: 0.78rem; margin-top: 0.2rem; }
+.plan-winrates { margin-top: 0.4rem; font-size: 0.82rem; }
+.plan-winrates strong { font-variant-numeric: tabular-nums; }
+.plan-delta { color: var(--muted); font-size: 0.78rem; }
+.plan-detail { margin-top: 0.5rem; font-size: 0.8rem; }
+.plan-detail summary { cursor: pointer; color: var(--muted); }
+.plan-detail summary:hover { color: var(--text); }
+.plan-moves {
+  display: block; margin-top: 0.4rem; padding: 0.4rem 0.6rem;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem; color: var(--text);
+  white-space: pre-wrap;
+}
+.plan-plan { margin: 0.4rem 0 0; color: var(--text); font-size: 0.82rem; }
+.plan-principles {
+  margin: 0; padding-left: 1.25rem;
+  display: grid; gap: 0.25rem;
+  font-size: 0.85rem; color: var(--text);
+}
+.plan-principles li { line-height: 1.4; }
+
 /* Next-session rule */
 .rule-block {
   background: var(--surface);

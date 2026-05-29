@@ -379,6 +379,123 @@ def test_compute_all_includes_opening_families_and_variations():
     assert "opening_variations" in payload
 
 
+def test_compute_all_includes_plan_compliance_with_empty_plan_default():
+    """compute_all should not crash when no plan is passed — emit empty shape."""
+    annotations = {"openings": {}, "games": {}, "error_log": []}
+    payload = compute_all(RECORDS, annotations, username="m_v-v")
+    assert "plan_compliance" in payload
+    pc = payload["plan_compliance"]
+    assert pc["openings"] == []
+    assert pc["principles"] == []
+
+
+def test_compute_plan_compliance_adherence_and_severity():
+    """Adherence math, severity buckets, and win-rate split (on-plan vs deviated)."""
+    from chess_tracker.metrics import compute_plan_compliance
+    from chess_tracker.pgn import GameRecord
+
+    def _rec(family, result, first_moves="1.e4 g6 2.d4 Bg7 3.Nc3 d6 4.f4 c6",
+             side="black", end_time=1_700_000_000):
+        return GameRecord(
+            url="x", end_time=end_time, time_class="bullet", side=side,
+            my_rating=500, opp_rating=500, result=result, opp_result="checkmated",
+            plies=20, fullmoves=10, opening=family, eco="A00",
+            first_moves=first_moves,
+        )
+
+    # 10 black games vs 1.e4: 6 played Modern (4 wins), 4 deviated to Pirc (1 win)
+    recs = (
+        [_rec("Modern Defense", "win", end_time=1_700_000_000 + i)
+         for i in range(4)] +
+        [_rec("Modern Defense", "timeout", end_time=1_700_000_010 + i)
+         for i in range(2)] +
+        [_rec("Pirc Defense", "win", end_time=1_700_000_020)] +
+        [_rec("Pirc Defense", "checkmated", end_time=1_700_000_021 + i)
+         for i in range(3)]
+    )
+
+    plan = {
+        "openings": [
+            {"name": "Modern Defense (c6 setup)", "side": "black",
+             "vs_first_move": "e4", "target_family": "Modern Defense",
+             "moves": "1.e4 g6 ...", "plan": "Hold the center."},
+        ],
+        "principles": ["Blunder check"],
+    }
+    out = compute_plan_compliance(recs, plan, window=30)
+    assert len(out["openings"]) == 1
+    o = out["openings"][0]
+    assert o["applicable_games"] == 10
+    assert o["games_on_plan"] == 6
+    assert o["adherence_pct"] == 60.0
+    assert o["win_pct_when_played"] == round(100 * 4 / 6, 1)
+    assert o["win_pct_when_deviated"] == 25.0
+    assert o["severity"] == "green"  # adherence == 60
+    assert out["principles"] == ["Blunder check"]
+
+
+def test_compute_plan_compliance_severity_buckets():
+    """Threshold edges: <40 red, [40,60) yellow, >=60 green, 0-applicable neutral."""
+    from chess_tracker.metrics import compute_plan_compliance
+    from chess_tracker.pgn import GameRecord
+
+    def _make_window(on_plan, deviated, first_moves="1.e4 g6 2.d4 Bg7 3.Nc3 d6"):
+        recs = []
+        et = 1_700_000_000
+        for i in range(on_plan):
+            recs.append(GameRecord(
+                url="x", end_time=et + i, time_class="bullet", side="black",
+                my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+                plies=20, fullmoves=10, opening="Modern Defense", eco="A00",
+                first_moves=first_moves,
+            ))
+        for i in range(deviated):
+            recs.append(GameRecord(
+                url="x", end_time=et + 100 + i, time_class="bullet", side="black",
+                my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+                plies=20, fullmoves=10, opening="Pirc Defense", eco="A00",
+                first_moves=first_moves,
+            ))
+        return recs
+
+    plan = {"openings": [{"side": "black", "vs_first_move": "e4",
+                          "target_family": "Modern Defense", "name": "M"}]}
+
+    # Red: 30% adherence (3 of 10)
+    out = compute_plan_compliance(_make_window(3, 7), plan)
+    assert out["openings"][0]["severity"] == "red"
+    # Yellow: 50% adherence (5 of 10)
+    out = compute_plan_compliance(_make_window(5, 5), plan)
+    assert out["openings"][0]["severity"] == "yellow"
+    # Green: 80% adherence (8 of 10)
+    out = compute_plan_compliance(_make_window(8, 2), plan)
+    assert out["openings"][0]["severity"] == "green"
+    # Neutral: 0 applicable (no 1.e4 games in window)
+    out = compute_plan_compliance([], plan)
+    # Empty records returns empty openings list, not neutral row
+    assert out["openings"] == []
+
+
+def test_compute_plan_compliance_filters_by_first_move():
+    """A game where White played 1.d4 must NOT count toward a 'vs 1.e4' plan."""
+    from chess_tracker.metrics import compute_plan_compliance
+    from chess_tracker.pgn import GameRecord
+
+    recs = [
+        GameRecord(url="x", end_time=1_700_000_000, time_class="bullet",
+                   side="black", my_rating=500, opp_rating=500, result="win",
+                   opp_result="checkmated", plies=20, fullmoves=10,
+                   opening="Modern Defense", eco="A00",
+                   first_moves="1.d4 g6 2.c4 Bg7"),  # white played d4, NOT e4
+    ]
+    plan = {"openings": [{"side": "black", "vs_first_move": "e4",
+                          "target_family": "Modern Defense", "name": "M"}]}
+    out = compute_plan_compliance(recs, plan)
+    o = out["openings"][0]
+    assert o["applicable_games"] == 0
+    assert o["severity"] == "neutral"
+
+
 def test_opening_families_aggregates_across_play_signatures():
     """A family-color row sums all games sharing that family + color,
     regardless of which play_signature they came from."""

@@ -670,9 +670,82 @@ def compute_play_signatures(records: list[GameRecord]) -> list[dict]:
     return out
 
 
+def compute_plan_compliance(records: list[GameRecord], plan: dict,
+                            window: int = 30) -> dict:
+    """For each opening in the plan, measure adherence over the last N games.
+
+    For an opening entry like {"side":"black","vs_first_move":"e4",
+    "target_family":"Modern Defense"}, we filter games on the last `window`
+    games to those played as the given side where White's first move matches
+    `vs_first_move` (if specified). Of those *applicable* games, we count
+    how many had family == target_family (on-plan) and compute win rates
+    both when on-plan and when deviated.
+
+    Severity assignment for the dashboard:
+      adherence_pct >= 60 → "green"
+      adherence_pct >= 40 → "yellow"
+      adherence_pct <  40 → "red"
+    If no applicable games occurred in the window, severity is "neutral"
+    (no opportunity to adhere — don't punish).
+    """
+    if not records:
+        return {"openings": [], "principles": plan.get("principles", []),
+                "window": window}
+    ordered = sorted(records, key=lambda r: r.end_time)
+    window_recs = ordered[-window:]
+
+    out_openings = []
+    for op in plan.get("openings", []):
+        side = op.get("side")
+        vs_move = op.get("vs_first_move")
+        target = op.get("target_family")
+        applicable = [r for r in window_recs if r.side == side]
+        if vs_move:
+            prefix = f"1.{vs_move.lower()}"
+            applicable = [r for r in applicable
+                          if r.first_moves
+                          and r.first_moves.lower().startswith(prefix)]
+        total = len(applicable)
+        played = [r for r in applicable if r.family == target]
+        deviated = [r for r in applicable if r.family != target]
+        played_wins = sum(1 for r in played if _is_win(r.result))
+        dev_wins = sum(1 for r in deviated if _is_win(r.result))
+        adherence_pct = (100 * len(played) / total) if total else 0.0
+        if total == 0:
+            severity = "neutral"
+        elif adherence_pct >= 60:
+            severity = "green"
+        elif adherence_pct >= 40:
+            severity = "yellow"
+        else:
+            severity = "red"
+        out_openings.append({
+            "name": op.get("name", target),
+            "side": side,
+            "vs_first_move": vs_move,
+            "target_family": target,
+            "moves": op.get("moves", ""),
+            "plan": op.get("plan", ""),
+            "applicable_games": total,
+            "games_on_plan": len(played),
+            "adherence_pct": round(adherence_pct, 1),
+            "win_pct_when_played": round(100 * played_wins / len(played), 1)
+                if played else None,
+            "win_pct_when_deviated": round(100 * dev_wins / len(deviated), 1)
+                if deviated else None,
+            "severity": severity,
+        })
+    return {
+        "openings": out_openings,
+        "principles": plan.get("principles", []),
+        "window": window,
+    }
+
+
 def compute_all(records: list[GameRecord], annotations: dict,
                 username: str, format: str = "bullet",
-                low_confidence_threshold: int = 15) -> dict:
+                low_confidence_threshold: int = 15,
+                plan: dict | None = None) -> dict:
     """Top-level dashboard payload. All panel data merged + annotations applied."""
     enrich_with_deltas(records)
     enrich_with_sessions(records)
@@ -710,4 +783,5 @@ def compute_all(records: list[GameRecord], annotations: dict,
             "mate_loss_buckets": compute_mate_loss_buckets(records),
         },
         "error_log": annotations.get("error_log", []),
+        "plan_compliance": compute_plan_compliance(records, plan or {}),
     }

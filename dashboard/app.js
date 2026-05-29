@@ -12,6 +12,7 @@
     return;
   }
   renderKPI(D);
+  renderPlanBlock(D.plan_compliance);
   renderBehavior(D.behavior);
   renderLeaks(D.leak_summary);
   renderRule(D.next_session_rule);
@@ -49,6 +50,57 @@
       <div class="kpi"><span class="kpi-label">Updated</span>
         <span class="kpi-value" style="font-size:0.9rem">${new Date(d.generated_at).toLocaleString()}</span></div>
     `);
+  }
+
+  // Plan & adherence — only renders on index.html where the section exists.
+  // Each prep opening shows adherence over the last N games + win-rate
+  // comparison (on-plan vs deviated). Severity coloring matches the leaks
+  // palette (severity-green / severity-yellow / severity-red / severity-neutral).
+  function renderPlanBlock(pc) {
+    const root = document.getElementById("plan-openings");
+    const princRoot = document.getElementById("plan-principles");
+    if (!root || !pc) return;
+    const openings = pc.openings || [];
+    if (openings.length === 0) {
+      root.innerHTML = `<p style="color:var(--muted)">No openings in plan. Edit chess_tracker/plan.json to add some.</p>`;
+    } else {
+      root.innerHTML = openings.map(o => {
+        const vs = o.vs_first_move ? `vs 1.${o.vs_first_move}` : `as ${o.side}`;
+        const won = o.win_pct_when_played;
+        const dev = o.win_pct_when_deviated;
+        const wonStr = won == null ? "—" : `${won}%`;
+        const devStr = dev == null ? "—" : `${dev}%`;
+        const deltaNote = (won != null && dev != null)
+          ? ` <span class="plan-delta">(${won >= dev ? "+" : ""}${(won - dev).toFixed(1)}pp on plan)</span>`
+          : "";
+        return `
+          <div class="plan-card severity-${o.severity}">
+            <div class="plan-head">
+              <span class="plan-vs">${vs}</span>
+              <span class="plan-name">${o.name}</span>
+              <span class="plan-adherence">${o.adherence_pct}% adherence</span>
+            </div>
+            <div class="plan-counts">
+              ${o.games_on_plan} of ${o.applicable_games} games played on plan
+            </div>
+            <div class="plan-winrates">
+              Win when played: <strong>${wonStr}</strong>
+              · Win when deviated: <strong>${devStr}</strong>
+              ${deltaNote}
+            </div>
+            <details class="plan-detail">
+              <summary>Show moves &amp; plan</summary>
+              <code class="plan-moves">${o.moves || "—"}</code>
+              <p class="plan-plan">${o.plan || ""}</p>
+            </details>
+          </div>
+        `;
+      }).join("");
+    }
+    if (princRoot) {
+      const principles = pc.principles || [];
+      princRoot.innerHTML = principles.map(p => `<li>${p}</li>`).join("");
+    }
   }
 
   function renderLeaks(leaks) {

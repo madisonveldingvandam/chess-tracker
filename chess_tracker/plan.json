@@ -1,0 +1,27 @@
+{
+  "openings": [
+    {
+      "name": "Modern Defense (c6 setup)",
+      "side": "black",
+      "vs_first_move": "e4",
+      "target_family": "Modern Defense",
+      "moves": "1.e4 g6  2.d4 Bg7  3.Nc3 d6  4.f4 c6",
+      "plan": "Fianchetto bishop, hold center, look for ...b5 or ...e5 break."
+    },
+    {
+      "name": "Englund Gambit",
+      "side": "black",
+      "vs_first_move": "d4",
+      "target_family": "Englund Gambit",
+      "moves": "1.d4 e5  2.dxe5 Nc6  3.Nf3 Qe7  4.Bf4 Qb4+  5.Bd2 Qxb2",
+      "plan": "Force tactical chaos, target b2/c3 weakness."
+    }
+  ],
+  "principles": [
+    "Blunder check — 3 candidate moves before every move",
+    "10–15 tactics per day, accuracy over speed",
+    "Opening principles ≥ lines: center, development, castle",
+    "Review every loss — find the eval-flip move",
+    "One opening per side, played always"
+  ]
+}
