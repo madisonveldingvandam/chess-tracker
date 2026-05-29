@@ -164,3 +164,23 @@ def test_parse_game_move_count_from_pgn_tree_not_clocks():
     rec = parse_game(g, username="me")
     assert rec.plies == 4
     assert rec.fullmoves == 2
+
+
+def test_parse_game_populates_opening_moves_12_plies():
+    g = {
+        "url": "https://chess.com/game/1",
+        "end_time": 1_700_000_000,
+        "time_class": "bullet",
+        "time_control": "60",
+        "rated": True,
+        "white": {"username": "me", "rating": 500, "result": "win"},
+        "black": {"username": "opp", "rating": 500, "result": "checkmated"},
+        "pgn": '[ECO "D05"]\n1. d4 d5 2. Nf3 Nf6 3. e3 e6 4. Bd3 c5 '
+               '5. b3 Nc6 6. Bb2 Bd6 7. O-O O-O *',
+    }
+    rec = parse_game(g, username="me")
+    # opening_moves carries 12 plies (past the 8-ply first_moves)
+    assert rec.opening_moves == (
+        "1.d4 d5 2.Nf3 Nf6 3.e3 e6 4.Bd3 c5 5.b3 Nc6 6.Bb2 Bd6")
+    # first_moves stays 8 plies, unchanged
+    assert rec.first_moves == "1.d4 d5 2.Nf3 Nf6 3.e3 e6 4.Bd3 c5"

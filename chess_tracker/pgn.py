@@ -6,6 +6,7 @@ import chess.pgn
 from chess_tracker.play_signature import (
     play_signature as _compute_play_signature,
     first_moves_san as _compute_first_moves_san,
+    opening_moves_san as _compute_opening_moves_san,
 )
 
 _CLOCK_RE = re.compile(r"\[%clk (\d+):(\d{2}):(\d{2}(?:\.\d+)?)\]")
@@ -31,6 +32,7 @@ class GameRecord:
     opp_clocks: list[float] = field(default_factory=list)
     play_signature: str | None = None  # 8-ply canonical FEN signature
     first_moves: str | None = None     # SAN of first 8 plies, e.g. "1.d4 d5 …"
+    opening_moves: str | None = None   # SAN of up to 12 plies; feeds the move-pattern matcher
     family: str | None = None          # tier-1 stem (e.g. "Queens Pawn Opening"); auto-derived from opening
     variation: str | None = None       # tier-2 suffix (e.g. "Zukertort Chigorin Variation"); "" for main lines
     time_control: str = "60"           # Chess.com raw TimeControl string, e.g. "60" = 1+0
@@ -165,6 +167,7 @@ def parse_game(g: dict, username: str) -> GameRecord:
         opp_clocks=b_clocks if me_white else w_clocks,
         play_signature=_compute_play_signature(game_tree),
         first_moves=_compute_first_moves_san(game_tree),
+        opening_moves=_compute_opening_moves_san(game_tree),
         time_control=str(g.get("time_control", "60")),
         rated=bool(g.get("rated", True)),
     )
