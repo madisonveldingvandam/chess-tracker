@@ -76,21 +76,23 @@ section h3 {
 #plan-block h3 { margin: 1rem 0 0.4rem; font-size: 0.95rem; font-weight: 400; color: var(--muted); }
 .plan-grid {
   display: grid; gap: 0.6rem;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));  /* fill full page width */
+}
+@media (max-width: 760px) {
+  .plan-grid { grid-template-columns: 1fr; }
 }
 .plan-card {
   padding: 0.7rem 0.9rem;
   background: var(--surface);
-  border-left: 2px solid var(--border);
+  border-left: 3px solid var(--border);
   border-radius: 2px;
   font-size: 0.85rem;
 }
-.plan-card.severity-green   { border-left-color: var(--accent); border-left-width: 3px; }
-.plan-card.severity-yellow  { border-left-color: var(--text); border-left-width: 3px; }
-.plan-card.severity-red     {
-  border-left-color: var(--text); border-left-width: 3px;
-  background: var(--accent-bg);
-}
+/* Uniform card surface; severity is conveyed by the left-border color only,
+   so all plan cards look consistent regardless of their data-driven state. */
+.plan-card.severity-green   { border-left-color: var(--accent); }
+.plan-card.severity-yellow  { border-left-color: var(--text); }
+.plan-card.severity-red     { border-left-color: var(--text); }
 .plan-card.severity-neutral { border-left-color: var(--border); }
 .plan-head {
   display: flex; align-items: baseline; gap: 0.6rem;

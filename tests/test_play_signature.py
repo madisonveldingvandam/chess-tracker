@@ -83,3 +83,33 @@ def test_opening_moves_san_best_effort_for_short_game():
 
 def test_opening_moves_san_returns_none_for_empty():
     assert opening_moves_san(None) is None
+
+
+# --- fens_from_san (tolerant prefix parsing) --------------------------------
+from chess_tracker.play_signature import fens_from_san
+
+
+def test_fens_from_san_parses_clean_line():
+    fens, labels = fens_from_san("1.e4 e5 2.Nf3 Nc6")
+    assert len(fens) == 5  # start + 4 plies
+    assert labels == ["1.e4", "e5", "2.Nf3", "Nc6"]
+
+
+def test_fens_from_san_stops_at_first_unparseable_token():
+    # Annotated multi-branch line (Four Knights): the board renders the
+    # parseable prefix through 4.Nxe5 and ignores "(Halloween) / 4.d4 ...".
+    fens, labels = fens_from_san(
+        "1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6 4.Nxe5 (Halloween) / 4.d4 exd4 5.Nd5")
+    assert len(fens) == 8        # start + 7 plies (through Nxe5)
+    assert labels[-1] == "4.Nxe5"
+
+
+def test_fens_from_san_empty_for_no_moves():
+    assert fens_from_san("") == ([], [])
+
+
+def test_fens_from_san_no_board_when_first_token_unparseable():
+    # Nothing parses -> at most the start fen; caller checks len > 1.
+    fens, labels = fens_from_san("(Halloween) / nonsense")
+    assert len(fens) <= 1
+    assert labels == []

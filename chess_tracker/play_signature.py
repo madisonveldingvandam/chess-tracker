@@ -91,8 +91,11 @@ def fens_from_san(moves: str | None) -> tuple[list[str], list[str]]:
     and `labels` is the move as written for each ply ("1.e4", "g6", ...),
     so labels[k] describes the move that produced fens[k + 1].
 
-    On any parse failure (illegal/ambiguous move, stray token) returns
-    ([], []) so callers can simply omit the board.
+    Parsing is tolerant: it stops at the first unparseable token and returns
+    the prefix parsed so far. This lets annotated/multi-branch plan lines
+    (e.g. "… 4.Nxe5 (Halloween) / 4.d4 exd4 5.Nd5") still render a board for
+    their mainline prefix. If nothing parses, only the start FEN is returned
+    (length 1), which callers treat as "no board" (they require len > 1).
     """
     if not moves:
         return [], []
@@ -108,7 +111,7 @@ def fens_from_san(moves: str | None) -> tuple[list[str], list[str]]:
             move = board.parse_san(san)
         except (ValueError, chess.IllegalMoveError,
                 chess.InvalidMoveError, chess.AmbiguousMoveError):
-            return [], []
+            break  # stop at first unparseable token; keep the prefix
         labels.append(f"{ply // 2 + 1}.{san}" if ply % 2 == 0 else san)
         board.push(move)
         fens.append(board.fen())
