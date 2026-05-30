@@ -12,7 +12,7 @@ from chess_tracker.plan import load_plan
 from chess_tracker.puzzles import attach_puzzles, find_engine_path
 from chess_tracker.analysis import (
     run_move_quality_pass, aggregate_move_quality,
-    load_quality_cache, save_quality_cache,
+    load_quality_cache, save_quality_cache, select_recent_games,
 )
 from chess_tracker.render import render_all_pages, DEFAULT_TEMPLATE_DIR
 
@@ -47,6 +47,10 @@ def main(argv=None) -> int:
                     help="Skip the Stockfish move-quality pass (accuracy%, blunders, cp-loss).")
     ap.add_argument("--analysis-depth", type=int, default=12,
                     help="Search depth for the move-quality pass (default 12).")
+    ap.add_argument("--analysis-max-games", type=int, default=200,
+                    help="Analyze only the N most recent games (default 200; "
+                         "<=0 = no limit). Bounds first-run cost; the cache fills "
+                         "incrementally across refreshes.")
     ap.add_argument("--data-dir", default="data")
     ap.add_argument("--dashboard-dir", default="dashboard")
     ap.add_argument("--template-dir", default=str(DEFAULT_TEMPLATE_DIR))
@@ -113,13 +117,14 @@ def main(argv=None) -> int:
         print("[4.6/5] No Stockfish found; move-quality analysis skipped.")
     else:
         side_by_url = {r.url: r.side for r in records if r.url}
+        to_analyze = select_recent_games(in_format, args.analysis_max_games)
         cache = load_quality_cache(analysis_cache_path)
-        summaries = run_move_quality_pass(in_format, side_by_url, cache,
+        summaries = run_move_quality_pass(to_analyze, side_by_url, cache,
                                           depth=args.analysis_depth)
         save_quality_cache(analysis_cache_path, cache)
         payload["move_quality"] = aggregate_move_quality(summaries)
-        print(f"[4.6/5] Move-quality pass: {len(summaries)} games analyzed/cached "
-              f"(depth {args.analysis_depth}).")
+        print(f"[4.6/5] Move-quality pass: {len(summaries)} of {len(to_analyze)} "
+              f"recent games (depth {args.analysis_depth}).")
 
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "computed.json").write_text(json.dumps(payload, indent=2))

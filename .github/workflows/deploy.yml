@@ -42,10 +42,16 @@ jobs:
       - name: Install Stockfish
         run: sudo apt-get update && sudo apt-get install -y stockfish
 
-      - name: Cache Chess.com archives
+      # Persist BOTH the raw archives and the move-quality analysis cache so
+      # each scheduled run only fetches/analyzes games it hasn't seen. Without
+      # the analysis cache here, every deploy would re-run Stockfish over the
+      # whole recent window from scratch.
+      - name: Cache Chess.com archives + analysis
         uses: actions/cache@v4
         with:
-          path: data/raw
+          path: |
+            data/raw
+            data/analysis_cache.json
           key: chess-archives-${{ github.run_id }}
           restore-keys: |
             chess-archives-

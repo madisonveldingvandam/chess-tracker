@@ -168,6 +168,31 @@ def test_refresh_attaches_move_quality_and_caches(tmp_path, monkeypatch):
     assert "b1" in cache
 
 
+@pytest.mark.skipif(find_engine_path() is None, reason="Stockfish not installed")
+def test_refresh_analysis_max_games_bounds_the_pass(tmp_path, monkeypatch):
+    """--analysis-max-games analyzes only the newest N games."""
+    from refresh import main
+    pgn = "[ECO \"C20\"]\n1. e4 e5 2. Qh5 Nc6 3. Qxe5 Nxe5 *"
+    def g(url, end_time):
+        return {"url": url, "end_time": end_time, "time_class": "bullet",
+                "time_control": "60", "rated": True, "rules": "chess",
+                "white": {"username": "me", "rating": 500, "result": "resigned"},
+                "black": {"username": "opp", "rating": 500, "result": "win"},
+                "pgn": pgn}
+    archives = {"games": [g("old", 1), g("mid", 2), g("new", 3)]}
+    monkeypatch.setattr("refresh.fetch_archives_index", lambda u: ["arc1"])
+    monkeypatch.setattr("refresh.fetch_archive", lambda url, cache_dir, force: archives)
+    rc = main(["--username", "me", "--no-puzzles",
+               "--analysis-depth", "8", "--analysis-max-games", "1",
+               "--data-dir", str(tmp_path / "data"),
+               "--dashboard-dir", str(tmp_path / "dash")])
+    assert rc == 0
+    payload = json.loads((tmp_path / "data" / "computed.json").read_text())
+    assert payload["move_quality"]["games_analyzed"] == 1
+    cache = json.loads((tmp_path / "data" / "analysis_cache.json").read_text())
+    assert list(cache) == ["new"]   # only the newest game analyzed
+
+
 # --- accept_game: multi-format ingestion filter ---
 
 def _game(**kw):

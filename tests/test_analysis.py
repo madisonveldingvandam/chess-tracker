@@ -158,6 +158,21 @@ def test_aggregate_move_quality_empty_is_none():
     assert aggregate_move_quality([]) is None
 
 
+def test_select_recent_games_takes_newest_n():
+    from chess_tracker.analysis import select_recent_games
+    games = [{"url": "a", "end_time": 1}, {"url": "b", "end_time": 3},
+             {"url": "c", "end_time": 2}]
+    out = select_recent_games(games, 2)
+    assert [g["url"] for g in out] == ["b", "c"]  # newest end_time first
+
+
+def test_select_recent_games_nonpositive_means_unlimited():
+    from chess_tracker.analysis import select_recent_games
+    games = [{"url": "a", "end_time": 1}, {"url": "b", "end_time": 2}]
+    assert len(select_recent_games(games, 0)) == 2
+    assert len(select_recent_games(games, -1)) == 2
+
+
 # --- engine driver: real Stockfish on a known blunder ---
 
 @pytest.mark.skipif(find_engine_path() is None, reason="Stockfish not installed")

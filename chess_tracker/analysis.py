@@ -220,6 +220,18 @@ def analyze_move_quality(
     return summary
 
 
+def select_recent_games(games, max_games: int) -> list[dict]:
+    """The ``max_games`` most recent games by ``end_time`` (newest first).
+
+    ``max_games <= 0`` means no limit (returns all, unordered). Bounding the
+    engine pass keeps first-run cost tractable; the per-URL cache then fills
+    incrementally across refreshes.
+    """
+    if max_games <= 0:
+        return list(games)
+    return sorted(games, key=lambda g: g.get("end_time", 0), reverse=True)[:max_games]
+
+
 def attach_move_quality(games, side_by_url, cache, *, depth, analyze_fn) -> list[dict]:
     """Return per-game summaries, reusing/updating ``cache`` (url -> entry).
 
