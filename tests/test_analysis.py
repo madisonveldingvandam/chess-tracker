@@ -79,6 +79,85 @@ def test_summarize_aggregates_counts_phase_and_accuracy():
     assert 0.0 <= s["accuracy"] <= 100.0
 
 
+# --- aggregation + per-URL caching (pure; no engine) ---
+
+def _summary(moves=1, acc=90.0, blunders=0, phase_acpl=None, phase_moves=None):
+    return {"moves_analyzed": moves, "accuracy": acc, "blunders": blunders,
+            "mistakes": 0, "inaccuracies": 0, "avg_cp_loss": 10,
+            "acpl_by_phase": phase_acpl or {}, "moves_by_phase": phase_moves or {},
+            "side": "white"}
+
+
+def test_summarize_reports_moves_per_phase():
+    from chess_tracker.analysis import MoveEval, summarize
+    moves = [
+        MoveEval.from_evals(0, 1, 20, 15, "opening"),
+        MoveEval.from_evals(2, 2, 10, 12, "opening"),
+        MoveEval.from_evals(10, 6, 30, -500, "middlegame"),
+    ]
+    s = summarize(moves)
+    assert s["moves_by_phase"] == {"opening": 2, "middlegame": 1}
+
+
+def test_attach_move_quality_serves_cache_and_analyzes_only_new():
+    from chess_tracker.analysis import attach_move_quality
+    calls = []
+    def fake(pgn, side, depth):
+        calls.append((pgn, side, depth))
+        return _summary(acc=90.0)
+    games = [{"url": "g1", "pgn": "p1"}, {"url": "g2", "pgn": "p2"}]
+    side_by_url = {"g1": "white", "g2": "black"}
+    cache = {"g1": {"depth": 12, "summary": _summary(acc=50.0)}}
+
+    summaries = attach_move_quality(games, side_by_url, cache,
+                                    depth=12, analyze_fn=fake)
+    assert calls == [("p2", "black", 12)]   # g1 served from cache
+    assert len(summaries) == 2
+    assert summaries[0]["accuracy"] == 50.0  # cached
+    assert "g2" in cache                      # newly stored
+
+
+def test_attach_move_quality_reanalyzes_when_depth_differs():
+    from chess_tracker.analysis import attach_move_quality
+    calls = []
+    def fake(pgn, side, depth):
+        calls.append(depth)
+        return _summary(acc=90.0)
+    games = [{"url": "g1", "pgn": "p1"}]
+    cache = {"g1": {"depth": 8, "summary": _summary(acc=50.0)}}
+
+    summaries = attach_move_quality(games, {"g1": "white"}, cache,
+                                    depth=12, analyze_fn=fake)
+    assert calls == [12]
+    assert summaries[0]["accuracy"] == 90.0
+    assert cache["g1"]["depth"] == 12
+
+
+def test_aggregate_move_quality_weights_and_buckets():
+    from chess_tracker.analysis import aggregate_move_quality
+    summaries = [
+        _summary(moves=10, acc=80.0, blunders=1,
+                 phase_acpl={"opening": 20, "middlegame": 40},
+                 phase_moves={"opening": 5, "middlegame": 5}),
+        _summary(moves=10, acc=60.0, blunders=3,
+                 phase_acpl={"middlegame": 60},
+                 phase_moves={"middlegame": 10}),
+    ]
+    a = aggregate_move_quality(summaries)
+    assert a["games_analyzed"] == 2
+    assert a["moves_analyzed"] == 20
+    assert a["blunders"] == 4
+    assert a["blunders_per_100_moves"] == 20.0
+    assert a["accuracy"] == 70.0                       # moves-weighted mean
+    assert a["acpl_by_phase"]["opening"] == 20
+    assert a["acpl_by_phase"]["middlegame"] == 53       # (40*5 + 60*10)/15
+
+
+def test_aggregate_move_quality_empty_is_none():
+    from chess_tracker.analysis import aggregate_move_quality
+    assert aggregate_move_quality([]) is None
+
+
 # --- engine driver: real Stockfish on a known blunder ---
 
 @pytest.mark.skipif(find_engine_path() is None, reason="Stockfish not installed")

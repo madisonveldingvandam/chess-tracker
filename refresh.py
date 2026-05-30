@@ -10,6 +10,10 @@ from chess_tracker.metrics import compute_all
 from chess_tracker.annotations import load_annotations
 from chess_tracker.plan import load_plan
 from chess_tracker.puzzles import attach_puzzles, find_engine_path
+from chess_tracker.analysis import (
+    run_move_quality_pass, aggregate_move_quality,
+    load_quality_cache, save_quality_cache,
+)
 from chess_tracker.render import render_all_pages, DEFAULT_TEMPLATE_DIR
 
 
@@ -39,6 +43,10 @@ def main(argv=None) -> int:
                     help="Re-fetch all archives, not just current month.")
     ap.add_argument("--no-puzzles", action="store_true",
                     help="Skip the Stockfish pass that attaches a puzzle to each recent loss.")
+    ap.add_argument("--no-analysis", action="store_true",
+                    help="Skip the Stockfish move-quality pass (accuracy%, blunders, cp-loss).")
+    ap.add_argument("--analysis-depth", type=int, default=12,
+                    help="Search depth for the move-quality pass (default 12).")
     ap.add_argument("--data-dir", default="data")
     ap.add_argument("--dashboard-dir", default="dashboard")
     ap.add_argument("--template-dir", default=str(DEFAULT_TEMPLATE_DIR))
@@ -95,6 +103,23 @@ def main(argv=None) -> int:
         n = attach_puzzles(payload.get("recent_losses", []), pgn_by_url, side_by_url)
         print(f"[4.5/5] Stockfish puzzle pass: {n} of "
               f"{len(payload.get('recent_losses', []))} recent losses got a puzzle.")
+
+    analysis_cache_path = data_dir / "analysis_cache.json"
+    if args.no_analysis:
+        payload["move_quality"] = None
+        print("[4.6/5] Move-quality analysis skipped (--no-analysis).")
+    elif find_engine_path() is None:
+        payload["move_quality"] = None
+        print("[4.6/5] No Stockfish found; move-quality analysis skipped.")
+    else:
+        side_by_url = {r.url: r.side for r in records if r.url}
+        cache = load_quality_cache(analysis_cache_path)
+        summaries = run_move_quality_pass(in_format, side_by_url, cache,
+                                          depth=args.analysis_depth)
+        save_quality_cache(analysis_cache_path, cache)
+        payload["move_quality"] = aggregate_move_quality(summaries)
+        print(f"[4.6/5] Move-quality pass: {len(summaries)} games analyzed/cached "
+              f"(depth {args.analysis_depth}).")
 
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "computed.json").write_text(json.dumps(payload, indent=2))

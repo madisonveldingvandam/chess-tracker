@@ -1,7 +1,9 @@
 # tests/test_refresh.py
 import json
 from unittest.mock import patch, MagicMock
+import pytest
 import refresh
+from chess_tracker.puzzles import find_engine_path
 
 
 def test_refresh_main_writes_computed_and_dashboard(tmp_path, monkeypatch):
@@ -116,6 +118,54 @@ def test_refresh_ingests_daily_games(tmp_path, monkeypatch):
     payload = json.loads((tmp_path / "data" / "computed.json").read_text())
     assert payload["format"] == "daily"
     assert payload["kpis"]["games_total"] == 1
+
+
+def test_refresh_no_analysis_flag_sets_move_quality_none(tmp_path, monkeypatch):
+    """--no-analysis skips the engine pass and leaves move_quality null."""
+    from refresh import main
+    archives = {"games": [
+        {"url": "d1", "end_time": 10, "time_class": "daily",
+         "time_control": "1/86400", "rated": True, "rules": "chess",
+         "white": {"username": "me", "rating": 1000, "result": "win"},
+         "black": {"username": "opp", "rating": 1000, "result": "resigned"},
+         "pgn": "[ECO \"D02\"]\n1. d4 d5 2. Nf3 *"},
+    ]}
+    monkeypatch.setattr("refresh.fetch_archives_index", lambda u: ["arc1"])
+    monkeypatch.setattr("refresh.fetch_archive", lambda url, cache_dir, force: archives)
+    rc = main(["--username", "me", "--format", "daily",
+               "--no-puzzles", "--no-analysis",
+               "--data-dir", str(tmp_path / "data"),
+               "--dashboard-dir", str(tmp_path / "dash")])
+    assert rc == 0
+    payload = json.loads((tmp_path / "data" / "computed.json").read_text())
+    assert payload["move_quality"] is None
+
+
+@pytest.mark.skipif(find_engine_path() is None, reason="Stockfish not installed")
+def test_refresh_attaches_move_quality_and_caches(tmp_path, monkeypatch):
+    """The engine pass populates move_quality and writes a per-URL cache."""
+    from refresh import main
+    archives = {"games": [
+        {"url": "b1", "end_time": 10, "time_class": "bullet",
+         "time_control": "60", "rated": True, "rules": "chess",
+         "white": {"username": "me", "rating": 500, "result": "resigned"},
+         "black": {"username": "opp", "rating": 500, "result": "win"},
+         "pgn": "[ECO \"C20\"]\n1. e4 e5 2. Qh5 Nc6 3. Qxe5 Nxe5 *"},
+    ]}
+    monkeypatch.setattr("refresh.fetch_archives_index", lambda u: ["arc1"])
+    monkeypatch.setattr("refresh.fetch_archive", lambda url, cache_dir, force: archives)
+    rc = main(["--username", "me", "--no-puzzles", "--analysis-depth", "8",
+               "--data-dir", str(tmp_path / "data"),
+               "--dashboard-dir", str(tmp_path / "dash")])
+    assert rc == 0
+    payload = json.loads((tmp_path / "data" / "computed.json").read_text())
+    mq = payload["move_quality"]
+    assert mq is not None
+    assert mq["games_analyzed"] == 1
+    assert mq["blunders"] >= 1
+    assert (tmp_path / "data" / "analysis_cache.json").exists()
+    cache = json.loads((tmp_path / "data" / "analysis_cache.json").read_text())
+    assert "b1" in cache
 
 
 # --- accept_game: multi-format ingestion filter ---

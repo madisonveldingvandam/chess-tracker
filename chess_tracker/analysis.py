@@ -25,9 +25,11 @@ Caveats (deliberate v1 simplifications):
 """
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass, asdict
 from io import StringIO
+from pathlib import Path
 
 import chess
 import chess.engine
@@ -129,7 +131,7 @@ def summarize(moves: list[MoveEval]) -> dict:
         return {
             "moves_analyzed": 0, "accuracy": None, "avg_cp_loss": None,
             "blunders": 0, "mistakes": 0, "inaccuracies": 0,
-            "acpl_by_phase": {},
+            "acpl_by_phase": {}, "moves_by_phase": {},
         }
 
     accuracy = sum(accuracy_from_winpct_loss(m.wp_loss) for m in moves) / n
@@ -139,6 +141,7 @@ def summarize(moves: list[MoveEval]) -> dict:
     for m in moves:
         by_phase.setdefault(m.phase, []).append(m.cp_loss)
     acpl_by_phase = {p: round(sum(v) / len(v)) for p, v in by_phase.items()}
+    moves_by_phase = {p: len(v) for p, v in by_phase.items()}
 
     return {
         "moves_analyzed": n,
@@ -148,6 +151,7 @@ def summarize(moves: list[MoveEval]) -> dict:
         "mistakes": sum(1 for m in moves if m.label == "mistake"),
         "inaccuracies": sum(1 for m in moves if m.label == "inaccuracy"),
         "acpl_by_phase": acpl_by_phase,
+        "moves_by_phase": moves_by_phase,
     }
 
 
@@ -214,3 +218,106 @@ def analyze_move_quality(
     summary = summarize(moves)
     summary["side"] = side
     return summary
+
+
+def attach_move_quality(games, side_by_url, cache, *, depth, analyze_fn) -> list[dict]:
+    """Return per-game summaries, reusing/updating ``cache`` (url -> entry).
+
+    ``cache`` maps game URL to ``{"depth": int, "summary": dict}``. A game is
+    re-analyzed only when absent or cached at a different depth — so repeat
+    refreshes touch the engine only for new games. ``analyze_fn(pgn, side,
+    depth)`` returns a summary dict or ``None`` (skipped). ``cache`` is mutated
+    in place.
+    """
+    summaries: list[dict] = []
+    for g in games:
+        url = g.get("url")
+        pgn = g.get("pgn")
+        side = side_by_url.get(url)
+        if not url or not pgn or not side:
+            continue
+        entry = cache.get(url)
+        if entry and entry.get("depth") == depth:
+            summaries.append(entry["summary"])
+            continue
+        summary = analyze_fn(pgn, side, depth)
+        if summary is None:
+            continue
+        cache[url] = {"depth": depth, "summary": summary}
+        summaries.append(summary)
+    return summaries
+
+
+def aggregate_move_quality(summaries: list[dict]) -> dict | None:
+    """Roll per-game summaries into one move-quality overview, or ``None``.
+
+    Accuracy is move-weighted across games; phase ACPL is weighted by the
+    number of moves in each phase.
+    """
+    summaries = [s for s in summaries if s and s.get("moves_analyzed")]
+    if not summaries:
+        return None
+
+    total_moves = sum(s["moves_analyzed"] for s in summaries)
+    blunders = sum(s.get("blunders", 0) for s in summaries)
+    mistakes = sum(s.get("mistakes", 0) for s in summaries)
+    inaccuracies = sum(s.get("inaccuracies", 0) for s in summaries)
+
+    weighted_acc = sum(s["accuracy"] * s["moves_analyzed"] for s in summaries)
+
+    phase_cp: dict[str, float] = {}
+    phase_n: dict[str, int] = {}
+    for s in summaries:
+        acpl = s.get("acpl_by_phase", {})
+        nbp = s.get("moves_by_phase", {})
+        for phase, n in nbp.items():
+            phase_cp[phase] = phase_cp.get(phase, 0.0) + acpl.get(phase, 0) * n
+            phase_n[phase] = phase_n.get(phase, 0) + n
+    acpl_by_phase = {p: round(phase_cp[p] / phase_n[p]) for p in phase_n if phase_n[p]}
+
+    return {
+        "games_analyzed": len(summaries),
+        "moves_analyzed": total_moves,
+        "accuracy": round(weighted_acc / total_moves, 1),
+        "avg_cp_loss": round(
+            sum(s.get("avg_cp_loss", 0) * s["moves_analyzed"] for s in summaries)
+            / total_moves),
+        "blunders": blunders,
+        "mistakes": mistakes,
+        "inaccuracies": inaccuracies,
+        "blunders_per_100_moves": round(100 * blunders / total_moves, 1),
+        "acpl_by_phase": acpl_by_phase,
+    }
+
+
+def load_quality_cache(path) -> dict:
+    """Load the per-URL analysis cache, or an empty dict if missing/corrupt."""
+    p = Path(path)
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_quality_cache(path, cache: dict) -> None:
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(cache, indent=2))
+
+
+def run_move_quality_pass(games, side_by_url, cache, *, engine_path=None,
+                          depth: int = DEFAULT_DEPTH) -> list[dict]:
+    """Open one Stockfish process and analyze all uncached games.
+
+    Returns ``[]`` (and leaves ``cache`` untouched) when no engine is available.
+    """
+    path = engine_path or find_engine_path()
+    if path is None:
+        return []
+    with chess.engine.SimpleEngine.popen_uci(path) as eng:
+        def analyze_fn(pgn, side, d):
+            return analyze_move_quality(pgn, side, eng, depth=d)
+        return attach_move_quality(games, side_by_url, cache,
+                                   depth=depth, analyze_fn=analyze_fn)
