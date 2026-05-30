@@ -13,10 +13,28 @@ from chess_tracker.puzzles import attach_puzzles, find_engine_path
 from chess_tracker.render import render_all_pages, DEFAULT_TEMPLATE_DIR
 
 
+def accept_game(game: dict, time_class: str, time_control: str | None = None) -> bool:
+    """True if a Chess.com game dict is a rated standard-chess game in the
+    requested time class.
+
+    time_control=None accepts every control within the class; pass an exact
+    Chess.com TimeControl string (e.g. "60", "60+1", "1/86400") to narrow.
+    """
+    if game.get("time_class") != time_class:
+        return False
+    if time_control is not None and str(game.get("time_control")) != str(time_control):
+        return False
+    return game.get("rated") is True and game.get("rules") == "chess"
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Refresh chess tracker dashboard.")
     ap.add_argument("--username", default="M_V-V")
-    ap.add_argument("--format", default="bullet", choices=["bullet"])
+    ap.add_argument("--format", default="bullet",
+                    choices=["bullet", "blitz", "rapid", "daily"])
+    ap.add_argument("--time-control", default=None,
+                    help="Optional exact Chess.com time_control filter "
+                         "(e.g. 60, 60+1, 1/86400). Default: all controls in the class.")
     ap.add_argument("--force", action="store_true",
                     help="Re-fetch all archives, not just current month.")
     ap.add_argument("--no-puzzles", action="store_true",
@@ -46,15 +64,12 @@ def main(argv=None) -> int:
         all_games.extend(data.get("games", []))
     print(f"      {len(all_games)} games total")
 
-    print(f"[3/5] Filtering to {args.format} 1+0 rated standard-chess games...")
-    def _accept(g):
-        return (g.get("time_class") == args.format
-                and str(g.get("time_control")) == "60"
-                and g.get("rated") is True
-                and g.get("rules") == "chess")
-    in_format = [g for g in all_games if _accept(g)]
+    tc_label = args.time_control or "all controls"
+    print(f"[3/5] Filtering to rated standard {args.format} games ({tc_label})...")
+    in_format = [g for g in all_games
+                 if accept_game(g, args.format, args.time_control)]
     records = [parse_game(g, username=args.username) for g in in_format]
-    print(f"      {len(records)} rated 1+0 {args.format} games parsed")
+    print(f"      {len(records)} rated {args.format} games parsed")
 
     print("[4/5] Computing metrics + merging annotations + plan...")
     annotations = load_annotations(annotations_path)

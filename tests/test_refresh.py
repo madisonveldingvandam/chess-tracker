@@ -39,8 +39,13 @@ def test_refresh_main_writes_computed_and_dashboard(tmp_path, monkeypatch):
         assert "window.DATA" in html
 
 
-def test_refresh_drops_non_60_and_unrated_bullet(tmp_path, monkeypatch):
-    """Only rated 1+0 standard-chess games survive the bullet filter."""
+def test_refresh_bullet_filter_default_and_time_control_narrowing(tmp_path, monkeypatch):
+    """Default bullet keeps all rated standard controls; --time-control narrows.
+
+    Unrated (u3) and non-standard variants (u4) are always dropped. The 2+1
+    bullet game (u2) now survives by default but is excluded when an exact
+    --time-control 60 is requested (the old strict 1+0 behavior).
+    """
     from refresh import main
     archives = {
         "games": [
@@ -72,11 +77,78 @@ def test_refresh_drops_non_60_and_unrated_bullet(tmp_path, monkeypatch):
     }
     monkeypatch.setattr("refresh.fetch_archives_index", lambda u: ["arc1"])
     monkeypatch.setattr("refresh.fetch_archive", lambda url, cache_dir, force: archives)
+    import json
+
+    # Default: no time-control filter → keep u1 (60) and u2 (120+1); drop u3, u4.
     rc = main(["--username", "me",
                "--data-dir", str(tmp_path / "data"),
                "--dashboard-dir", str(tmp_path / "dash")])
     assert rc == 0
-    import json
     payload = json.loads((tmp_path / "data" / "computed.json").read_text())
-    # Only u1 should have made it through
+    assert payload["kpis"]["games_total"] == 2
+
+    # Explicit --time-control 60 reproduces the old strict 1+0 filter → only u1.
+    rc = main(["--username", "me", "--time-control", "60",
+               "--data-dir", str(tmp_path / "data2"),
+               "--dashboard-dir", str(tmp_path / "dash2")])
+    assert rc == 0
+    payload = json.loads((tmp_path / "data2" / "computed.json").read_text())
     assert payload["kpis"]["games_total"] == 1
+
+
+def test_refresh_ingests_daily_games(tmp_path, monkeypatch):
+    """Daily games flow through the whole pipeline (impossible before the unlock)."""
+    from refresh import main
+    archives = {"games": [
+        {"url": "d1", "end_time": 10, "time_class": "daily",
+         "time_control": "1/86400", "rated": True, "rules": "chess",
+         "white": {"username": "me", "rating": 1000, "result": "win"},
+         "black": {"username": "opp", "rating": 1000, "result": "resigned"},
+         "pgn": "[ECO \"D02\"]\n1. d4 d5 2. Nf3 *"},
+    ]}
+    monkeypatch.setattr("refresh.fetch_archives_index", lambda u: ["arc1"])
+    monkeypatch.setattr("refresh.fetch_archive", lambda url, cache_dir, force: archives)
+    import json
+    rc = main(["--username", "me", "--format", "daily", "--no-puzzles",
+               "--data-dir", str(tmp_path / "data"),
+               "--dashboard-dir", str(tmp_path / "dash")])
+    assert rc == 0
+    payload = json.loads((tmp_path / "data" / "computed.json").read_text())
+    assert payload["format"] == "daily"
+    assert payload["kpis"]["games_total"] == 1
+
+
+# --- accept_game: multi-format ingestion filter ---
+
+def _game(**kw):
+    base = {"time_class": "bullet", "time_control": "60",
+            "rated": True, "rules": "chess"}
+    base.update(kw)
+    return base
+
+
+def test_accept_game_keeps_daily_games():
+    """Daily games must survive the filter (previously discarded entirely)."""
+    from refresh import accept_game
+    g = _game(time_class="daily", time_control="1/86400")
+    assert accept_game(g, "daily") is True
+
+
+def test_accept_game_keeps_bullet_variant_when_no_time_control():
+    """With no explicit --time-control, all rated standard bullet is kept."""
+    from refresh import accept_game
+    assert accept_game(_game(time_control="120+1"), "bullet") is True
+
+
+def test_accept_game_narrows_to_exact_time_control_when_given():
+    """An explicit time_control reproduces the old strict 1+0 filter."""
+    from refresh import accept_game
+    assert accept_game(_game(time_control="60"), "bullet", "60") is True
+    assert accept_game(_game(time_control="120+1"), "bullet", "60") is False
+
+
+def test_accept_game_rejects_unrated_variants_and_other_classes():
+    from refresh import accept_game
+    assert accept_game(_game(rated=False), "bullet") is False
+    assert accept_game(_game(rules="kingofthehill"), "bullet") is False
+    assert accept_game(_game(time_class="blitz"), "bullet") is False
