@@ -498,6 +498,9 @@ section h3 {
 }
 .refresh-link:hover { color: var(--text); border-color: var(--muted); }
 
+/* Move quality (landing): cards reuse .behavior-card; only the empty state is new */
+.mq-empty { color: var(--muted); font-style: italic; }
+
 /* Drill-in cards (landing only) */
 .drillin-grid {
   display: grid;

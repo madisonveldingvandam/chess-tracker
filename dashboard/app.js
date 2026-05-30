@@ -12,6 +12,7 @@
     return;
   }
   renderKPI(D);
+  renderMoveQuality(D.move_quality);
   renderPlanBlock(D.plan_compliance);
   renderBehavior(D.behavior);
   renderLeaks(D.leak_summary);
@@ -55,6 +56,39 @@
          target="_blank" rel="noopener"
          title="Re-run the deploy workflow on GitHub Actions to rebuild this dashboard now">↻ Refresh</a>
     `);
+  }
+
+  // Move quality — engine-derived accuracy/blunders for the current format.
+  // Only renders on index.html (where #move-quality-cards exists). All values
+  // are server-computed numbers from analysis.aggregate_move_quality — safe to
+  // inline. `mq` is null when no engine ran (e.g. --no-analysis).
+  function renderMoveQuality(mq) {
+    const root = document.getElementById("move-quality-cards");
+    if (!root) return;
+    if (!mq) {
+      root.innerHTML =
+        `<p class="mq-empty">Run refresh.py with Stockfish to see move quality.</p>`;
+      return;
+    }
+    const cell = (label, value, sub, alert = false) =>
+      `<div class="behavior-card${alert ? " alert" : ""}">
+         <div class="bh-label">${label}</div>
+         <div class="bh-value">${value}</div>
+         <div class="bh-sub">${sub}</div>
+       </div>`;
+    const ph = mq.acpl_by_phase || {};
+    const phSub = ["opening", "middlegame", "endgame"]
+      .filter(p => ph[p] != null)
+      .map(p => `${p.slice(0, 3)} ${ph[p]}`)
+      .join(" · ") || "—";
+    root.innerHTML = [
+      cell("Accuracy", `${mq.accuracy}%`,
+        `${mq.games_analyzed} games · ${mq.moves_analyzed} moves`),
+      cell("Blunders / 100 moves", `${mq.blunders_per_100_moves}`,
+        `${mq.blunders}B · ${mq.mistakes}M · ${mq.inaccuracies}I`,
+        mq.blunders_per_100_moves >= 5),
+      cell("Avg cp lost / move", `${mq.avg_cp_loss}`, phSub),
+    ].join("");
   }
 
   // Plan & adherence — only renders on index.html where the section exists.
