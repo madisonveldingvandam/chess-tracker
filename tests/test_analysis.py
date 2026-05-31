@@ -173,6 +173,27 @@ def test_select_recent_games_nonpositive_means_unlimited():
     assert len(select_recent_games(games, -1)) == 2
 
 
+def test_aggregate_by_format_runs_each_format_and_nulls_empty():
+    from chess_tracker.analysis import aggregate_by_format
+    def fake(pgn, side, depth):
+        return _summary(moves=2, acc=70.0, blunders=1,
+                        phase_acpl={"opening": 50}, phase_moves={"opening": 2})
+    games_by_format = {
+        "bullet": [{"url": "b1", "pgn": "p", "end_time": 1}],
+        "daily": [{"url": "d1", "pgn": "p", "end_time": 1}],
+        "rapid": [],  # no games → None
+    }
+    side = {"b1": "white", "d1": "black"}
+    cache = {}
+    out = aggregate_by_format(games_by_format, side, cache,
+                             analyze_fn=fake, depth=8, max_games=200)
+    assert set(out) == {"bullet", "daily", "rapid"}
+    assert out["bullet"]["games_analyzed"] == 1
+    assert out["daily"]["games_analyzed"] == 1
+    assert out["rapid"] is None
+    assert {"b1", "d1"} <= set(cache)   # both analyzed games cached
+
+
 # --- engine driver: real Stockfish on a known blunder ---
 
 @pytest.mark.skipif(find_engine_path() is None, reason="Stockfish not installed")

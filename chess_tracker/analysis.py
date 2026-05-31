@@ -302,6 +302,41 @@ def aggregate_move_quality(summaries: list[dict]) -> dict | None:
     }
 
 
+def aggregate_by_format(games_by_format, side_by_url, cache, *, analyze_fn,
+                        depth, max_games) -> dict:
+    """Move-quality aggregate per time class: ``{fmt: aggregate|None}``.
+
+    Each format's most-recent ``max_games`` are analyzed (cache shared across
+    formats, so a game counted under its class is analyzed once). A format with
+    no games maps to ``None``.
+    """
+    out = {}
+    for fmt, games in games_by_format.items():
+        recent = select_recent_games(games, max_games)
+        summaries = attach_move_quality(recent, side_by_url, cache,
+                                        depth=depth, analyze_fn=analyze_fn)
+        out[fmt] = aggregate_move_quality(summaries)
+    return out
+
+
+def run_move_quality_by_format(games_by_format, side_by_url, cache, *,
+                               engine_path=None, depth: int = DEFAULT_DEPTH,
+                               max_games: int = 200) -> dict:
+    """Open one Stockfish process and aggregate move quality for each format.
+
+    Returns ``{fmt: None}`` for every format when no engine is available.
+    """
+    path = engine_path or find_engine_path()
+    if path is None:
+        return {fmt: None for fmt in games_by_format}
+    with chess.engine.SimpleEngine.popen_uci(path) as eng:
+        def analyze_fn(pgn, side, d):
+            return analyze_move_quality(pgn, side, eng, depth=d)
+        return aggregate_by_format(games_by_format, side_by_url, cache,
+                                   analyze_fn=analyze_fn, depth=depth,
+                                   max_games=max_games)
+
+
 def load_quality_cache(path) -> dict:
     """Load the per-URL analysis cache, or an empty dict if missing/corrupt."""
     p = Path(path)

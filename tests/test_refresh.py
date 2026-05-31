@@ -139,6 +139,36 @@ def test_refresh_no_analysis_flag_sets_move_quality_none(tmp_path, monkeypatch):
     assert rc == 0
     payload = json.loads((tmp_path / "data" / "computed.json").read_text())
     assert payload["move_quality"] is None
+    assert payload["move_quality_by_format"] is None
+
+
+@pytest.mark.skipif(find_engine_path() is None, reason="Stockfish not installed")
+def test_refresh_move_quality_by_format(tmp_path, monkeypatch):
+    """The cross-format pass aggregates each time class present in the archive."""
+    from refresh import main
+    archives = {"games": [
+        {"url": "b1", "end_time": 2, "time_class": "bullet", "time_control": "60",
+         "rated": True, "rules": "chess",
+         "white": {"username": "me", "rating": 500, "result": "resigned"},
+         "black": {"username": "opp", "rating": 500, "result": "win"},
+         "pgn": "[ECO \"C20\"]\n1. e4 e5 2. Qh5 Nc6 3. Qxe5 Nxe5 *"},
+        {"url": "d1", "end_time": 1, "time_class": "daily", "time_control": "1/86400",
+         "rated": True, "rules": "chess",
+         "white": {"username": "me", "rating": 1000, "result": "win"},
+         "black": {"username": "opp", "rating": 1000, "result": "resigned"},
+         "pgn": "[ECO \"D02\"]\n1. d4 d5 2. Nf3 Nc6 3. e3 *"},
+    ]}
+    monkeypatch.setattr("refresh.fetch_archives_index", lambda u: ["arc"])
+    monkeypatch.setattr("refresh.fetch_archive", lambda url, cache_dir, force: archives)
+    rc = main(["--username", "me", "--format", "bullet", "--no-puzzles",
+               "--analysis-depth", "8", "--analysis-max-games", "50",
+               "--data-dir", str(tmp_path / "data"),
+               "--dashboard-dir", str(tmp_path / "dash")])
+    assert rc == 0
+    mqbf = json.loads((tmp_path / "data" / "computed.json").read_text())["move_quality_by_format"]
+    assert mqbf["bullet"] and mqbf["bullet"]["games_analyzed"] == 1
+    assert mqbf["daily"] and mqbf["daily"]["games_analyzed"] == 1
+    assert mqbf["rapid"] is None and mqbf["blitz"] is None   # present but empty
 
 
 @pytest.mark.skipif(find_engine_path() is None, reason="Stockfish not installed")

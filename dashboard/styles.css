@@ -501,6 +501,14 @@ section h3 {
 /* Move quality (landing): cards reuse .behavior-card; only the empty state is new */
 .mq-empty { color: var(--muted); font-style: italic; }
 
+/* Cross-format comparison table */
+.mqf-table { border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 28rem; }
+.mqf-table th, .mqf-table td { text-align: right; padding: 0.4rem 1rem; border-bottom: 1px solid var(--border); }
+.mqf-table th:first-child, .mqf-table td:first-child { text-align: left; text-transform: capitalize; }
+.mqf-table th { color: var(--muted); font-weight: 400; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.mqf-current { background: var(--accent-bg); }
+.mqf-current td:first-child { color: var(--accent); }
+
 /* Drill-in cards (landing only) */
 .drillin-grid {
   display: grid;

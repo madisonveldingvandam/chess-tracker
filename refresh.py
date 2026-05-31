@@ -11,7 +11,7 @@ from chess_tracker.annotations import load_annotations
 from chess_tracker.plan import load_plan
 from chess_tracker.puzzles import attach_puzzles, find_engine_path
 from chess_tracker.analysis import (
-    run_move_quality_pass, aggregate_move_quality,
+    run_move_quality_pass, run_move_quality_by_format, aggregate_move_quality,
     load_quality_cache, save_quality_cache, select_recent_games,
 )
 from chess_tracker.render import render_all_pages, DEFAULT_TEMPLATE_DIR
@@ -51,6 +51,11 @@ def main(argv=None) -> int:
                     help="Analyze only the N most recent games (default 200; "
                          "<=0 = no limit). Bounds first-run cost; the cache fills "
                          "incrementally across refreshes.")
+    ap.add_argument("--compare-formats", nargs="+",
+                    default=["bullet", "blitz", "rapid", "daily"],
+                    choices=["bullet", "blitz", "rapid", "daily"],
+                    help="Time classes to include in the cross-format move-quality "
+                         "comparison (the active --format is always included).")
     ap.add_argument("--data-dir", default="data")
     ap.add_argument("--dashboard-dir", default="dashboard")
     ap.add_argument("--template-dir", default=str(DEFAULT_TEMPLATE_DIR))
@@ -109,22 +114,40 @@ def main(argv=None) -> int:
               f"{len(payload.get('recent_losses', []))} recent losses got a puzzle.")
 
     analysis_cache_path = data_dir / "analysis_cache.json"
-    if args.no_analysis:
+    if args.no_analysis or find_engine_path() is None:
         payload["move_quality"] = None
-        print("[4.6/5] Move-quality analysis skipped (--no-analysis).")
-    elif find_engine_path() is None:
-        payload["move_quality"] = None
-        print("[4.6/5] No Stockfish found; move-quality analysis skipped.")
+        payload["move_quality_by_format"] = None
+        why = "--no-analysis" if args.no_analysis else "no Stockfish found"
+        print(f"[4.6/5] Move-quality analysis skipped ({why}).")
     else:
+        cache = load_quality_cache(analysis_cache_path)
+
+        # Single-format detail — respects --format and --time-control.
         side_by_url = {r.url: r.side for r in records if r.url}
         to_analyze = select_recent_games(in_format, args.analysis_max_games)
-        cache = load_quality_cache(analysis_cache_path)
         summaries = run_move_quality_pass(to_analyze, side_by_url, cache,
                                           depth=args.analysis_depth)
-        save_quality_cache(analysis_cache_path, cache)
         payload["move_quality"] = aggregate_move_quality(summaries)
-        print(f"[4.6/5] Move-quality pass: {len(summaries)} of {len(to_analyze)} "
-              f"recent games (depth {args.analysis_depth}).")
+
+        # Cross-format comparison — whole time class per format, current format
+        # always included. Shares the URL cache, so games analyzed above are
+        # reused rather than re-run.
+        def _side(g):
+            return ("white" if g.get("white", {}).get("username", "").lower()
+                    == args.username.lower() else "black")
+        compare = sorted(set(args.compare_formats) | {args.format})
+        games_by_format = {fmt: [g for g in all_games if accept_game(g, fmt)]
+                           for fmt in compare}
+        side_all = {g["url"]: _side(g) for gs in games_by_format.values()
+                    for g in gs if g.get("url")}
+        payload["move_quality_by_format"] = run_move_quality_by_format(
+            games_by_format, side_all, cache,
+            depth=args.analysis_depth, max_games=args.analysis_max_games)
+
+        save_quality_cache(analysis_cache_path, cache)
+        nfmt = sum(1 for v in payload["move_quality_by_format"].values() if v)
+        print(f"[4.6/5] Move-quality: {len(summaries)} {args.format} games "
+              f"+ {nfmt} format(s) compared (depth {args.analysis_depth}).")
 
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "computed.json").write_text(json.dumps(payload, indent=2))

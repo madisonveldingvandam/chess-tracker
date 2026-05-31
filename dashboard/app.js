@@ -13,6 +13,7 @@
   }
   renderKPI(D);
   renderMoveQuality(D.move_quality);
+  renderMoveQualityByFormat(D.move_quality_by_format, D.format);
   renderPlanBlock(D.plan_compliance);
   renderBehavior(D.behavior);
   renderLeaks(D.leak_summary);
@@ -89,6 +90,32 @@
         mq.blunders_per_100_moves >= 5),
       cell("Avg cp lost / move", `${mq.avg_cp_loss}`, phSub),
     ].join("");
+  }
+
+  // Cross-format comparison — one row per time class that has data. Hidden
+  // when fewer than two formats are available (nothing to compare). Values are
+  // server-computed numbers; current format is highlighted.
+  function renderMoveQualityByFormat(byFmt, currentFmt) {
+    const section = document.getElementById("move-quality-by-format");
+    const root = document.getElementById("mqf-table");
+    if (!section || !root) return;
+    const order = ["bullet", "blitz", "rapid", "daily"];
+    const rows = order.filter(f => byFmt && byFmt[f]);
+    if (rows.length < 2) { section.style.display = "none"; return; }
+    const body = rows.map(f => {
+      const m = byFmt[f];
+      const cur = f === currentFmt;
+      return `<tr${cur ? ' class="mqf-current"' : ""}>
+        <td>${f}${cur ? " ◂" : ""}</td>
+        <td>${m.accuracy}%</td>
+        <td>${m.blunders_per_100_moves}</td>
+        <td>${m.avg_cp_loss}</td>
+        <td>${m.games_analyzed}</td></tr>`;
+    }).join("");
+    root.innerHTML = `<table class="mqf-table">
+      <thead><tr><th>Format</th><th>Accuracy</th><th>Blunders/100</th>
+        <th>Avg cp lost</th><th>Games</th></tr></thead>
+      <tbody>${body}</tbody></table>`;
   }
 
   // Plan & adherence — only renders on index.html where the section exists.
