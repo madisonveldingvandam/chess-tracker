@@ -679,6 +679,41 @@ def test_compute_plan_compliance_family_entry_unchanged_has_no_breakdown():
     assert o["gambit_breakdown"] is None
 
 
+def test_compute_plan_compliance_status_defaults_to_active():
+    """An opening with no status field is reported as active."""
+    from chess_tracker.metrics import compute_plan_compliance
+    from chess_tracker.pgn import GameRecord
+
+    rec = GameRecord(
+        url="x", end_time=1_700_000_000, time_class="bullet", side="black",
+        my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+        plies=20, fullmoves=10, opening="Modern Defense", eco="B06",
+        first_moves="1.e4 g6 2.d4 Bg7 3.Nc3 d6 4.f4 c6")
+    plan = {"openings": [{"name": "Modern", "side": "black",
+                          "vs_first_move": "e4", "target_family": "Modern Defense"}]}
+    out = compute_plan_compliance([rec], plan)
+    assert out["openings"][0]["status"] == "active"
+
+
+def test_compute_plan_compliance_status_bench_passes_through():
+    """A bench opening keeps status='bench' and still computes adherence stats."""
+    from chess_tracker.metrics import compute_plan_compliance
+    from chess_tracker.pgn import GameRecord
+
+    rec = GameRecord(
+        url="x", end_time=1_700_000_000, time_class="bullet", side="black",
+        my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
+        plies=20, fullmoves=10, opening="Modern Defense", eco="B06",
+        first_moves="1.e4 g6 2.d4 Bg7 3.Nc3 d6 4.f4 c6")
+    plan = {"openings": [{"name": "Modern", "side": "black", "status": "bench",
+                          "vs_first_move": "e4", "target_family": "Modern Defense"}]}
+    out = compute_plan_compliance([rec], plan)
+    o = out["openings"][0]
+    assert o["status"] == "bench"
+    assert o["games_on_plan"] == 1          # stats still computed for bench
+    assert o["adherence_pct"] == 100.0
+
+
 def test_shipped_plan_has_white_entries_with_match_rules():
     """The shipped plan.json carries the two White move-pattern entries."""
     from chess_tracker.plan import load_plan

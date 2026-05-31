@@ -779,6 +779,7 @@ def compute_plan_compliance(records: list[GameRecord], plan: dict,
         out_openings.append({
             "name": op.get("name", target),
             "side": side,
+            "status": op.get("status", "active"),
             "vs_first_move": vs_move,
             "target_family": target,
             "moves": op.get("moves", ""),
