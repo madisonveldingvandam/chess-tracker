@@ -56,6 +56,9 @@ jobs:
           restore-keys: |
             chess-archives-
 
+      - name: Run tests
+        run: uv run pytest
+
       - name: Refresh dashboard
         run: uv run refresh.py
 
