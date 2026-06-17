@@ -14,6 +14,29 @@ _ECO_URL_RE = re.compile(r'\[ECOUrl "https://www\.chess\.com/openings/([^"]+)"\]
 _ECO_RE = re.compile(r'\[ECO "([^"]+)"\]')
 
 
+def parse_time_control(tc: str) -> tuple[int, int]:
+    """Parse a Chess.com TimeControl string → (start_seconds, increment_seconds).
+
+    Examples:
+      "60"      → (60, 0)    — 1+0 bullet
+      "60+1"    → (60, 1)    — 1+1 bullet
+      "120+1"   → (120, 1)   — 2+1 blitz
+      "600+5"   → (600, 5)   — 10+5 rapid
+      "1/86400" → (60, 0)    — daily; falls back to bullet default
+      ""        → (60, 0)    — missing; falls back to bullet default
+    """
+    if "+" in tc:
+        parts = tc.split("+", 1)
+        try:
+            return int(parts[0]), int(parts[1])
+        except ValueError:
+            return 60, 0
+    try:
+        return int(tc), 0
+    except ValueError:
+        return 60, 0
+
+
 @dataclass
 class GameRecord:
     url: str
