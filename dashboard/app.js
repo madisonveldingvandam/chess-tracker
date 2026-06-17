@@ -295,7 +295,7 @@
 
   function renderRule(rule) {
     const root = document.getElementById("next-rule");
-    if (!root) return;
+    if (!root || !rule) return;
     root.innerHTML = `
       <dl class="rule-block">
         <dt>Game cap</dt><dd>${rule.game_cap}</dd>
