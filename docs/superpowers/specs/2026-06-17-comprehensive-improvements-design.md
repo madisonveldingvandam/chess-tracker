@@ -125,7 +125,23 @@ Action: [suggested_action]
 
 ---
 
-### Phase 3 — Data Quality (one session, ~2-3 hours)
+### Phase 3 — Data Quality + Backend Metrics Foundation (one session, ~2-3 hours)
+
+**Backend metrics foundation (prerequisite for Phase 4 and Phase 5)**
+
+Add `blunders_by_phase: dict[str, int]` to `summarize()` in `analysis.py`, counting blunder-labeled moves per phase bucket. This is the shared field consumed by Phase 4 (puzzle theme routing) and Phase 5 (accuracy bucketing). Add it once here; both later phases reference it as already available.
+
+```python
+# in summarize(), alongside acpl_by_phase:
+blunders_by_phase = {}
+for m in moves:
+    if m.label == "blunder":
+        blunders_by_phase[m.phase] = blunders_by_phase.get(m.phase, 0) + 1
+```
+
+Add to the `summarize()` return dict and propagate through `aggregate_move_quality`.
+
+---
 
 **[#5] Sample-size protection + smoothed win rate + corrected priority formula**
 
@@ -194,7 +210,7 @@ Move the puzzle section from its current position to directly below the action c
 Today's puzzles
   [5 personal-loss puzzles from recent_losses[].puzzle]
   ──
-  Themes to practice (from Phase 5, computed)
+  Themes to practice (computed in Phase 4 from blunders_by_phase + loss types)
 ```
 
 Puzzle card shows: FEN board position, "find the better move" prompt, opponent's threat, reveal button. Current frontend already has drill infrastructure — promote it to homepage.
@@ -210,49 +226,67 @@ Training rules surfaced in the UI (not just documentation):
 
 Do not use static opening-name → theme mapping.
 
-Instead, compute `recommended_puzzle_themes` from existing move-quality data:
+Instead, compute `recommended_puzzle_themes` using `blunders_by_phase` (added in Phase 3) and loss-type counts from the recent window.
 
-**Prerequisite:** add `blunders_by_phase: dict[str, int]` to `summarize()` in `analysis.py`, counting blunder-labeled moves per phase. This is a small addition that also improves the bucketed accuracy module in Phase 5.
+All theme slugs must appear in the validated slug map below. Any slug not in the map must not be emitted — a missing slug produces a silent broken link.
 
 ```python
+# Validated Lichess puzzle theme slugs.
+# Verify new entries at https://lichess.org/training/{slug} before adding.
+LICHESS_PUZZLE_SLUGS = {
+    # Tactics
+    "fork", "pin", "skewer", "hangingPiece", "discoveredAttack",
+    "attackingF2F7", "capturingDefender", "deflection", "attraction",
+    "trappedPiece",
+    # Mate
+    "mateIn1", "mateIn2", "backRankMate", "exposedKing",
+    # Endgame
+    "rookEndgame", "pawnEndgame", "queenEndgame", "bishopEndgame",
+    "knightEndgame",
+    # Defense / other
+    "defensiveMove", "advancedPawn",
+}
+
 def recommend_puzzle_themes(blunders_by_phase: dict, loss_type_counts: dict) -> list[str]:
     """Route puzzle themes from where blunders happened + how games were lost.
 
     blunders_by_phase: {"opening": N, "middlegame": N, "endgame": N}
+      — sourced from summarize().blunders_by_phase (added in Phase 3)
     loss_type_counts:  {"timeout": N, "checkmated": N, "resigned": N}
     """
     themes = []
     total_blunders = sum(blunders_by_phase.values()) or 1
     total_losses = sum(loss_type_counts.values()) or 1
 
-    opening_pct   = blunders_by_phase.get("opening", 0)    / total_blunders
+    opening_pct    = blunders_by_phase.get("opening", 0)    / total_blunders
     middlegame_pct = blunders_by_phase.get("middlegame", 0) / total_blunders
-    endgame_pct   = blunders_by_phase.get("endgame", 0)    / total_blunders
+    endgame_pct    = blunders_by_phase.get("endgame", 0)    / total_blunders
 
     if opening_pct > 0.4:
         themes += ["fork", "pin", "attackingF2F7", "discoveredAttack"]
     if middlegame_pct > 0.4:
-        themes += ["hangingPiece", "captureDefender", "fork", "pin"]
+        themes += ["hangingPiece", "capturingDefender", "fork", "pin"]
     if endgame_pct > 0.3:
-        themes += ["endgame", "rookEndgame", "pawnEndgame"]
+        themes += ["rookEndgame", "pawnEndgame"]
 
     mate_pct    = loss_type_counts.get("checkmated", 0) / total_losses
     timeout_pct = loss_type_counts.get("timeout", 0)    / total_losses
 
     if mate_pct > 0.5:
-        themes += ["mateIn1", "mateIn2", "backRank"]
+        themes += ["mateIn1", "mateIn2", "backRankMate"]
     if timeout_pct > 0.5:
-        themes += ["simplification", "pawnEndgame"]
+        themes += ["pawnEndgame", "rookEndgame"]
 
     # Always lead with basic vocabulary themes
     for t in ["fork", "pin", "hangingPiece"]:
         if t not in themes:
             themes.insert(0, t)
 
-    return list(dict.fromkeys(themes))  # deduplicate, preserve order
+    validated = [t for t in dict.fromkeys(themes) if t in LICHESS_PUZZLE_SLUGS]
+    return validated
 ```
 
-Surface the theme list as "Practice these on Lichess today:" with clickable Lichess puzzle links filtered by theme (`https://lichess.org/training/{theme}`).
+Surface the theme list as "Practice these on Lichess today:" with clickable links `https://lichess.org/training/{theme}`. Add a unit test that asserts every slug emitted by `recommend_puzzle_themes` is in `LICHESS_PUZZLE_SLUGS`.
 
 ---
 
@@ -370,7 +404,7 @@ Personal-loss puzzles are kept as the application step, not demoted. They are th
 
 ### Mate recognition
 
-Do not build a major mate-defense study module. Keep: mate-in-1, mate-in-2, back-rank, "opponent threatens mate" recognition. These are fundamentals, not advanced study. Surface in puzzle theme recommendations as `mateIn1`, `mateIn2`, `backRank` — not `exposedKing` or complex mate patterns yet.
+Do not build a major mate-defense study module. Keep: mate-in-1, mate-in-2, back-rank, "opponent threatens mate" recognition. These are fundamentals, not advanced study. Surface in puzzle theme recommendations as `mateIn1`, `mateIn2`, `backRankMate` — not `exposedKing` or complex mate patterns yet.
 
 ### Opening study
 
@@ -389,7 +423,7 @@ Compute it, surface as context. Only flag if `never_castled_pct > 30%` and that 
 | `GameRecord` | `castle_fullmove` | `int | None` |
 | `compute_opening_families` row | `smoothed_win_pct`, `sample_strength`, `plan_status`, `median_castle_move`, `never_castled_pct`, `priority` | float/str |
 | `MoveEval` | (no change) | — |
-| `summarize()` output | `blunders_by_phase`, `acpl_by_move_bucket`, `material_loss_blunders` | dict/int |
+| `summarize()` output | `blunders_by_phase` (Phase 3), `acpl_by_move_bucket` (Phase 5), `material_loss_blunders` (Phase 5) | dict/int |
 | `compute_all` output | `recommended_puzzle_themes` | list[str] |
 
 ---
