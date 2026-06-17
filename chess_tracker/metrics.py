@@ -488,7 +488,7 @@ def compute_review_picks(records: list[GameRecord], window: int = 30) -> list[di
     return picks
 
 
-def compute_opening_families(records: list[GameRecord]) -> list[dict]:
+def compute_opening_families(records: list[GameRecord], plan: dict | None = None) -> list[dict]:
     """Tier-1 aggregation: group records by (family, color).
 
     One row per family-color combo. Mirrors compute_play_signatures schema
@@ -500,6 +500,13 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
     every row's `sum_rating_delta` / `avg_rating_delta` silently returns 0.
     `compute_all` enriches before calling.
     """
+    plan_lookup: dict[tuple[str, str], str] = {}
+    for op in (plan or {}).get("openings", []):
+        tf = op.get("target_family")
+        side = op.get("side")
+        if tf and side:
+            plan_lookup[(tf, side)] = op.get("status", "active")
+
     groups: dict[tuple[str, str], list[GameRecord]] = {}
     sig_keys: dict[tuple[str, str], set] = {}
     for r in records:
@@ -539,6 +546,7 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
         eco_top = eco_counts.most_common(1)[0][0] if eco_counts else None
         sig_counts = Counter(r.play_signature for r in recs if r.play_signature)
         canonical_sig = sig_counts.most_common(1)[0][0] if sig_counts else None
+        plan_status = plan_lookup.get((family, color))
         out.append({
             "family": family,
             "color": color,
@@ -560,6 +568,7 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
             "variation_count": len(sig_keys.get((family, color), set())),
             "canonical_play_signature": canonical_sig,
             "form": [_result_letter(r) for r in recs[-10:]],
+            "plan_status": plan_status,
         })
     out.sort(key=lambda x: (x["sum_rating_delta"], -x["games"]))
     return out
@@ -838,7 +847,7 @@ def compute_all(records: list[GameRecord], annotations: dict,
             **compute_process_metrics(records),
             "session_decay": compute_session_decay(records),
         },
-        "opening_families": compute_opening_families(records),
+        "opening_families": compute_opening_families(records, plan=plan or {}),
         "opening_variations": compute_opening_variations(records),
         "play_signatures": play_signatures,
         "sessions": compute_sessions(records),

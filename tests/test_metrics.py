@@ -1100,3 +1100,47 @@ def test_time_burn_delta_is_not_wildly_negative_for_blitz_records():
         f"time_burn_delta is {delta} — value below -3 strongly indicates "
         "early_total computed with hardcoded 60s instead of actual start clock"
     )
+
+
+def test_compute_opening_families_plan_status_none_without_plan():
+    """Without a plan arg, every row has plan_status=None."""
+    from chess_tracker.metrics import compute_opening_families
+    families = compute_opening_families(RECORDS)
+    for row in families:
+        assert "plan_status" in row
+        assert row["plan_status"] is None
+
+
+def test_compute_opening_families_plan_status_active():
+    """plan_status='active' when family+side matches an active plan entry.
+    RECORDS has 'London System' as white and 'Italian Game' as black.
+    """
+    from chess_tracker.metrics import compute_opening_families
+    plan = {
+        "openings": [
+            {"target_family": "London System", "side": "white",
+             "name": "London System", "status": "active"},
+        ]
+    }
+    families = compute_opening_families(RECORDS, plan=plan)
+    london_white = next(r for r in families
+                        if r["family"] == "London System" and r["color"] == "white")
+    assert london_white["plan_status"] == "active"
+    italian_black = next(r for r in families
+                         if r["family"] == "Italian Game" and r["color"] == "black")
+    assert italian_black["plan_status"] is None
+
+
+def test_compute_opening_families_bench_status_propagated():
+    """plan_status='bench' when plan entry has status='bench'."""
+    from chess_tracker.metrics import compute_opening_families
+    plan = {
+        "openings": [
+            {"target_family": "London System", "side": "white",
+             "name": "London System", "status": "bench"},
+        ]
+    }
+    families = compute_opening_families(RECORDS, plan=plan)
+    london_white = next(r for r in families
+                        if r["family"] == "London System" and r["color"] == "white")
+    assert london_white["plan_status"] == "bench"
