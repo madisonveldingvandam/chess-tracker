@@ -197,6 +197,7 @@
             <div class="plan-head">
               <span class="plan-vs">${vs}</span>
               <span class="plan-name">${o.name}</span>
+              <span class="severity-${o.status === 'bench' ? 'neutral' : 'green'}" style="font-size:0.75rem;padding:1px 6px;border-radius:3px;">${o.status || 'active'}</span>
               <span class="plan-adherence">${o.adherence_pct}% adherence</span>
             </div>
             <div class="plan-counts">
@@ -541,6 +542,13 @@
       data: rows, layout: "fitColumns", height: "540px",
       columns: [
         {title: "Opening", field: "family", headerFilter: "input", minWidth: 180},
+        {title: "Plan", field: "plan_status", width: 70, headerSort: false,
+         formatter: c => {
+           const v = c.getValue();
+           if (!v) return "";
+           const cls = v === "active" ? "severity-green" : "severity-neutral";
+           return `<span class="${cls}" style="font-size:0.75rem;padding:1px 5px;border-radius:3px;">${v}</span>`;
+         }},
         {title: "Games", field: "games", width: 75, sorter: "number"},
         {title: "Δ Rating", field: "sum_rating_delta", width: 90, sorter: "number", formatter: ratingDeltaCell},
         {title: "Win%", field: "win_pct", width: 75, sorter: "number", formatter: winPctCell},
