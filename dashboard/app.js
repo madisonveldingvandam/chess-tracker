@@ -12,9 +12,14 @@
     return;
   }
   renderKPI(D);
+  renderActionCard(D);
+  renderPlanBlock(D.plan_compliance);
   renderMoveQuality(D.move_quality);
   renderMoveQualityByFormat(D.move_quality_by_format, D.format);
-  renderPlanBlock(D.plan_compliance);
+  renderFamilyBlock(D.opening_families, "white",
+    "#white-families-table", "white-board", "white-board-meta", false);
+  renderFamilyBlock(D.opening_families, "black",
+    "#black-families-table", "black-board", "black-board-meta", true);
   renderBehavior(D.behavior);
   renderLeaks(D.leak_summary);
   renderRule(D.next_session_rule);
@@ -25,10 +30,6 @@
   renderErrorLog(D.error_log);
   renderProcess(D.process_metrics);
   renderSessionDecay(D.process_metrics?.session_decay);
-  renderFamilyBlock(D.opening_families, "white",
-    "#white-families-table", "white-board", "white-board-meta", false);
-  renderFamilyBlock(D.opening_families, "black",
-    "#black-families-table", "black-board", "black-board-meta", true);
   renderOpeningDetail(D);
   renderSessions(D.sessions);
   renderDrillinCards(D);
@@ -57,6 +58,39 @@
          target="_blank" rel="noopener"
          title="Re-run the deploy workflow on GitHub Actions to rebuild this dashboard now">↻ Refresh</a>
     `);
+  }
+
+  // Action card: top of index.html only. Shows next-session rule + the top
+  // 1-2 leaks so the most actionable info is visible without scrolling.
+  // Falls back gracefully if elements are absent (other pages don't have them).
+  function renderActionCard(D) {
+    const cardRoot = document.getElementById("action-card");
+    const leakRoot = document.getElementById("current-leak-inline");
+    if (!cardRoot) return;
+    const rule = D.next_session_rule;
+    if (!rule) { cardRoot.innerHTML = ""; return; }
+    cardRoot.innerHTML = `
+      <h2>Next session</h2>
+      <div class="action-rule">
+        <span>${rule.game_cap} games max</span> ·
+        <span>${rule.move_10_target_seconds}s left at move 10</span> ·
+        <span>Stop if rating drops ${rule.stop_if_rating_drops}</span>
+      </div>
+      <div class="rule-narrative">${rule.narrative}</div>
+    `;
+    if (!leakRoot) return;
+    const leaks = D.leak_summary || [];
+    if (leaks.length === 0) {
+      leakRoot.innerHTML = `<div class="leak severity-neutral">No active leaks — all clear.</div>`;
+      return;
+    }
+    leakRoot.innerHTML = leaks.slice(0, 2).map(L => `
+      <div class="leak severity-${L.severity}">
+        <div class="leak-name">${L.name.replace(/_/g, " ")}</div>
+        <div class="leak-evidence">${L.evidence}</div>
+        <div class="leak-action">→ ${L.suggested_action}</div>
+      </div>
+    `).join("");
   }
 
   // Move quality — engine-derived accuracy/blunders for the current format.
