@@ -502,6 +502,8 @@ def compute_opening_families(records: list[GameRecord], plan: dict | None = None
     """
     plan_lookup: dict[tuple[str, str], str] = {}
     for op in (plan or {}).get("openings", []):
+        if not isinstance(op, dict):
+            continue
         tf = op.get("target_family")
         side = op.get("side")
         if tf and side:
