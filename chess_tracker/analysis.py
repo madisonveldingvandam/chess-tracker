@@ -131,7 +131,7 @@ def summarize(moves: list[MoveEval]) -> dict:
         return {
             "moves_analyzed": 0, "accuracy": None, "avg_cp_loss": None,
             "blunders": 0, "mistakes": 0, "inaccuracies": 0,
-            "acpl_by_phase": {}, "moves_by_phase": {},
+            "acpl_by_phase": {}, "moves_by_phase": {}, "blunders_by_phase": {},
         }
 
     accuracy = sum(accuracy_from_winpct_loss(m.wp_loss) for m in moves) / n
@@ -143,6 +143,11 @@ def summarize(moves: list[MoveEval]) -> dict:
     acpl_by_phase = {p: round(sum(v) / len(v)) for p, v in by_phase.items()}
     moves_by_phase = {p: len(v) for p, v in by_phase.items()}
 
+    blunders_by_phase: dict[str, int] = {}
+    for m in moves:
+        if m.label == "blunder":
+            blunders_by_phase[m.phase] = blunders_by_phase.get(m.phase, 0) + 1
+
     return {
         "moves_analyzed": n,
         "accuracy": round(accuracy, 1),
@@ -152,6 +157,7 @@ def summarize(moves: list[MoveEval]) -> dict:
         "inaccuracies": sum(1 for m in moves if m.label == "inaccuracy"),
         "acpl_by_phase": acpl_by_phase,
         "moves_by_phase": moves_by_phase,
+        "blunders_by_phase": blunders_by_phase,
     }
 
 
@@ -287,6 +293,11 @@ def aggregate_move_quality(summaries: list[dict]) -> dict | None:
             phase_n[phase] = phase_n.get(phase, 0) + n
     acpl_by_phase = {p: round(phase_cp[p] / phase_n[p]) for p in phase_n if phase_n[p]}
 
+    agg_blunders_by_phase: dict[str, int] = {}
+    for s in summaries:
+        for phase, count in s.get("blunders_by_phase", {}).items():
+            agg_blunders_by_phase[phase] = agg_blunders_by_phase.get(phase, 0) + count
+
     return {
         "games_analyzed": len(summaries),
         "moves_analyzed": total_moves,
@@ -299,6 +310,7 @@ def aggregate_move_quality(summaries: list[dict]) -> dict | None:
         "inaccuracies": inaccuracies,
         "blunders_per_100_moves": round(100 * blunders / total_moves, 1),
         "acpl_by_phase": acpl_by_phase,
+        "blunders_by_phase": agg_blunders_by_phase,
     }
 
 
