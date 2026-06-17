@@ -2,7 +2,7 @@
 from collections import Counter
 from datetime import datetime
 import statistics
-from chess_tracker.pgn import GameRecord, opening_family, opening_variation
+from chess_tracker.pgn import GameRecord, opening_family, opening_variation, parse_time_control
 from chess_tracker.enrich import enrich_with_deltas, enrich_with_sessions
 from chess_tracker.behavior import (
     compute_loss_streaks, compute_revenge_gap, compute_daily_drawdown,
@@ -147,19 +147,24 @@ def compute_process_metrics(records: list[GameRecord]) -> dict:
     res10 = [c for r in records if (c := _ply_clock(r.my_clocks, 9)) is not None]
     res20 = [c for r in records if (c := _ply_clock(r.my_clocks, 19)) is not None]
 
-    # Opening velocity: seconds spent on my first 8 moves = 60 - my_clocks[7]
+    # Opening velocity: seconds spent on my first 8 moves.
+    # Use the game's actual starting clock, not a hardcoded bullet assumption.
     velocities = []
     for r in records:
         c = _ply_clock(r.my_clocks, 7)
         if c is not None:
-            velocities.append(round(60.0 - c, 2))
+            start_sec, _ = parse_time_control(r.time_control)
+            velocities.append(round(start_sec - c, 2))
 
-    # Time burn delta: mean s/move across my moves 1-8 vs my moves 9-20
+    # Time burn delta: mean s/move across my moves 1-8 vs my moves 9-20.
+    # early_total uses the game's actual starting clock (not hardcoded 60s).
+    # late_total is a clock delta and is unaffected by the starting clock.
     early_rates = []
     late_rates = []
     for r in records:
         if len(r.my_clocks) >= 8:
-            early_total = 60.0 - r.my_clocks[7]
+            start_sec, _ = parse_time_control(r.time_control)
+            early_total = start_sec - r.my_clocks[7]
             early_rates.append(early_total / 8)
         if len(r.my_clocks) >= 20:
             late_total = r.my_clocks[7] - r.my_clocks[19]
