@@ -5,6 +5,7 @@ from chess_tracker.pgn import (
     opening_family,
     opening_variation,
     _clean_opening_label,
+    parse_time_control,
 )
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures/sample_game.json").read_text())
@@ -184,3 +185,36 @@ def test_parse_game_populates_opening_moves_12_plies():
         "1.d4 d5 2.Nf3 Nf6 3.e3 e6 4.Bd3 c5 5.b3 Nc6 6.Bb2 Bd6")
     # first_moves stays 8 plies, unchanged
     assert rec.first_moves == "1.d4 d5 2.Nf3 Nf6 3.e3 e6 4.Bd3 c5"
+
+
+def test_parse_time_control_bullet_no_increment():
+    assert parse_time_control("60") == (60, 0)
+
+
+def test_parse_time_control_bullet_with_increment():
+    assert parse_time_control("60+1") == (60, 1)
+
+
+def test_parse_time_control_blitz():
+    assert parse_time_control("180") == (180, 0)
+
+
+def test_parse_time_control_blitz_with_increment():
+    assert parse_time_control("120+1") == (120, 1)
+
+
+def test_parse_time_control_rapid():
+    assert parse_time_control("600+5") == (600, 5)
+
+
+def test_parse_time_control_daily_falls_back():
+    # Daily uses "1/86400" format — not a numeric start; fall back gracefully.
+    assert parse_time_control("1/86400") == (60, 0)
+
+
+def test_parse_time_control_empty_falls_back():
+    assert parse_time_control("") == (60, 0)
+
+
+def test_parse_time_control_unknown_string_falls_back():
+    assert parse_time_control("unknown") == (60, 0)
