@@ -1146,14 +1146,14 @@ def test_compute_opening_families_bench_status_propagated():
     assert london_white["plan_status"] == "bench"
 
 
-def test_compute_opening_families_smoothed_win_pct_laplace():
-    """smoothed_win_pct = round((wins + 2) / (games + 4), 3) for every row."""
+def test_compute_opening_families_smoothed_win_rate_laplace():
+    """smoothed_win_rate = round((wins + 2) / (games + 4), 3) for every row."""
     from chess_tracker.metrics import compute_opening_families
     families = compute_opening_families(RECORDS)
     for row in families:
-        assert "smoothed_win_pct" in row
+        assert "smoothed_win_rate" in row
         expected = round((row["wins"] + 2) / (row["games"] + 4), 3)
-        assert abs(row["smoothed_win_pct"] - expected) < 0.001
+        assert abs(row["smoothed_win_rate"] - expected) < 0.001
 
 
 def test_compute_opening_families_sample_strength_thresholds():

@@ -509,6 +509,7 @@ def compute_opening_families(records: list[GameRecord], plan: dict | None = None
         if tf and side:
             plan_lookup[(tf, side)] = op.get("status", "active")
 
+    # Baseline uses ALL records (incl. unclassified families) — true player win rate.
     total_records = len(records)
     overall_win_pct = (
         sum(1 for r in records if _is_win(r.result)) / total_records
@@ -556,7 +557,7 @@ def compute_opening_families(records: list[GameRecord], plan: dict | None = None
         canonical_sig = sig_counts.most_common(1)[0][0] if sig_counts else None
         plan_status = plan_lookup.get((family, color))
 
-        smoothed_win_pct = round((wins + 2) / (n + 4), 3)
+        smoothed_win_rate = round((wins + 2) / (n + 4), 3)
 
         if n < 10:
             sample_strength = "ignore"
@@ -573,7 +574,7 @@ def compute_opening_families(records: list[GameRecord], plan: dict | None = None
             repertoire_weight = 0.5
         else:
             repertoire_weight = 0.25
-        underperformance = max(0.0, overall_win_pct - smoothed_win_pct)
+        underperformance = max(0.0, overall_win_pct - smoothed_win_rate)
         priority = round(n * underperformance * repertoire_weight, 2)
 
         out.append({
@@ -598,7 +599,7 @@ def compute_opening_families(records: list[GameRecord], plan: dict | None = None
             "canonical_play_signature": canonical_sig,
             "form": [_result_letter(r) for r in recs[-10:]],
             "plan_status": plan_status,
-            "smoothed_win_pct": smoothed_win_pct,
+            "smoothed_win_rate": smoothed_win_rate,
             "sample_strength": sample_strength,
             "priority": priority,
         })
