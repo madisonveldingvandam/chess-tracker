@@ -100,3 +100,45 @@ LONG_OUTLAST_RECORD = _r(
     my_clocks=_LONG_OUTLAST_MINE,
     opp_clocks=_LONG_OUTLAST_OPP,
 )
+
+
+def _clocks_from(start: float, spent_per_ply: list[float]) -> list[float]:
+    """Like _clocks but with an explicit starting clock (not hardcoded to 60s).
+
+    Used to build test fixtures for non-bullet time controls.
+    """
+    out = []
+    remaining = start
+    for s in spent_per_ply:
+        remaining -= s
+        out.append(round(remaining, 1))
+    return out
+
+
+# 2+1 blitz (120s start) fixtures for time-control normalization tests.
+# Each record has 25 of-my-moves to satisfy len(my_clocks) >= 20 required
+# by compute_process_metrics for time_burn_delta calculation.
+#
+# _BLITZ_FAST_OPENING: 0.5s per move for first 8, then 1.5s per move.
+#   clock[7] = 120 - (0.5 × 8) = 116.0
+#   Correct opening velocity: 120 - 116 = 4.0s
+#   Bug velocity:              60 - 116 = -56.0s  (wrong sign)
+#
+# _BLITZ_SLOW_OPENING: 3.0s per move for first 8, then 1.0s per move.
+#   clock[7] = 120 - (3.0 × 8) = 96.0
+#   Correct opening velocity: 120 - 96 = 24.0s
+#   Bug velocity:              60 - 96 = -36.0s   (wrong sign)
+_BLITZ_FAST_OPENING_25 = _clocks_from(120.0, [0.5] * 8 + [1.5] * 17)
+_BLITZ_SLOW_OPENING_25 = _clocks_from(120.0, [3.0] * 8 + [1.0] * 17)
+
+BLITZ_CLOCK_RECORDS = [
+    _r(1_700_020_000, "win", "timeout", "Sicilian Defense", side="white",
+       fullmoves=25, my_clocks=_BLITZ_FAST_OPENING_25,
+       opp_clocks=_BLITZ_SLOW_OPENING_25, time_control="120+1"),
+    _r(1_700_020_120, "timeout", "win", "Sicilian Defense", side="white",
+       fullmoves=25, my_clocks=_BLITZ_SLOW_OPENING_25,
+       opp_clocks=_BLITZ_FAST_OPENING_25, time_control="120+1"),
+    _r(1_700_020_240, "win", "timeout", "Sicilian Defense", side="white",
+       fullmoves=25, my_clocks=_BLITZ_FAST_OPENING_25,
+       opp_clocks=_BLITZ_SLOW_OPENING_25, time_control="120+1"),
+]

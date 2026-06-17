@@ -1,5 +1,5 @@
 """Tests for metric computations."""
-from tests.fixtures.sample_records import RECORDS, CLOCK_RECORDS, OUTLASTED_THEN_FLAG_RECORD, LONG_OUTLAST_RECORD
+from tests.fixtures.sample_records import RECORDS, CLOCK_RECORDS, OUTLASTED_THEN_FLAG_RECORD, LONG_OUTLAST_RECORD, BLITZ_CLOCK_RECORDS
 from chess_tracker.metrics import compute_kpis, compute_sessions, compute_process_metrics, compute_session_decay
 
 
@@ -1056,3 +1056,47 @@ def test_review_picks_one_timeout_one_mate_one_biggest_loss():
     assert picks[1]["url"] == "u5"
     # fast_mate = most recent checkmated game with fullmoves <= 15 (game 3)
     assert picks[2]["url"] == "u3"
+
+
+def test_opening_velocity_uses_actual_start_clock_not_hardcoded_60():
+    """For 2+1 blitz (120s start), opening velocity must be computed from
+    120s, not the bullet-only 60s hardcode.
+
+    Fast blitz opener: 0.5s × 8 moves = 4s spent → velocity should be ~4s.
+    With the 60s bug:  60 - 116 = -56s  (negative — physically impossible).
+    With the fix:     120 - 116 =   4s  (correct).
+
+    Test accepts 0–30s as the valid range; rejects negative values and
+    values above 30s (which would indicate ignoring the blitz start clock).
+    """
+    pm = compute_process_metrics(BLITZ_CLOCK_RECORDS)
+    vel = pm["opening_velocity_median"]
+    assert vel is not None
+    assert vel > 0, (
+        f"opening_velocity_median is {vel} — negative value indicates "
+        "hardcoded 60s baseline bug (clock[7]=116 for blitz, 60-116=-56)"
+    )
+    assert vel < 30, (
+        f"opening_velocity_median is {vel} — expected ~4–24s for these records"
+    )
+
+
+def test_time_burn_delta_is_not_wildly_negative_for_blitz_records():
+    """time_burn_delta = mean(early s/move) - mean(late s/move).
+
+    For BLITZ_CLOCK_RECORDS, the fast and slow openers are evenly mixed
+    and their pacing is consistent, so delta should be near zero.
+
+    With the 60s bug, early_total = 60 - clock[7] goes negative for blitz
+    games (e.g. 60 - 116 = -56), making early_rates negative and dragging
+    time_burn_delta to ~ -7.5.
+
+    Threshold: any value below -3.0 indicates the bug is present.
+    """
+    pm = compute_process_metrics(BLITZ_CLOCK_RECORDS)
+    delta = pm["time_burn_delta"]
+    assert delta is not None
+    assert delta > -3.0, (
+        f"time_burn_delta is {delta} — value below -3 strongly indicates "
+        "early_total computed with hardcoded 60s instead of actual start clock"
+    )
