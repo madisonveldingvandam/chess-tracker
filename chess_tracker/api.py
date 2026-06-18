@@ -43,3 +43,8 @@ def fetch_archive(url: str, cache_dir: Path, force: bool = False) -> dict:
     data = _get_json(url)
     cache_path.write_text(json.dumps(data))
     return data
+
+
+def fetch_player_stats(username: str) -> dict:
+    """Return the /stats dict for a player (current ratings across all time classes)."""
+    return _get_json(f"{BASE}/{username.lower()}/stats")

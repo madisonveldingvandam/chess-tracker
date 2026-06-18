@@ -38,6 +38,8 @@ header#kpi-strip {
 }
 .kpi-value { font-size: 1.5rem; font-weight: 400; margin-top: 0.2rem; }
 .kpi-value.accent { color: var(--accent); }
+.kpi.kpi-active .kpi-label { color: var(--accent); }
+.kpi.kpi-sep { width: 1px; background: var(--border); align-self: stretch; margin: 0 0.5rem; }
 
 main { padding: 1.5rem 2rem; }
 section { margin-bottom: 2.5rem; }
@@ -522,6 +524,8 @@ section h3 {
 .mqf-table th { color: var(--muted); font-weight: 400; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .mqf-current { background: var(--accent-bg); }
 .mqf-current td:first-child { color: var(--accent); }
+/* Opponent openings: move notation must preserve case (e4 ≠ E4) */
+.opp-openings-table td:first-child { text-transform: none; }
 
 /* Drill-in cards (landing only) */
 .drillin-grid {

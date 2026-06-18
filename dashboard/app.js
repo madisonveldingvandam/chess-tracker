@@ -30,6 +30,7 @@
   renderFamilyBlock(D.opening_families, "black",
     "#black-families-table", "black-board", "black-board-meta", true);
   renderOpeningDetail(D);
+  renderOpponentOpenings(D.opponent_openings);
   renderSessions(D.sessions);
   renderDrillinCards(D);
 
@@ -41,9 +42,23 @@
       ? d.sessions[d.sessions.length - 1].rating_delta
       : null;
     const lastStr = lastDelta == null ? "—" : (lastDelta >= 0 ? "+" : "") + lastDelta;
+
+    const FMT_ORDER  = ["bullet", "blitz", "rapid", "daily"];
+    const FMT_LABELS = {bullet: "Bullet", blitz: "Blitz", rapid: "Rapid", daily: "Daily"};
+    const byFmt = d.ratings_by_format || {};
+    const avail = FMT_ORDER.filter(f => byFmt[f] != null);
+    const ratingHtml = avail.length
+      ? avail.map(f =>
+          `<div class="kpi${f === d.format ? " kpi-active" : ""}">` +
+          `<span class="kpi-label">${FMT_LABELS[f]}</span>` +
+          `<span class="kpi-value">${byFmt[f]}</span></div>`
+        ).join('')
+      : `<div class="kpi kpi-active"><span class="kpi-label">Rating</span>` +
+        `<span class="kpi-value">${k.current_rating ?? "—"}</span></div>`;
+
     strip.insertAdjacentHTML('beforeend', `
-      <div class="kpi"><span class="kpi-label">Rating</span>
-        <span class="kpi-value">${k.current_rating ?? "—"}</span></div>
+      ${ratingHtml}
+      <div class="kpi kpi-sep"></div>
       <div class="kpi"><span class="kpi-label">Games</span>
         <span class="kpi-value">${k.games_total}</span></div>
       <div class="kpi"><span class="kpi-label">Recent form</span>
@@ -962,6 +977,54 @@
         <div style="color:var(--muted);font-size:0.9rem">${p.question}</div>
       </li>`;
     }).join("");
+  }
+
+  function renderOpponentOpenings(data) {
+    const section = document.getElementById("opponent-openings-block");
+    if (!section) return;
+    const rows = data && data.rows;
+    if (!rows || rows.length === 0) return;
+    section.style.display = "";
+
+    const confBadge = c => {
+      const colors = {strong: "var(--accent)", medium: "var(--muted)", weak: "var(--muted)"};
+      return `<span style="font-size:0.78rem;color:${colors[c] || "var(--muted)"};">${c || ""}</span>`;
+    };
+    const pctColor = p => p >= 70 ? "cell-weak" : p <= 40 ? "cell-strong" : "";
+
+    const thead = `<thead><tr>
+      <th>Opponent line</th>
+      <th title="Total games from this opener">Games</th>
+      <th>W</th><th>D</th><th>L</th>
+      <th title="% of games in this line you lost">Loss%</th>
+      <th>Signal</th>
+    </tr></thead>`;
+
+    const tbody = rows.map(r => `<tr>
+      <td>${escapeAttr(r.opp_line)}</td>
+      <td>${r.game_count}</td>
+      <td>${r.win_count}</td>
+      <td>${r.draw_count}</td>
+      <td>${r.loss_count}</td>
+      <td class="${pctColor(r.loss_pct)}">${r.loss_pct}%</td>
+      <td>${confBadge(r.confidence)}</td>
+    </tr>`).join("");
+
+    document.getElementById("opponent-openings-table").innerHTML =
+      `<table class="mqf-table opp-openings-table">${thead}<tbody>${tbody}</tbody></table>`;
+
+    const a = data.audit || {};
+    const shown = a.groups_shown ?? rows.length;
+    const hidden = a.groups_hidden_low_sample ?? 0;
+    const skipped = (a.games_excluded_null_opening ?? 0) + (a.games_excluded_too_short ?? 0);
+    const note = [
+      `${shown} pattern${shown !== 1 ? "s" : ""} shown`,
+      hidden > 0 ? `${hidden} hidden (low sample)` : "",
+      skipped > 0 ? `${skipped} game${skipped !== 1 ? "s" : ""} skipped (no opening data)` : "",
+      data.grouping_level !== "exact_line" ? `grouped by: ${data.grouping_level}` : "",
+    ].filter(Boolean).join(" · ");
+    const auditEl = document.getElementById("opponent-openings-audit");
+    if (auditEl) auditEl.textContent = note;
   }
 
   function winPctCell(cell) {

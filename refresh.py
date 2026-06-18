@@ -4,7 +4,7 @@ import json
 import sys
 from pathlib import Path
 
-from chess_tracker.api import fetch_archives_index, fetch_archive
+from chess_tracker.api import fetch_archives_index, fetch_archive, fetch_player_stats
 from chess_tracker.pgn import parse_game
 from chess_tracker.metrics import compute_all
 from chess_tracker.annotations import load_annotations
@@ -67,9 +67,22 @@ def main(argv=None) -> int:
     template_dir = Path(args.template_dir)
     annotations_path = data_dir / "annotations.json"
 
-    print(f"[1/5] Loading archives index for {args.username}...")
+    print(f"[1/5] Loading archives index + stats for {args.username}...")
     archives = fetch_archives_index(args.username)
     print(f"      {len(archives)} archive(s)")
+    _STAT_KEYS = {"bullet": "chess_bullet", "blitz": "chess_blitz",
+                  "rapid": "chess_rapid", "daily": "chess_daily"}
+    try:
+        _stats = fetch_player_stats(args.username)
+        ratings_by_format = {
+            fmt: _stats[key]["last"]["rating"]
+            for fmt, key in _STAT_KEYS.items()
+            if key in _stats and "last" in _stats.get(key, {})
+        }
+        print(f"      ratings: { {k: v for k, v in ratings_by_format.items()} }")
+    except Exception as exc:
+        print(f"      stats fetch failed ({exc}); ratings_by_format will be empty")
+        ratings_by_format = {}
 
     print(f"[2/5] Fetching archives (force={args.force})...")
     all_games = []
@@ -148,6 +161,8 @@ def main(argv=None) -> int:
         nfmt = sum(1 for v in payload["move_quality_by_format"].values() if v)
         print(f"[4.6/5] Move-quality: {len(summaries)} {args.format} games "
               f"+ {nfmt} format(s) compared (depth {args.analysis_depth}).")
+
+    payload["ratings_by_format"] = ratings_by_format
 
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "computed.json").write_text(json.dumps(payload, indent=2))

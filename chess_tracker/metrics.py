@@ -10,6 +10,7 @@ from chess_tracker.behavior import (
 )
 from chess_tracker.play_signature import fens_from_san
 from chess_tracker.opening_match import match_opening
+from chess_tracker.opponent_openings import compute_opponent_opening_stats
 
 
 _DRAW_RESULTS = {"agreed", "repetition", "stalemate", "insufficient",
@@ -851,4 +852,5 @@ def compute_all(records: list[GameRecord], annotations: dict,
         },
         "error_log": annotations.get("error_log", []),
         "plan_compliance": compute_plan_compliance(records, plan or {}),
+        "opponent_openings": compute_opponent_opening_stats(records),
     }
