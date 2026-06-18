@@ -14,6 +14,7 @@ from chess_tracker.analysis import (
     run_move_quality_pass, run_move_quality_by_format, aggregate_move_quality,
     load_quality_cache, save_quality_cache, select_recent_games,
 )
+from chess_tracker.blunder_phases import compute_blunder_phases
 from chess_tracker.render import render_all_pages, DEFAULT_TEMPLATE_DIR
 
 
@@ -104,6 +105,7 @@ def main(argv=None) -> int:
     print("[4/5] Computing metrics + merging annotations + plan...")
     annotations = load_annotations(annotations_path)
     plan = load_plan()
+    # blunder_phases populated after analysis pass below; set empty default now
     payload = compute_all(records, annotations,
                           username=args.username, format=args.format,
                           plan=plan)
@@ -161,6 +163,17 @@ def main(argv=None) -> int:
         nfmt = sum(1 for v in payload["move_quality_by_format"].values() if v)
         print(f"[4.6/5] Move-quality: {len(summaries)} {args.format} games "
               f"+ {nfmt} format(s) compared (depth {args.analysis_depth}).")
+
+        # Recompute with blunder_phases now that quality data is available.
+        all_summaries = [v["summary"] for v in cache.values()
+                         if v.get("summary") and v["summary"].get("moves_analyzed")]
+        bp_result = compute_blunder_phases(all_summaries, total_eligible=len(records))
+        payload["blunder_phases"] = bp_result["blunder_phases"]
+        payload["engine_coverage"] = bp_result["engine_coverage"]
+        from chess_tracker.prescription import compute_training_prescription
+        payload["training_prescription"] = compute_training_prescription(
+            bp_result["blunder_phases"], bp_result["engine_coverage"], records
+        )
 
     payload["ratings_by_format"] = ratings_by_format
 

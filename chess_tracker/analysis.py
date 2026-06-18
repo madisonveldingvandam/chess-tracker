@@ -138,8 +138,19 @@ def summarize(moves: list[MoveEval]) -> dict:
     avg_cp_loss = sum(m.cp_loss for m in moves) / n
 
     by_phase: dict[str, list[int]] = {}
+    blunders_by_phase: dict[str, int] = {}
+    blunder_cp_sum_by_phase: dict[str, int] = {}
+    blunder_worst_cp_by_phase: dict[str, int] = {}
     for m in moves:
         by_phase.setdefault(m.phase, []).append(m.cp_loss)
+        if m.label == "blunder":
+            blunders_by_phase[m.phase] = blunders_by_phase.get(m.phase, 0) + 1
+            blunder_cp_sum_by_phase[m.phase] = (
+                blunder_cp_sum_by_phase.get(m.phase, 0) + m.cp_loss
+            )
+            blunder_worst_cp_by_phase[m.phase] = max(
+                blunder_worst_cp_by_phase.get(m.phase, 0), m.cp_loss
+            )
     acpl_by_phase = {p: round(sum(v) / len(v)) for p, v in by_phase.items()}
     moves_by_phase = {p: len(v) for p, v in by_phase.items()}
 
@@ -152,6 +163,9 @@ def summarize(moves: list[MoveEval]) -> dict:
         "inaccuracies": sum(1 for m in moves if m.label == "inaccuracy"),
         "acpl_by_phase": acpl_by_phase,
         "moves_by_phase": moves_by_phase,
+        "blunders_by_phase": blunders_by_phase,
+        "blunder_cp_sum_by_phase": blunder_cp_sum_by_phase,
+        "blunder_worst_cp_by_phase": blunder_worst_cp_by_phase,
     }
 
 

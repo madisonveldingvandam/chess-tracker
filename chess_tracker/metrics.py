@@ -11,6 +11,8 @@ from chess_tracker.behavior import (
 from chess_tracker.play_signature import fens_from_san
 from chess_tracker.opening_match import match_opening
 from chess_tracker.opponent_openings import compute_opponent_opening_stats
+from chess_tracker.trap_patterns import compute_trap_exposures
+from chess_tracker.prescription import compute_training_prescription
 
 
 _DRAW_RESULTS = {"agreed", "repetition", "stalemate", "insufficient",
@@ -813,7 +815,9 @@ def compute_plan_compliance(records: list[GameRecord], plan: dict,
 def compute_all(records: list[GameRecord], annotations: dict,
                 username: str, format: str = "bullet",
                 low_confidence_threshold: int = 15,
-                plan: dict | None = None) -> dict:
+                plan: dict | None = None,
+                blunder_phases: dict | None = None,
+                engine_coverage: dict | None = None) -> dict:
     """Top-level dashboard payload. All panel data merged + annotations applied."""
     enrich_with_deltas(records)
     enrich_with_sessions(records)
@@ -853,4 +857,15 @@ def compute_all(records: list[GameRecord], annotations: dict,
         "error_log": annotations.get("error_log", []),
         "plan_compliance": compute_plan_compliance(records, plan or {}),
         "opponent_openings": compute_opponent_opening_stats(records),
+        **compute_trap_exposures(records),
+        "blunder_phases": blunder_phases or {
+            "opening": {"user_move_count": 0, "blunder_count": 0, "blunder_rate": 0.0,
+                        "affected_games": 0, "phase_eligible_games": 0,
+                        "affected_game_pct": 0.0, "avg_loss_cp": None, "worst_single_loss_cp": None},
+            "early_middlegame": {"user_move_count": 0, "blunder_count": 0, "blunder_rate": 0.0,
+                                 "affected_games": 0, "phase_eligible_games": 0,
+                                 "affected_game_pct": 0.0, "avg_loss_cp": None, "worst_single_loss_cp": None},
+        },
+        "engine_coverage": engine_coverage or {"analyzed_games": 0, "eligible_games": len(records)},
+        "training_prescription": compute_training_prescription(blunder_phases, engine_coverage, records),
     }

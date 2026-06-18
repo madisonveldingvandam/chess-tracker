@@ -31,6 +31,9 @@
     "#black-families-table", "black-board", "black-board-meta", true);
   renderOpeningDetail(D);
   renderOpponentOpenings(D.opponent_openings);
+  renderTrapExposures(D.trap_exposures, D.trap_exposure_audit);
+  renderBlunderPhases(D.blunder_phases, D.engine_coverage);
+  renderPrescription(D.training_prescription);
   renderSessions(D.sessions);
   renderDrillinCards(D);
 
@@ -1025,6 +1028,131 @@
     ].filter(Boolean).join(" · ");
     const auditEl = document.getElementById("opponent-openings-audit");
     if (auditEl) auditEl.textContent = note;
+  }
+
+  function renderTrapExposures(rows, audit) {
+    const section = document.getElementById("trap-exposures-block");
+    if (!section) return;
+    if (!rows || rows.length === 0) return;
+    section.style.display = "";
+
+    const confBadge = c => {
+      const colors = {strong: "var(--accent)", medium: "var(--muted)", weak: "var(--muted)"};
+      return `<span style="font-size:0.78rem;color:${colors[c] || "var(--muted)"};">${c || ""}</span>`;
+    };
+    const pctColor = p => p >= 70 ? "cell-weak" : p <= 40 ? "cell-strong" : "";
+
+    const thead = `<thead><tr>
+      <th>Trap / System</th>
+      <th title="Games where this pattern appeared">Seen</th>
+      <th>W</th><th>D</th><th>L</th>
+      <th title="% of sightings you lost">Loss%</th>
+      <th>Signal</th>
+    </tr></thead>`;
+
+    const tbody = rows.map(r => `<tr>
+      <td>${escapeAttr(r.name)}</td>
+      <td>${r.hit_count}</td>
+      <td>${r.win_count}</td>
+      <td>${r.draw_count}</td>
+      <td>${r.loss_count}</td>
+      <td class="${pctColor(r.loss_pct)}">${r.loss_pct}%</td>
+      <td>${confBadge(r.confidence)}</td>
+    </tr>`).join("");
+
+    document.getElementById("trap-exposures-table").innerHTML =
+      `<table class="mqf-table opp-openings-table">${thead}<tbody>${tbody}</tbody></table>`;
+
+    const a = audit || {};
+    const note = [
+      `${rows.length} trap${rows.length !== 1 ? "s" : ""} shown`,
+      a.patterns_deferred ? `${a.patterns_deferred} deferred to V2` : "",
+      a.games_scanned ? `${a.games_scanned} games scanned` : "",
+    ].filter(Boolean).join(" · ");
+    const auditEl = document.getElementById("trap-exposures-audit");
+    if (auditEl) auditEl.textContent = note;
+  }
+
+  function renderBlunderPhases(phases, coverage) {
+    const section = document.getElementById("blunder-phases-block");
+    if (!section) return;
+    const analyzed = coverage && coverage.analyzed_games || 0;
+    const eligible = coverage && coverage.eligible_games || 0;
+
+    // Show section even with no data — shows coverage note
+    section.style.display = "";
+
+    const phaseRows = [
+      {key: "opening",          label: "Opening (moves 1–8)"},
+      {key: "early_middlegame", label: "Early middlegame (moves 9–20)"},
+    ];
+
+    if (!phases || analyzed === 0) {
+      document.getElementById("blunder-phases-table").innerHTML =
+        `<p style="color:var(--muted);font-size:0.88rem">Engine analysis not yet run — blunder phase breakdown unavailable.</p>`;
+      const covEl = document.getElementById("blunder-phases-coverage");
+      if (covEl) covEl.textContent = `Engine coverage: 0 / ${eligible} games analyzed.`;
+      return;
+    }
+
+    const thead = `<thead><tr>
+      <th>Phase</th>
+      <th title="Your moves in this phase">Moves</th>
+      <th title="Blunders (≥30% win% loss)">Blunders</th>
+      <th title="Blunders per 100 user moves">Rate</th>
+      <th title="Games containing ≥1 blunder in this phase">Affected</th>
+      <th title="Average cp loss on blunder moves">Avg cp loss</th>
+      <th title="Worst single blunder">Worst cp</th>
+    </tr></thead>`;
+
+    const tbody = phaseRows.map(({key, label}) => {
+      const p = (phases[key] || {});
+      const bc = p.blunder_count || 0;
+      const mc = p.user_move_count || 0;
+      const rate = mc ? (bc / mc * 100).toFixed(1) : "—";
+      const ag = p.affected_games || 0;
+      const eg = p.phase_eligible_games || 0;
+      const cls = bc >= 10 ? "cell-weak" : bc >= 3 ? "" : "";
+      return `<tr>
+        <td style="text-transform:none">${label}</td>
+        <td>${mc || "—"}</td>
+        <td class="${cls}">${bc}</td>
+        <td>${rate}%</td>
+        <td>${ag} / ${eg}</td>
+        <td>${p.avg_loss_cp != null ? p.avg_loss_cp : "—"}</td>
+        <td>${p.worst_single_loss_cp != null ? p.worst_single_loss_cp : "—"}</td>
+      </tr>`;
+    }).join("");
+
+    document.getElementById("blunder-phases-table").innerHTML =
+      `<table class="mqf-table opp-openings-table">${thead}<tbody>${tbody}</tbody></table>`;
+
+    const covEl = document.getElementById("blunder-phases-coverage");
+    if (covEl) covEl.textContent = `Engine coverage: ${analyzed} / ${eligible} games analyzed.`;
+  }
+
+  function renderPrescription(p) {
+    const section = document.getElementById("prescription-block");
+    if (!section) return;
+    if (!p) return;
+    section.style.display = "";
+
+    const confColor = c => c === "strong" ? "var(--accent)" : c === "medium" ? "var(--text)" : "var(--muted)";
+    const doList = (p.do || []).map(s => `<li>${escapeAttr(s)}</li>`).join("");
+    const avoidLine = p.avoid
+      ? `<p style="color:var(--muted);font-size:0.84rem;margin-top:0.5rem">Avoid: ${escapeAttr(p.avoid)}</p>`
+      : "";
+
+    document.getElementById("prescription-card").innerHTML = `
+      <div style="border:1px solid var(--border);border-radius:6px;padding:1rem 1.25rem;max-width:36rem">
+        <div style="display:flex;align-items:baseline;gap:0.75rem;margin-bottom:0.4rem">
+          <span style="font-size:1rem;font-weight:500;color:${confColor(p.confidence)}">${escapeAttr(p.title)}</span>
+          <span style="font-size:0.74rem;color:var(--muted)">${escapeAttr(p.confidence || "")}</span>
+        </div>
+        <p style="color:var(--muted);font-size:0.84rem;margin:0 0 0.6rem">${escapeAttr(p.why || "")}</p>
+        <ol style="margin:0;padding-left:1.25rem;font-size:0.88rem">${doList}</ol>
+        ${avoidLine}
+      </div>`;
   }
 
   function winPctCell(cell) {
