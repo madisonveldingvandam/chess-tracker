@@ -154,11 +154,6 @@ def summarize(moves: list[MoveEval]) -> dict:
     acpl_by_phase = {p: round(sum(v) / len(v)) for p, v in by_phase.items()}
     moves_by_phase = {p: len(v) for p, v in by_phase.items()}
 
-    blunders_by_phase: dict[str, int] = {}
-    for m in moves:
-        if m.label == "blunder":
-            blunders_by_phase[m.phase] = blunders_by_phase.get(m.phase, 0) + 1
-
     return {
         "moves_analyzed": n,
         "accuracy": round(accuracy, 1),
