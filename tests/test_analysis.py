@@ -206,3 +206,47 @@ def test_analyze_move_quality_flags_white_queen_blunder():
     assert q["moves_analyzed"] == 3        # white made e4, Qh5, Qxe5
     assert q["blunders"] >= 1
     assert q["accuracy"] < 100
+
+
+def test_summarize_includes_blunders_by_phase():
+    from chess_tracker.analysis import MoveEval, summarize
+    moves = [
+        MoveEval.from_evals(ply=0, fullmove=1, cp_before=20, cp_after=-600, phase="opening"),
+        MoveEval.from_evals(ply=2, fullmove=2, cp_before=20, cp_after=-600, phase="opening"),
+        MoveEval.from_evals(ply=4, fullmove=3, cp_before=20, cp_after=-600, phase="middlegame"),
+        MoveEval.from_evals(ply=6, fullmove=4, cp_before=20, cp_after=10,   phase="endgame"),
+    ]
+    s = summarize(moves)
+    assert "blunders_by_phase" in s
+    assert s["blunders_by_phase"]["opening"] == 2
+    assert s["blunders_by_phase"]["middlegame"] == 1
+    assert s["blunders_by_phase"].get("endgame", 0) == 0
+
+
+def test_summarize_blunders_by_phase_empty_when_no_moves():
+    from chess_tracker.analysis import summarize
+    s = summarize([])
+    assert "blunders_by_phase" in s
+    assert s["blunders_by_phase"] == {}
+
+
+def test_aggregate_move_quality_sums_blunders_by_phase():
+    from chess_tracker.analysis import aggregate_move_quality
+    summaries = [
+        {
+            "moves_analyzed": 2, "accuracy": 80.0, "avg_cp_loss": 50,
+            "blunders": 1, "mistakes": 0, "inaccuracies": 0,
+            "acpl_by_phase": {"opening": 50}, "moves_by_phase": {"opening": 2},
+            "blunders_by_phase": {"opening": 1},
+        },
+        {
+            "moves_analyzed": 3, "accuracy": 70.0, "avg_cp_loss": 30,
+            "blunders": 2, "mistakes": 0, "inaccuracies": 0,
+            "acpl_by_phase": {"middlegame": 30}, "moves_by_phase": {"middlegame": 3},
+            "blunders_by_phase": {"opening": 1, "middlegame": 1},
+        },
+    ]
+    result = aggregate_move_quality(summaries)
+    assert "blunders_by_phase" in result
+    assert result["blunders_by_phase"]["opening"] == 2
+    assert result["blunders_by_phase"]["middlegame"] == 1

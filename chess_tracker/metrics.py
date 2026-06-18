@@ -491,7 +491,7 @@ def compute_review_picks(records: list[GameRecord], window: int = 30) -> list[di
     return picks
 
 
-def compute_opening_families(records: list[GameRecord]) -> list[dict]:
+def compute_opening_families(records: list[GameRecord], plan: dict | None = None) -> list[dict]:
     """Tier-1 aggregation: group records by (family, color).
 
     One row per family-color combo. Mirrors compute_play_signatures schema
@@ -503,6 +503,22 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
     every row's `sum_rating_delta` / `avg_rating_delta` silently returns 0.
     `compute_all` enriches before calling.
     """
+    plan_lookup: dict[tuple[str, str], str] = {}
+    for op in (plan or {}).get("openings", []):
+        if not isinstance(op, dict):
+            continue
+        tf = op.get("target_family")
+        side = op.get("side")
+        if tf and side:
+            plan_lookup[(tf, side)] = op.get("status", "active")
+
+    # Baseline uses ALL records (incl. unclassified families) — true player win rate.
+    total_records = len(records)
+    overall_win_pct = (
+        sum(1 for r in records if _is_win(r.result)) / total_records
+        if total_records else 0.5
+    )
+
     groups: dict[tuple[str, str], list[GameRecord]] = {}
     sig_keys: dict[tuple[str, str], set] = {}
     for r in records:
@@ -542,6 +558,28 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
         eco_top = eco_counts.most_common(1)[0][0] if eco_counts else None
         sig_counts = Counter(r.play_signature for r in recs if r.play_signature)
         canonical_sig = sig_counts.most_common(1)[0][0] if sig_counts else None
+        plan_status = plan_lookup.get((family, color))
+
+        smoothed_win_rate = round((wins + 2) / (n + 4), 3)
+
+        if n < 10:
+            sample_strength = "ignore"
+        elif n < 30:
+            sample_strength = "weak"
+        elif n < 100:
+            sample_strength = "usable"
+        else:
+            sample_strength = "strong"
+
+        if plan_status == "active":
+            repertoire_weight = 2.0
+        elif plan_status == "bench":
+            repertoire_weight = 0.5
+        else:
+            repertoire_weight = 0.25
+        underperformance = max(0.0, overall_win_pct - smoothed_win_rate)
+        priority = round(n * underperformance * repertoire_weight, 2)
+
         out.append({
             "family": family,
             "color": color,
@@ -563,6 +601,10 @@ def compute_opening_families(records: list[GameRecord]) -> list[dict]:
             "variation_count": len(sig_keys.get((family, color), set())),
             "canonical_play_signature": canonical_sig,
             "form": [_result_letter(r) for r in recs[-10:]],
+            "plan_status": plan_status,
+            "smoothed_win_rate": smoothed_win_rate,
+            "sample_strength": sample_strength,
+            "priority": priority,
         })
     out.sort(key=lambda x: (x["sum_rating_delta"], -x["games"]))
     return out
@@ -843,7 +885,7 @@ def compute_all(records: list[GameRecord], annotations: dict,
             **compute_process_metrics(records),
             "session_decay": compute_session_decay(records),
         },
-        "opening_families": compute_opening_families(records),
+        "opening_families": compute_opening_families(records, plan=plan or {}),
         "opening_variations": compute_opening_variations(records),
         "play_signatures": play_signatures,
         "sessions": compute_sessions(records),

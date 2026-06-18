@@ -12,9 +12,14 @@
     return;
   }
   renderKPI(D);
+  renderActionCard(D);
+  renderPlanBlock(D.plan_compliance);
   renderMoveQuality(D.move_quality);
   renderMoveQualityByFormat(D.move_quality_by_format, D.format);
-  renderPlanBlock(D.plan_compliance);
+  renderFamilyBlock(D.opening_families, "white",
+    "#white-families-table", "white-board", "white-board-meta", false);
+  renderFamilyBlock(D.opening_families, "black",
+    "#black-families-table", "black-board", "black-board-meta", true);
   renderBehavior(D.behavior);
   renderLeaks(D.leak_summary);
   renderRule(D.next_session_rule);
@@ -25,10 +30,6 @@
   renderErrorLog(D.error_log);
   renderProcess(D.process_metrics);
   renderSessionDecay(D.process_metrics?.session_decay);
-  renderFamilyBlock(D.opening_families, "white",
-    "#white-families-table", "white-board", "white-board-meta", false);
-  renderFamilyBlock(D.opening_families, "black",
-    "#black-families-table", "black-board", "black-board-meta", true);
   renderOpeningDetail(D);
   renderOpponentOpenings(D.opponent_openings);
   renderTrapExposures(D.trap_exposures, D.trap_exposure_audit);
@@ -75,6 +76,39 @@
          target="_blank" rel="noopener"
          title="Re-run the deploy workflow on GitHub Actions to rebuild this dashboard now">↻ Refresh</a>
     `);
+  }
+
+  // Action card: top of index.html only. Shows next-session rule + the top
+  // 1-2 leaks so the most actionable info is visible without scrolling.
+  // Falls back gracefully if elements are absent (other pages don't have them).
+  function renderActionCard(D) {
+    const cardRoot = document.getElementById("action-card");
+    const leakRoot = document.getElementById("current-leak-inline");
+    if (!cardRoot) return;
+    const rule = D.next_session_rule;
+    if (!rule) { cardRoot.innerHTML = ""; return; }
+    cardRoot.innerHTML = `
+      <h2>Next session</h2>
+      <div class="action-rule">
+        <span>${rule.game_cap} games max</span> ·
+        <span>${rule.move_10_target_seconds}s left at move 10</span> ·
+        <span>Stop if rating drops ${rule.stop_if_rating_drops}</span>
+      </div>
+      <div class="rule-narrative">${rule.narrative}</div>
+    `;
+    if (!leakRoot) return;
+    const leaks = D.leak_summary || [];
+    if (leaks.length === 0) {
+      leakRoot.innerHTML = `<div class="leak severity-neutral">No active leaks — all clear.</div>`;
+      return;
+    }
+    leakRoot.innerHTML = leaks.slice(0, 2).map(L => `
+      <div class="leak severity-${L.severity}">
+        <div class="leak-name">${L.name.replace(/_/g, " ")}</div>
+        <div class="leak-evidence">${L.evidence}</div>
+        <div class="leak-action">→ ${L.suggested_action}</div>
+      </div>
+    `).join("");
   }
 
   // Move quality — engine-derived accuracy/blunders for the current format.
@@ -181,6 +215,7 @@
             <div class="plan-head">
               <span class="plan-vs">${vs}</span>
               <span class="plan-name">${o.name}</span>
+              <span class="severity-${o.status === 'bench' ? 'neutral' : 'green'}" style="font-size:0.75rem;padding:1px 6px;border-radius:3px;">${o.status || 'active'}</span>
               <span class="plan-adherence">${o.adherence_pct}% adherence</span>
             </div>
             <div class="plan-counts">
@@ -279,7 +314,7 @@
 
   function renderRule(rule) {
     const root = document.getElementById("next-rule");
-    if (!root) return;
+    if (!root || !rule) return;
     root.innerHTML = `
       <dl class="rule-block">
         <dt>Game cap</dt><dd>${rule.game_cap}</dd>
@@ -525,6 +560,13 @@
       data: rows, layout: "fitColumns", height: "540px",
       columns: [
         {title: "Opening", field: "family", headerFilter: "input", minWidth: 180},
+        {title: "Plan", field: "plan_status", width: 70, headerSort: false,
+         formatter: c => {
+           const v = c.getValue();
+           if (!v) return "";
+           const cls = v === "active" ? "severity-green" : "severity-neutral";
+           return `<span class="${cls}" style="font-size:0.75rem;padding:1px 5px;border-radius:3px;">${v}</span>`;
+         }},
         {title: "Games", field: "games", width: 75, sorter: "number"},
         {title: "Δ Rating", field: "sum_rating_delta", width: 90, sorter: "number", formatter: ratingDeltaCell},
         {title: "Win%", field: "win_pct", width: 75, sorter: "number", formatter: winPctCell},
