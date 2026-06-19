@@ -493,11 +493,11 @@
     const all = (families || []).filter(r => r.color === color);
     const rows = all.filter(r => !r.is_rare);
     const rare = all.filter(r => r.is_rare);
-    let det = null;
     let rareRowData = null;
     if (rare.length > 0) {
       const totalGames = rare.reduce((s, r) => s + r.games, 0);
       const totalDelta = rare.reduce((s, r) => s + r.sum_rating_delta, 0);
+      const rareSorted = rare.slice().sort((a, b) => b.games - a.games);
       rareRowData = {
         family: `Rare Openings (${rare.length})`,
         _is_rare_header: true,
@@ -505,12 +505,16 @@
         sum_rating_delta: totalDelta,
         win_pct: null, flag_pct: null, mate_pct: null,
         variation_count: null, form: [], plan_status: null, color,
+        _children: rareSorted,
       };
     }
 
     const table = new Tabulator(tableSelector, {
       data: rareRowData ? [...rows, rareRowData] : rows,
-      layout: "fitColumns", height: "540px",
+      layout: "fitColumns", maxHeight: "540px",
+      dataTree: true,
+      dataTreeStartExpanded: false,
+      dataTreeElementColumn: "family",
       rowFormatter: row => {
         if (row.getData()._is_rare_header) {
           const el = row.getElement();
@@ -522,45 +526,27 @@
       },
       columns: [
         {title: "Opening", field: "family", width: 210, minWidth: 160},
-        {title: "Plan", field: "plan_status", width: 52, headerSort: false,
+        {title: "Plan", field: "plan_status", width: 55, minWidth: 55, headerSort: false,
          formatter: c => {
            const v = c.getValue();
            if (!v) return "";
            const cls = v === "active" ? "severity-green" : "severity-neutral";
            return `<span class="${cls}" style="font-size:0.75rem;padding:1px 5px;border-radius:3px;">${v}</span>`;
          }},
-        {title: "Games", field: "games", width: 60, sorter: "number"},
-        {title: "Δ Rating", field: "sum_rating_delta", width: 76, sorter: "number", formatter: ratingDeltaCell},
-        {title: "Win%", field: "win_pct", width: 60, sorter: "number", formatter: winPctCell},
-        {title: "Flag%", field: "flag_pct", width: 56, sorter: "number"},
-        {title: "Mate%", field: "mate_pct", width: 56, sorter: "number"},
-        {title: "#Vars", field: "variation_count", width: 52, sorter: "number"},
-        {title: "Form", field: "form", width: 88, formatter: sparkline, headerSort: false},
+        {title: "Games", field: "games", width: 68, minWidth: 68, sorter: "number"},
+        {title: "Δ Rating", field: "sum_rating_delta", width: 90, minWidth: 90, sorter: "number", formatter: ratingDeltaCell},
+        {title: "Win%", field: "win_pct", width: 62, minWidth: 62, sorter: "number", formatter: winPctCell},
+        {title: "Flag%", field: "flag_pct", width: 65, minWidth: 65, sorter: "number"},
+        {title: "Mate%", field: "mate_pct", width: 65, minWidth: 65, sorter: "number"},
+        {title: "#Vars", field: "variation_count", width: 65, minWidth: 65, sorter: "number"},
+        {title: "Form", field: "form", width: 88, minWidth: 80, formatter: sparkline, headerSort: false},
       ],
       initialSort: [{column: "sum_rating_delta", dir: "asc"}],
     });
 
-    function pinRareRowToBottom() {
-      if (!rareRowData) return;
-      const allRows = table.getRows();
-      const rareRowObj = allRows.find(r => r.getData()._is_rare_header);
-      const nonRareRows = allRows.filter(r => !r.getData()._is_rare_header);
-      if (rareRowObj && nonRareRows.length > 0) {
-        rareRowObj.move(nonRareRows[nonRareRows.length - 1], false);
-      }
-    }
-
-    let sortPending = false;
-    table.on("dataSorted", () => {
-      if (sortPending) return;
-      sortPending = true;
-      pinRareRowToBottom();
-      sortPending = false;
-    });
-
     table.on("rowClick", (e, row) => {
       if (row.getData()._is_rare_header) {
-        if (det) det.open = !det.open;
+        if (!e.target.closest(".tabulator-data-tree-control")) row.treeToggle();
         return;
       }
       selectFamilyRow(row, boardId, metaId, flip);
@@ -570,30 +556,9 @@
       drillIntoFamily(row.getData());
     });
     table.on("tableBuilt", () => {
-      pinRareRowToBottom();
       const first = table.getRows().find(r => !r.getData()._is_rare_header);
       if (first) selectFamilyRow(first, boardId, metaId, flip);
     });
-
-    if (rare.length > 0) {
-      const sigSplit = document.querySelector(tableSelector).closest(".sig-split");
-      const rareSorted = rare.slice().sort((a, b) => b.games - a.games);
-      const familyLabel = rare.length === 1 ? "1 family" : `${rare.length} families`;
-      const deltaStr = rareRowData.sum_rating_delta >= 0
-        ? `+${rareRowData.sum_rating_delta}`
-        : String(rareRowData.sum_rating_delta);
-      det = document.createElement("details");
-      det.className = "rare-basket";
-      det.innerHTML = `<summary>${familyLabel} with &lt;10 games — ${deltaStr} Δ rating</summary>` +
-        `<table class="rare-table"><thead><tr><th>Opening</th><th>Games</th><th>Δ Rating</th></tr></thead><tbody>` +
-        rareSorted.map(r => {
-          const delta = r.sum_rating_delta >= 0 ? "+" + r.sum_rating_delta : String(r.sum_rating_delta);
-          const qs = `family=${encodeURIComponent(r.family)}&color=${encodeURIComponent(r.color)}`;
-          return `<tr><td><a href="opening.html?${qs}">${r.family}</a></td><td>${r.games}</td><td>${delta}</td></tr>`;
-        }).join("") +
-        `</tbody></table>`;
-      sigSplit.after(det);
-    }
   }
 
   function selectFamilyRow(row, boardId, metaId, flip) {
