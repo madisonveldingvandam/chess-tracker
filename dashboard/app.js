@@ -12,7 +12,6 @@
     return;
   }
   renderKPI(D);
-  renderActionCard(D);
   renderPlanBlock(D.plan_compliance);
   renderMoveQuality(D.move_quality);
   renderMoveQualityByFormat(D.move_quality_by_format, D.format);
@@ -22,7 +21,6 @@
     "#black-families-table", "black-board", "black-board-meta", true);
   renderBehavior(D.behavior);
   renderLeaks(D.leak_summary);
-  renderRule(D.next_session_rule);
   renderRecentLosses(D.recent_losses);
   renderPuzzleDrill(D.recent_losses);
   renderLossSummary(D);
@@ -34,7 +32,6 @@
   renderOpponentOpenings(D.opponent_openings);
   renderTrapExposures(D.trap_exposures, D.trap_exposure_audit);
   renderBlunderPhases(D.blunder_phases, D.engine_coverage);
-  renderPrescription(D.training_prescription);
   renderSessions(D.sessions);
   renderDrillinCards(D);
 
@@ -76,39 +73,6 @@
          target="_blank" rel="noopener"
          title="Re-run the deploy workflow on GitHub Actions to rebuild this dashboard now">↻ Refresh</a>
     `);
-  }
-
-  // Action card: top of index.html only. Shows next-session rule + the top
-  // 1-2 leaks so the most actionable info is visible without scrolling.
-  // Falls back gracefully if elements are absent (other pages don't have them).
-  function renderActionCard(D) {
-    const cardRoot = document.getElementById("action-card");
-    const leakRoot = document.getElementById("current-leak-inline");
-    if (!cardRoot) return;
-    const rule = D.next_session_rule;
-    if (!rule) { cardRoot.innerHTML = ""; return; }
-    cardRoot.innerHTML = `
-      <h2>Next session</h2>
-      <div class="action-rule">
-        <span>${rule.game_cap} games max</span> ·
-        <span>${rule.move_10_target_seconds}s left at move 10</span> ·
-        <span>Stop if rating drops ${rule.stop_if_rating_drops}</span>
-      </div>
-      <div class="rule-narrative">${rule.narrative}</div>
-    `;
-    if (!leakRoot) return;
-    const leaks = D.leak_summary || [];
-    if (leaks.length === 0) {
-      leakRoot.innerHTML = `<div class="leak severity-neutral">No active leaks — all clear.</div>`;
-      return;
-    }
-    leakRoot.innerHTML = leaks.slice(0, 2).map(L => `
-      <div class="leak severity-${L.severity}">
-        <div class="leak-name">${L.name.replace(/_/g, " ")}</div>
-        <div class="leak-evidence">${L.evidence}</div>
-        <div class="leak-action">→ ${L.suggested_action}</div>
-      </div>
-    `).join("");
   }
 
   // Move quality — engine-derived accuracy/blunders for the current format.
@@ -176,7 +140,6 @@
   // palette (severity-green / severity-yellow / severity-red / severity-neutral).
   function renderPlanBlock(pc) {
     const root = document.getElementById("plan-openings");
-    const princRoot = document.getElementById("plan-principles");
     if (!root || !pc) return;
     const openings = pc.openings || [];
     if (openings.length === 0) {
@@ -279,10 +242,6 @@
         });
       });
     }
-    if (princRoot) {
-      const principles = pc.principles || [];
-      princRoot.innerHTML = principles.map(p => `<li>${p}</li>`).join("");
-    }
   }
 
   function renderLeaks(leaks) {
@@ -299,19 +258,6 @@
         <div class="leak-action">→ ${L.suggested_action}</div>
       </div>
     `).join("");
-  }
-
-  function renderRule(rule) {
-    const root = document.getElementById("next-rule");
-    if (!root || !rule) return;
-    root.innerHTML = `
-      <dl class="rule-block">
-        <dt>Game cap</dt><dd>${rule.game_cap}</dd>
-        <dt>Move-10 target</dt><dd>${rule.move_10_target_seconds}s left</dd>
-        <dt>Stop if</dt><dd>rating drops ${rule.stop_if_rating_drops} in a session</dd>
-      </dl>
-      <div class="rule-narrative">${rule.narrative}</div>
-    `;
   }
 
   function renderRecentLosses(losses) {
@@ -1160,30 +1106,6 @@
 
     const covEl = document.getElementById("blunder-phases-coverage");
     if (covEl) covEl.textContent = `Engine coverage: ${analyzed} / ${eligible} games analyzed.`;
-  }
-
-  function renderPrescription(p) {
-    const section = document.getElementById("prescription-block");
-    if (!section) return;
-    if (!p) return;
-    section.style.display = "";
-
-    const confColor = c => c === "strong" ? "var(--accent)" : c === "medium" ? "var(--text)" : "var(--muted)";
-    const doList = (p.do || []).map(s => `<li>${escapeAttr(s)}</li>`).join("");
-    const avoidLine = p.avoid
-      ? `<p style="color:var(--muted);font-size:0.84rem;margin-top:0.5rem">Avoid: ${escapeAttr(p.avoid)}</p>`
-      : "";
-
-    document.getElementById("prescription-card").innerHTML = `
-      <div style="border:1px solid var(--border);border-radius:6px;padding:1rem 1.25rem;max-width:36rem">
-        <div style="display:flex;align-items:baseline;gap:0.75rem;margin-bottom:0.4rem">
-          <span style="font-size:1rem;font-weight:500;color:${confColor(p.confidence)}">${escapeAttr(p.title)}</span>
-          <span style="font-size:0.74rem;color:var(--muted)">${escapeAttr(p.confidence || "")}</span>
-        </div>
-        <p style="color:var(--muted);font-size:0.84rem;margin:0 0 0.6rem">${escapeAttr(p.why || "")}</p>
-        <ol style="margin:0;padding-left:1.25rem;font-size:0.88rem">${doList}</ol>
-        ${avoidLine}
-      </div>`;
   }
 
   function winPctCell(cell) {

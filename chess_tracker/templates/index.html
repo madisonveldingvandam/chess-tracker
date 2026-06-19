@@ -10,16 +10,7 @@
 <body>
   <header id="kpi-strip"></header>
   <main>
-    <!-- 1. Action card: next-session rule + top 1-2 leaks inline -->
-    <section id="action-card-block">
-      <div id="action-card"></div>
-      <div id="current-leak-inline"></div>
-    </section>
-    <section id="prescription-block" style="display:none">
-      <h2>Next session prep</h2>
-      <div id="prescription-card"></div>
-    </section>
-    <!-- 2. Repertoire adherence (moved up) -->
+    <!-- 2. Repertoire adherence -->
     <section id="plan-block">
       <h2>Plan &amp; adherence <small>last 30 games · edit chess_tracker/plan.json to change</small></h2>
       <div id="plan-openings" class="plan-grid"></div>
@@ -59,14 +50,10 @@
       <h2>Behavior — current state</h2>
       <div id="behavior-cards" class="behavior-grid"></div>
     </section>
-    <!-- 6. Drill-in + principles -->
+    <!-- 6. Drill-in -->
     <section id="drillin-section">
       <h2>Drill in</h2>
       <div id="drillin-cards" class="drillin-grid"></div>
-    </section>
-    <section id="principles-block">
-      <h3>Universal principles</h3>
-      <ol id="plan-principles" class="plan-principles"></ol>
     </section>
   </main>
   <script src="vendor/tabulator.min.js"></script>
