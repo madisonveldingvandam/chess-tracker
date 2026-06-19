@@ -490,7 +490,9 @@
   // in the meta panel, to drill into opening.html.
   function renderFamilyBlock(families, color, tableSelector, boardId, metaId, flip) {
     if (!document.querySelector(tableSelector)) return;
-    const rows = (families || []).filter(r => r.color === color);
+    const all = (families || []).filter(r => r.color === color);
+    const rows = all.filter(r => !r.is_rare);
+    const rare = all.filter(r => r.is_rare);
     const table = new Tabulator(tableSelector, {
       data: rows, layout: "fitColumns", height: "540px",
       columns: [
@@ -518,6 +520,22 @@
       const first = table.getRows()[0];
       if (first) selectFamilyRow(first, boardId, metaId, flip);
     });
+    if (rare.length > 0) {
+      const sigSplit = document.querySelector(tableSelector).closest(".sig-split");
+      const det = document.createElement("details");
+      det.className = "rare-basket";
+      const label = rare.length === 1 ? "1 family" : `${rare.length} families`;
+      const rareSorted = rare.slice().sort((a, b) => b.games - a.games);
+      det.innerHTML = `<summary>Rare Openings — ${label} with fewer than 10 games</summary>` +
+        `<table class="rare-table"><thead><tr><th>Opening</th><th>Games</th><th>Δ Rating</th></tr></thead><tbody>` +
+        rareSorted.map(r => {
+          const delta = r.sum_rating_delta >= 0 ? "+" + r.sum_rating_delta : String(r.sum_rating_delta);
+          const qs = `family=${encodeURIComponent(r.family)}&color=${encodeURIComponent(r.color)}`;
+          return `<tr><td><a href="opening.html?${qs}">${r.family}</a></td><td>${r.games}</td><td>${delta}</td></tr>`;
+        }).join("") +
+        `</tbody></table>`;
+      sigSplit.after(det);
+    }
   }
 
   function selectFamilyRow(row, boardId, metaId, flip) {

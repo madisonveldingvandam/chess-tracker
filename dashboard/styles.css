@@ -569,3 +569,14 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
   font-size: 0.85rem;
   color: var(--muted);
 }
+
+/* Rare Openings basket */
+.rare-basket { margin-top: 0.75rem; }
+.rare-basket > summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; user-select: none; }
+.rare-basket > summary:hover { color: var(--text); }
+.rare-table { border-collapse: collapse; margin-top: 0.5rem; font-size: 0.82rem; }
+.rare-table th { text-align: left; padding: 0.15rem 1.5rem 0.15rem 0; color: var(--muted); font-weight: 400; }
+.rare-table td { padding: 0.15rem 1.5rem 0.15rem 0; }
+.rare-table td:nth-child(2), .rare-table td:nth-child(3) { font-variant-numeric: tabular-nums; }
+.rare-table a { color: var(--text); text-decoration: none; }
+.rare-table a:hover { text-decoration: underline; }
