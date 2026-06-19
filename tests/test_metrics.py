@@ -1198,3 +1198,11 @@ def test_compute_opening_families_priority_underperformers_rank_higher():
     good_row = next(r for r in rows if r["family"] == "Good Opening")
     bad_row = next(r for r in rows if r["family"] == "Bad Opening")
     assert bad_row["priority"] > good_row["priority"]
+
+
+def test_shipped_plan_has_no_bench_entries():
+    """plan.json must not contain any bench entries."""
+    from chess_tracker.plan import load_plan
+    plan = load_plan()
+    bench = [o for o in plan["openings"] if o.get("status") == "bench"]
+    assert bench == [], f"Found bench entries: {[o['name'] for o in bench]}"
