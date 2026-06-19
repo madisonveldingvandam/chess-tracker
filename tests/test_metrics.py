@@ -805,26 +805,27 @@ def test_opening_variations_separates_by_color_and_main_line():
         )
 
     recs = [
-        _rec("white", "London System"),                    # main line
-        _rec("white", "London System Indian Defense"),     # named variation
-        _rec("black", "London System"),                    # main line, other color
+        _rec("white", "London System"),                    # main line → aliased to Queens Pawn Opening
+        _rec("white", "London System Indian Defense"),     # named variation → aliased
+        _rec("black", "London System"),                    # main line, other color → aliased
     ]
     rows = compute_opening_variations(recs)
-    london_white_main = [r for r in rows
-                         if r["family"] == "London System"
-                         and r["variation"] == ""
-                         and r["color"] == "white"]
-    london_white_indian = [r for r in rows
-                           if r["family"] == "London System"
-                           and r["variation"] == "Indian Defense"
-                           and r["color"] == "white"]
-    london_black_main = [r for r in rows
-                         if r["family"] == "London System"
-                         and r["variation"] == ""
-                         and r["color"] == "black"]
-    assert len(london_white_main) == 1
-    assert len(london_white_indian) == 1
-    assert len(london_black_main) == 1
+    # London System is aliased to Queens Pawn Opening at key-build time
+    qp_white_main = [r for r in rows
+                     if r["family"] == "Queens Pawn Opening"
+                     and r["variation"] == ""
+                     and r["color"] == "white"]
+    qp_white_indian = [r for r in rows
+                       if r["family"] == "Queens Pawn Opening"
+                       and r["variation"] == "Indian Defense"
+                       and r["color"] == "white"]
+    qp_black_main = [r for r in rows
+                     if r["family"] == "Queens Pawn Opening"
+                     and r["variation"] == ""
+                     and r["color"] == "black"]
+    assert len(qp_white_main) == 1
+    assert len(qp_white_indian) == 1
+    assert len(qp_black_main) == 1
 
 
 def test_compute_sessions_includes_first_game_delta():
@@ -961,14 +962,15 @@ def test_opening_families_rating_weighted_columns_and_sort():
     ]
     enrich_with_deltas(records)
     rows = compute_opening_families(records)
-    london = next(r for r in rows if r["family"] == "London System")
+    # London System is aliased to Queens Pawn Opening
+    qp = next(r for r in rows if r["family"] == "Queens Pawn Opening")
     italian = next(r for r in rows if r["family"] == "Italian Game")
-    assert london["sum_rating_delta"] == -30
-    assert london["timeout_rating_delta"] == -20
-    assert london["checkmate_rating_delta"] == -10
+    assert qp["sum_rating_delta"] == -30
+    assert qp["timeout_rating_delta"] == -20
+    assert qp["checkmate_rating_delta"] == -10
     assert italian["sum_rating_delta"] == 20
     # Sort: worst (most negative sum) first
-    assert rows[0]["family"] == "London System"
+    assert rows[0]["family"] == "Queens Pawn Opening"
 
 
 def test_review_picks_one_timeout_one_mate_one_biggest_loss():
@@ -1059,19 +1061,20 @@ def test_compute_opening_families_plan_status_none_without_plan():
 
 def test_compute_opening_families_plan_status_active():
     """plan_status='active' when family+side matches an active plan entry.
-    RECORDS has 'London System' as white and 'Italian Game' as black.
+    RECORDS has 'London System' white games, aliased to 'Queens Pawn Opening'.
+    Plan entries must use the canonical (post-alias) family name to match.
     """
     from chess_tracker.metrics import compute_opening_families
     plan = {
         "openings": [
-            {"target_family": "London System", "side": "white",
-             "name": "London System", "status": "active"},
+            {"target_family": "Queens Pawn Opening", "side": "white",
+             "name": "Queens Pawn Opening", "status": "active"},
         ]
     }
     families = compute_opening_families(RECORDS, plan=plan)
-    london_white = next(r for r in families
-                        if r["family"] == "London System" and r["color"] == "white")
-    assert london_white["plan_status"] == "active"
+    qp_white = next(r for r in families
+                    if r["family"] == "Queens Pawn Opening" and r["color"] == "white")
+    assert qp_white["plan_status"] == "active"
     italian_black = next(r for r in families
                          if r["family"] == "Italian Game" and r["color"] == "black")
     assert italian_black["plan_status"] is None
@@ -1106,6 +1109,72 @@ def test_compute_opening_families_sample_strength_thresholds():
             f"{n} games → expected {expected_label!r}, "
             f"got {rows[0]['sample_strength']!r}"
         )
+
+
+def test_compute_all_applies_family_aliases_london_to_queens_pawn():
+    """London System records must appear as Queens Pawn Opening in the payload."""
+    from chess_tracker.metrics import compute_all
+    annotations = {"openings": {}, "games": {}, "error_log": [], "blocked_dates": []}
+    # RECORDS has 3 London System white games and no Queens Pawn Opening games
+    payload = compute_all(RECORDS, annotations, username="x")
+    families = payload["opening_families"]
+    assert not any(f["family"] == "London System" for f in families), (
+        "London System should be aliased away"
+    )
+    qp = next((f for f in families
+               if f["family"] == "Queens Pawn Opening" and f["color"] == "white"), None)
+    assert qp is not None, "Queens Pawn Opening white row should exist after alias"
+    assert qp["games"] == 3
+
+
+def test_compute_opening_families_applies_aliases_directly():
+    """compute_opening_families() applies FAMILY_ALIASES at key-build time; no mutation needed."""
+    from chess_tracker.metrics import compute_opening_families
+    from chess_tracker.enrich import enrich_with_deltas, enrich_with_sessions
+    recs = list(RECORDS)
+    enrich_with_deltas(recs)
+    enrich_with_sessions(recs)
+    families = compute_opening_families(recs)
+    # Aliases applied: London System merged into Queens Pawn Opening
+    assert not any(f["family"] == "London System" for f in families)
+    assert any(f["family"] == "Queens Pawn Opening" and f["color"] == "white" for f in families)
+    # Original records are NOT mutated
+    assert any(r.family == "London System" for r in recs)
+
+
+def test_compute_opening_families_is_rare_flag():
+    """is_rare=True when games < 10; False when games >= 10."""
+    from chess_tracker.pgn import GameRecord
+    from chess_tracker.metrics import compute_opening_families
+    from chess_tracker.enrich import enrich_with_deltas, enrich_with_sessions
+
+    def _mk(n, family, result="win"):
+        recs = [GameRecord(
+            url=f"u{i}", end_time=i, time_class="bullet",
+            side="white", my_rating=500, opp_rating=500,
+            result=result, opp_result="checkmated",
+            plies=20, fullmoves=10, opening=f"{family} Test Variation", eco="A00",
+            family=family, variation="Test Variation",
+        ) for i in range(n)]
+        enrich_with_deltas(recs)
+        enrich_with_sessions(recs)
+        return recs
+
+    # 5 games → rare
+    rows = compute_opening_families(_mk(5, "Small Family"))
+    assert rows[0]["is_rare"] is True
+
+    # 9 games → rare (boundary: < 10)
+    rows = compute_opening_families(_mk(9, "Almost Family"))
+    assert rows[0]["is_rare"] is True
+
+    # 10 games → not rare
+    rows = compute_opening_families(_mk(10, "Big Family"))
+    assert rows[0]["is_rare"] is False
+
+    # 50 games → not rare
+    rows = compute_opening_families(_mk(50, "Strong Family"))
+    assert rows[0]["is_rare"] is False
 
 
 def test_compute_opening_families_priority_underperformers_rank_higher():

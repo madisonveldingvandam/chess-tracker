@@ -20,6 +20,16 @@ _DRAW_RESULTS = {"agreed", "repetition", "stalemate", "insufficient",
 OUTLASTED_EDGE_SECONDS = 5.0   # minimum clock lead (seconds) to qualify as "outlasted"
 OUTLASTED_MIN_PLY_INDEX = 9    # first ply index checked (0-indexed; ply 9 = move 10)
 
+# Maps Chess.com family labels that fragment the same opening system into one
+# canonical name. Applied in compute_all() before any aggregation so all
+# downstream metrics (variations, plan compliance, sessions) see one name.
+FAMILY_ALIASES: dict[str, str] = {
+    "London System":   "Queens Pawn Opening",
+    "Colle System":    "Queens Pawn Opening",
+    "Modern Defense":  "Pirc Defense",
+    "Bishops Opening": "Italian Game",
+}
+
 
 def _is_win(r: str) -> bool:
     return r == "win"
@@ -490,7 +500,7 @@ def compute_opening_families(records: list[GameRecord], plan: dict | None = None
     for r in records:
         if r.family is None:
             continue
-        key = (r.family, r.side)
+        key = (FAMILY_ALIASES.get(r.family, r.family), r.side)
         groups.setdefault(key, []).append(r)
         if r.play_signature is not None:
             sig_keys.setdefault(key, set()).add(r.play_signature)
@@ -568,6 +578,7 @@ def compute_opening_families(records: list[GameRecord], plan: dict | None = None
             "plan_status": plan_status,
             "smoothed_win_rate": smoothed_win_rate,
             "sample_strength": sample_strength,
+            "is_rare": n < 10,
             "priority": priority,
         })
     out.sort(key=lambda x: (x["sum_rating_delta"], -x["games"]))
@@ -593,7 +604,7 @@ def compute_opening_variations(records: list[GameRecord]) -> list[dict]:
             continue
         # variation may be None (no opening label parsed) or "" (main line)
         var = r.variation if r.variation is not None else ""
-        key = (r.family, var, r.side)
+        key = (FAMILY_ALIASES.get(r.family, r.family), var, r.side)
         groups.setdefault(key, []).append(r)
 
     out = []
