@@ -823,6 +823,11 @@ def compute_all(records: list[GameRecord], annotations: dict,
                 blunder_phases: dict | None = None,
                 engine_coverage: dict | None = None) -> dict:
     """Top-level dashboard payload. All panel data merged + annotations applied."""
+    blocked = set(annotations.get("blocked_dates", []))
+    if blocked:
+        records = [r for r in records
+                   if datetime.fromtimestamp(r.end_time).astimezone().date().isoformat()
+                   not in blocked]
     enrich_with_deltas(records)
     enrich_with_sessions(records)
 

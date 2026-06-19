@@ -2,12 +2,13 @@ import json
 from chess_tracker.annotations import load_annotations, save_annotations, default_annotations
 
 
-def test_default_annotations_has_three_sections():
+def test_default_annotations_has_sections():
     d = default_annotations()
-    assert set(d.keys()) == {"openings", "games", "error_log"}
+    assert set(d.keys()) == {"openings", "games", "error_log", "blocked_dates"}
     assert d["openings"] == {}
     assert d["games"] == {}
     assert d["error_log"] == []
+    assert d["blocked_dates"] == []
 
 
 def test_load_creates_default_when_missing(tmp_path):
@@ -22,6 +23,7 @@ def test_save_then_load_roundtrip(tmp_path):
         "openings": {"Petrovs Defense": {"tag": "in_repertoire", "note": "main"}},
         "games": {},
         "error_log": [{"id": "err-001", "title": "queen blunders"}],
+        "blocked_dates": [],
     }
     save_annotations(path, payload)
     assert load_annotations(path) == payload

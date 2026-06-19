@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def default_annotations() -> dict:
-    return {"openings": {}, "games": {}, "error_log": []}
+    return {"openings": {}, "games": {}, "error_log": [], "blocked_dates": []}
 
 
 def load_annotations(path: Path) -> dict:
