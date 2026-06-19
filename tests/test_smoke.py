@@ -3,7 +3,13 @@ import json
 import tempfile
 from pathlib import Path
 
-from chess_tracker.render import render_dashboard, DEFAULT_TEMPLATE_PATH
+from chess_tracker.render import (
+    render_dashboard,
+    render_all_pages,
+    DEFAULT_TEMPLATE_PATH,
+    DEFAULT_TEMPLATE_DIR,
+    PAGE_TEMPLATES,
+)
 
 _MINIMAL_PAYLOAD = {
     "username": "test_user",
@@ -16,6 +22,7 @@ _MINIMAL_PAYLOAD = {
         "tilt": "yellow",
     },
     "leak_summary": [],
+    "next_session_rule": None,
     "recent_losses": [],
     "review_picks": [],
     "process_metrics": {
@@ -41,6 +48,12 @@ _MINIMAL_PAYLOAD = {
     "plan_compliance": {"openings": [], "window": 30},
     "move_quality": None,
     "move_quality_by_format": None,
+    "ratings_by_format": {},
+    "opponent_openings": None,
+    "trap_exposures": [],
+    "trap_exposure_audit": {},
+    "blunder_phases": None,
+    "engine_coverage": None,
 }
 
 
@@ -85,6 +98,21 @@ def test_render_dashboard_required_keys_present_in_embedded_data():
     raw = content[start:end].replace("\\/", "/")
     data = json.loads(raw)
     for key in ("kpis", "leak_summary", "recent_losses",
-                "process_metrics", "opening_families", "sessions"):
+                "process_metrics", "opening_families", "sessions",
+                "opponent_openings", "trap_exposures", "blunder_phases",
+                "ratings_by_format"):
         assert key in data, f"Missing required key: {key}"
     out.unlink()
+
+
+def test_render_all_pages_produces_all_templates():
+    """render_all_pages writes one HTML file per PAGE_TEMPLATES entry."""
+    with tempfile.TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        render_all_pages(DEFAULT_TEMPLATE_DIR, out_dir, _MINIMAL_PAYLOAD)
+        for name in PAGE_TEMPLATES:
+            out = out_dir / f"{name}.html"
+            assert out.exists(), f"Missing output: {name}.html"
+            content = out.read_text()
+            assert "window.DATA" in content, f"{name}.html missing DATA injection"
+            assert "test_user" in content, f"{name}.html missing username substitution"
