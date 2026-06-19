@@ -183,24 +183,14 @@
       root.innerHTML = `<p style="color:var(--muted)">No openings in plan. Edit chess_tracker/plan.json to add some.</p>`;
     } else {
       const sideRank = (o) => (o.side === "black" ? 0 : 1);
-      const statusRank = (o) => (o.status === "bench" ? 1 : 0);
-      const ordered = [...openings].sort((a, b) =>
-        sideRank(a) - sideRank(b) || statusRank(a) - statusRank(b));
+      const ordered = [...openings].sort((a, b) => sideRank(a) - sideRank(b));
       let lastSide = null;
-      let lastStatus = "active";
       const cardsHtml = ordered.map((o, i) => {
         let prefix = "";
         if (o.side !== lastSide) {
-          // close an open bench wrapper from the previous side before its header
-          if (lastStatus === "bench") prefix += `</div>`;
           prefix += `<h3 class="plan-side-header">${o.side === "black" ? "As Black" : "As White"}</h3>`;
-          lastStatus = "active";
-        }
-        if (o.status === "bench" && lastStatus !== "bench") {
-          prefix += `<div class="plan-bench-label">Bench — studying</div><div class="plan-bench">`;
         }
         lastSide = o.side;
-        lastStatus = o.status || "active";
         const vs = o.vs_first_move ? `vs 1.${o.vs_first_move}` : `as ${o.side}`;
         const won = o.win_pct_when_played;
         const dev = o.win_pct_when_deviated;
@@ -215,7 +205,6 @@
             <div class="plan-head">
               <span class="plan-vs">${vs}</span>
               <span class="plan-name">${o.name}</span>
-              <span class="severity-${o.status === 'bench' ? 'neutral' : 'green'}" style="font-size:0.75rem;padding:1px 6px;border-radius:3px;">${o.status || 'active'}</span>
               <span class="plan-adherence">${o.adherence_pct}% adherence</span>
             </div>
             <div class="plan-counts">
@@ -254,7 +243,7 @@
           </div>
         `;
       }).join("");
-      root.innerHTML = cardsHtml + (lastStatus === "bench" ? "</div>" : "");
+      root.innerHTML = cardsHtml;
       // Wire up each card's move-by-move board. State (current ply) lives in
       // this closure per card; the board reuses boardSquaresHTML by swapping
       // FENs. Black-defense lines render from Black's perspective.
