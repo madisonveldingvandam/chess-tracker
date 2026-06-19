@@ -573,8 +573,6 @@ def compute_opening_families(records: list[GameRecord], plan: dict | None = None
 
         if plan_status == "active":
             repertoire_weight = 2.0
-        elif plan_status == "bench":
-            repertoire_weight = 0.5
         else:
             repertoire_weight = 0.25
         underperformance = max(0.0, overall_win_pct - smoothed_win_rate)

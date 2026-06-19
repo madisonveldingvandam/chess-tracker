@@ -695,25 +695,6 @@ def test_compute_plan_compliance_status_defaults_to_active():
     assert out["openings"][0]["status"] == "active"
 
 
-def test_compute_plan_compliance_status_bench_passes_through():
-    """A bench opening keeps status='bench' and still computes adherence stats."""
-    from chess_tracker.metrics import compute_plan_compliance
-    from chess_tracker.pgn import GameRecord
-
-    rec = GameRecord(
-        url="x", end_time=1_700_000_000, time_class="bullet", side="black",
-        my_rating=500, opp_rating=500, result="win", opp_result="checkmated",
-        plies=20, fullmoves=10, opening="Modern Defense", eco="B06",
-        first_moves="1.e4 g6 2.d4 Bg7 3.Nc3 d6 4.f4 c6")
-    plan = {"openings": [{"name": "Modern", "side": "black", "status": "bench",
-                          "vs_first_move": "e4", "target_family": "Modern Defense"}]}
-    out = compute_plan_compliance([rec], plan)
-    o = out["openings"][0]
-    assert o["status"] == "bench"
-    assert o["games_on_plan"] == 1          # stats still computed for bench
-    assert o["adherence_pct"] == 100.0
-
-
 def test_shipped_plan_has_white_entries_with_match_rules():
     """The shipped plan.json carries the two White move-pattern entries."""
     from chess_tracker.plan import load_plan
@@ -1129,21 +1110,6 @@ def test_compute_opening_families_plan_status_active():
     italian_black = next(r for r in families
                          if r["family"] == "Italian Game" and r["color"] == "black")
     assert italian_black["plan_status"] is None
-
-
-def test_compute_opening_families_bench_status_propagated():
-    """plan_status='bench' when plan entry has status='bench'."""
-    from chess_tracker.metrics import compute_opening_families
-    plan = {
-        "openings": [
-            {"target_family": "London System", "side": "white",
-             "name": "London System", "status": "bench"},
-        ]
-    }
-    families = compute_opening_families(RECORDS, plan=plan)
-    london_white = next(r for r in families
-                        if r["family"] == "London System" and r["color"] == "white")
-    assert london_white["plan_status"] == "bench"
 
 
 def test_compute_opening_families_smoothed_win_rate_laplace():
