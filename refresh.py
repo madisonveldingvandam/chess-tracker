@@ -170,10 +170,6 @@ def main(argv=None) -> int:
         bp_result = compute_blunder_phases(all_summaries, total_eligible=len(records))
         payload["blunder_phases"] = bp_result["blunder_phases"]
         payload["engine_coverage"] = bp_result["engine_coverage"]
-        from chess_tracker.prescription import compute_training_prescription
-        payload["training_prescription"] = compute_training_prescription(
-            bp_result["blunder_phases"], bp_result["engine_coverage"], records
-        )
 
     payload["ratings_by_format"] = ratings_by_format
 

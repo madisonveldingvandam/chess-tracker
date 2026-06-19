@@ -16,12 +16,6 @@ _MINIMAL_PAYLOAD = {
         "tilt": "yellow",
     },
     "leak_summary": [],
-    "next_session_rule": {
-        "game_cap": 20,
-        "move_10_target_seconds": 45,
-        "stop_if_rating_drops": 50,
-        "narrative": "Cap at 20 games.",
-    },
     "recent_losses": [],
     "review_picks": [],
     "process_metrics": {
@@ -44,7 +38,7 @@ _MINIMAL_PAYLOAD = {
         "mate_loss_buckets": [],
     },
     "error_log": [],
-    "plan_compliance": {"openings": [], "principles": [], "window": 30},
+    "plan_compliance": {"openings": [], "window": 30},
     "move_quality": None,
     "move_quality_by_format": None,
 }
@@ -90,7 +84,7 @@ def test_render_dashboard_required_keys_present_in_embedded_data():
     end = content.index(";\n", start)
     raw = content[start:end].replace("\\/", "/")
     data = json.loads(raw)
-    for key in ("kpis", "leak_summary", "next_session_rule", "recent_losses",
+    for key in ("kpis", "leak_summary", "recent_losses",
                 "process_metrics", "opening_families", "sessions"):
         assert key in data, f"Missing required key: {key}"
     out.unlink()

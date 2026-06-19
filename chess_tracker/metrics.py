@@ -12,7 +12,6 @@ from chess_tracker.play_signature import fens_from_san
 from chess_tracker.opening_match import match_opening
 from chess_tracker.opponent_openings import compute_opponent_opening_stats
 from chess_tracker.trap_patterns import compute_trap_exposures
-from chess_tracker.prescription import compute_training_prescription
 
 
 _DRAW_RESULTS = {"agreed", "repetition", "stalemate", "insufficient",
@@ -347,39 +346,6 @@ def detect_leaks(records: list[GameRecord]) -> list[dict]:
         })
 
     return leaks
-
-
-def next_session_rule(records: list[GameRecord]) -> dict:
-    """Generate concrete next-session recommendation."""
-    if not records:
-        return {"game_cap": 20, "move_10_target_seconds": 45,
-                "stop_if_rating_drops": 50,
-                "narrative": "No data yet — start conservative."}
-
-    # Game cap: tied 1:1 to the post_peak_decay leak. End of peak bucket
-    # when fired; default 30 otherwise.
-    decay = compute_session_decay(records)
-    fired, peak, _last = _post_peak_decay(decay)
-    cap = 30
-    if fired:
-        cap = {"1-5": 5, "6-10": 10, "11-20": 20}[peak["bucket"]]
-
-    # Move-10 target: median my-clock at my_clocks[9] among wins, minus 5s
-    wins = [r for r in records if _is_win(r.result)]
-    win_reserves = [c for r in wins if (c := _ply_clock(r.my_clocks, 9)) is not None]
-    target = round(statistics.median(win_reserves) - 5, 0) if win_reserves else 45
-
-    narrative = (
-        f"Cap at {cap} games. Aim for {target}s left at move 10. "
-        f"Stop if rating drops 50 in a session."
-    )
-
-    return {
-        "game_cap": cap,
-        "move_10_target_seconds": int(target),
-        "stop_if_rating_drops": 50,
-        "narrative": narrative,
-    }
 
 
 def recent_losses_with_suggestions(records: list[GameRecord], limit: int = 20) -> list[dict]:
@@ -763,8 +729,7 @@ def compute_plan_compliance(records: list[GameRecord], plan: dict,
     (no opportunity to adhere — don't punish).
     """
     if not records:
-        return {"openings": [], "principles": plan.get("principles", []),
-                "window": window}
+        return {"openings": [], "window": window}
     ordered = sorted(records, key=lambda r: r.end_time)
     window_recs = ordered[-window:]
 
@@ -847,7 +812,6 @@ def compute_plan_compliance(records: list[GameRecord], plan: dict,
         })
     return {
         "openings": out_openings,
-        "principles": plan.get("principles", []),
         "window": window,
     }
 
@@ -876,7 +840,6 @@ def compute_all(records: list[GameRecord], annotations: dict,
         "generated_at": datetime.now().astimezone().isoformat(),
         "kpis": compute_kpis(records),
         "leak_summary": detect_leaks(records),
-        "next_session_rule": next_session_rule(records),
         "recent_losses": recent_losses_with_suggestions(records),
         "review_picks": compute_review_picks(records),
         "process_metrics": {
@@ -907,5 +870,4 @@ def compute_all(records: list[GameRecord], annotations: dict,
                                  "affected_game_pct": 0.0, "avg_loss_cp": None, "worst_single_loss_cp": None},
         },
         "engine_coverage": engine_coverage or {"analyzed_games": 0, "eligible_games": len(records)},
-        "training_prescription": compute_training_prescription(blunder_phases, engine_coverage, records),
     }

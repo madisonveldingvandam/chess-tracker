@@ -210,7 +210,7 @@ def test_post_peak_decay_tie_break_picks_later_bucket():
 
 
 from chess_tracker.metrics import (
-    detect_leaks, next_session_rule, recent_losses_with_suggestions
+    detect_leaks, recent_losses_with_suggestions
 )
 
 
@@ -226,38 +226,6 @@ def test_detect_leaks_flags_slow_opening_when_velocity_high():
     leaks = detect_leaks([CLOCK_RECORDS[1]])
     names = [l["name"] for l in leaks]
     assert "time_burn_opening" in names
-
-
-def test_next_session_rule_has_three_fields_plus_narrative():
-    rule = next_session_rule(RECORDS + CLOCK_RECORDS)
-    assert set(rule.keys()) == {"game_cap", "move_10_target_seconds",
-                                 "stop_if_rating_drops", "narrative"}
-    assert isinstance(rule["narrative"], str) and len(rule["narrative"]) > 10
-
-
-def test_next_session_rule_caps_at_peak_bucket_end_when_decay_fires():
-    # Same fixture shape as the leak test: peak at 11-20, crash at 21+.
-    results = (
-        ["win"] * 2 + ["timeout"] * 3 +
-        ["win"] * 3 + ["timeout"] * 2 +
-        ["win"] * 8 + ["timeout"] * 2 +
-        ["win"] * 1 + ["timeout"] * 4
-    )
-    rule = next_session_rule(_session_with_results(results))
-    assert rule["game_cap"] == 20
-
-
-def test_next_session_rule_keeps_default_cap_when_no_decay():
-    # Monotonic increase: 1-5 (1W,4L), 6-10 (2W,3L), 11-20 (6W,4L), 21+ (4W,1L)
-    # Peak == last == 21+, no fire, cap should stay at 30.
-    results = (
-        ["win"] * 1 + ["timeout"] * 4 +
-        ["win"] * 2 + ["timeout"] * 3 +
-        ["win"] * 6 + ["timeout"] * 4 +
-        ["win"] * 4 + ["timeout"] * 1
-    )
-    rule = next_session_rule(_session_with_results(results))
-    assert rule["game_cap"] == 30
 
 
 from chess_tracker.pgn import GameRecord
@@ -422,7 +390,7 @@ def test_compute_all_has_new_panel_keys():
                           username="m_v-v", format="bullet")
     expected = {
         "username", "format", "generated_at",
-        "kpis", "leak_summary", "next_session_rule",
+        "kpis", "leak_summary",
         "recent_losses", "process_metrics",
         "play_signatures", "sessions", "error_log",
     }
@@ -478,7 +446,6 @@ def test_compute_all_includes_plan_compliance_with_empty_plan_default():
     assert "plan_compliance" in payload
     pc = payload["plan_compliance"]
     assert pc["openings"] == []
-    assert pc["principles"] == []
 
 
 def test_compute_plan_compliance_adherence_and_severity():
@@ -512,7 +479,6 @@ def test_compute_plan_compliance_adherence_and_severity():
              "vs_first_move": "e4", "target_family": "Modern Defense",
              "moves": "1.e4 g6 ...", "plan": "Hold the center."},
         ],
-        "principles": ["Blunder check"],
     }
     out = compute_plan_compliance(recs, plan, window=30)
     assert len(out["openings"]) == 1
@@ -523,7 +489,6 @@ def test_compute_plan_compliance_adherence_and_severity():
     assert o["win_pct_when_played"] == round(100 * 4 / 6, 1)
     assert o["win_pct_when_deviated"] == 25.0
     assert o["severity"] == "green"  # adherence == 60
-    assert out["principles"] == ["Blunder check"]
 
 
 def test_compute_plan_compliance_severity_buckets():

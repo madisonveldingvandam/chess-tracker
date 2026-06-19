@@ -161,27 +161,6 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
   flex: 1; text-align: center; color: var(--muted);
   font-size: 0.75rem; font-variant-numeric: tabular-nums;
 }
-.plan-principles {
-  margin: 0; padding-left: 1.25rem;
-  display: grid; gap: 0.25rem;
-  font-size: 0.85rem; color: var(--text);
-}
-.plan-principles li { line-height: 1.4; }
-
-/* Next-session rule */
-.rule-block {
-  background: var(--surface);
-  padding: 1rem 1.25rem; border-radius: 4px;
-  display: grid; grid-template-columns: max-content 1fr;
-  gap: 0.4rem 1.5rem;
-}
-.rule-block dt { color: var(--text); font-size: 0.85rem; }
-.rule-block dd { margin: 0; font-weight: 400; font-size: 0.85rem; }
-.rule-narrative {
-  margin-top: 0.8rem; padding-top: 0.8rem;
-  border-top: 1px solid var(--border);
-  font-style: italic; color: var(--text); font-size: 0.85rem;
-}
 
 /* Process metrics */
 .process-grid {

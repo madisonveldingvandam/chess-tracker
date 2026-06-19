@@ -44,12 +44,5 @@
         "window_plies": 12
       }
     }
-  ],
-  "principles": [
-    "Blunder check — 3 candidate moves before every move",
-    "10–15 tactics per day, accuracy over speed",
-    "Opening principles ≥ lines: center, development, castle",
-    "Review every loss — find the eval-flip move",
-    "One opening per side, played always"
   ]
 }
