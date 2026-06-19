@@ -31,15 +31,16 @@
       }
     },
     {
-      "name": "Four Knights Game",
+      "name": "Vienna Hybrid",
       "side": "white",
       "vs_first_move": "e4",
-      "target_family": "Four Knights Game",
-      "moves": "1.e4 e5  2.Nf3 Nc6  3.Nc3 Nf6  4.Bb5 Bb4  5.O-O O-O  6.d3 d6  7.Bg5 Bxc3  8.bxc3 Qe7  9.Re1 Nd8  10.d4 Ne6",
-      "plan": "Sound classical Four Knights (Spanish, 4.Bb5): develop both knights, castle, then the d4 central break. No material sacrifice — holds up against accurate / engine defence, unlike the gambits.",
+      "target_family": "Bishop's Opening",
+      "moves": "1.e4 e5  2.Bc4 Nf6  3.d3 Nc6  4.Nc3  Bc5  5.Nf3  O-O  6.O-O  d6  7.h3  a6",
+      "plan": "Vienna Hybrid (Bishop's Opening: Berlin Variation): 2.Bc4 then d3 — solid, slow structure. Both Bc4 and Nc3 must reach the board; d3 keeps the center flexible. Against ...Bb4 (Hromadka), answer Ne2. Do NOT play f4 — that converts to the Vienna Gambit.",
       "match": {
         "applicable_if_black_plays": "e5",
-        "white_requires": ["Nf3", "Nc3"],
+        "white_requires": ["Bc4", "Nc3"],
+        "white_forbids": ["f4"],
         "window_plies": 12
       }
     },
