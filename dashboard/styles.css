@@ -570,13 +570,21 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
   color: var(--muted);
 }
 
-/* Rare Openings basket */
-.rare-basket { margin-top: 0.75rem; }
-.rare-basket > summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; user-select: none; }
-.rare-basket > summary:hover { color: var(--text); }
-.rare-table { border-collapse: collapse; margin-top: 0.5rem; font-size: 0.82rem; }
-.rare-table th { text-align: left; padding: 0.15rem 1.5rem 0.15rem 0; color: var(--muted); font-weight: 400; }
-.rare-table td { padding: 0.15rem 1.5rem 0.15rem 0; }
-.rare-table td:nth-child(2), .rare-table td:nth-child(3) { font-variant-numeric: tabular-nums; }
-.rare-table a { color: var(--text); text-decoration: none; }
-.rare-table a:hover { text-decoration: underline; }
+/* Tree expand/collapse controls for the Rare Openings inline tree row.
+   Tabulator's base CSS uses #333 fills which are invisible on a dark background. */
+.tabulator .tabulator-data-tree-control {
+  background: rgba(255,255,255,.08) !important;
+  border-color: var(--border, #444) !important;
+}
+.tabulator .tabulator-data-tree-control:hover {
+  background: rgba(255,255,255,.16) !important;
+  cursor: pointer;
+}
+.tabulator .tabulator-data-tree-control .tabulator-data-tree-control-expand,
+.tabulator .tabulator-data-tree-control .tabulator-data-tree-control-expand::after,
+.tabulator .tabulator-data-tree-control .tabulator-data-tree-control-collapse::after {
+  background: var(--text, #e8e4da) !important;
+}
+.tabulator .tabulator-data-tree-branch {
+  border-color: var(--border, #444) !important;
+}
