@@ -497,24 +497,25 @@
     if (rare.length > 0) {
       const totalGames = rare.reduce((s, r) => s + r.games, 0);
       const totalDelta = rare.reduce((s, r) => s + r.sum_rating_delta, 0);
-      const rareSorted = rare.slice().sort((a, b) => b.games - a.games);
+      const totalWins   = rare.reduce((s, r) => s + (r.wins   || 0), 0);
+      const totalLosses = rare.reduce((s, r) => s + (r.losses || 0), 0);
+      const approxFlags = rare.reduce((s, r) => s + Math.round((r.flag_pct || 0) / 100 * (r.losses || 0)), 0);
+      const approxMates = rare.reduce((s, r) => s + Math.round((r.mate_pct || 0) / 100 * (r.losses || 0)), 0);
       rareRowData = {
         family: `Rare Openings (${rare.length})`,
         _is_rare_header: true,
         games: totalGames,
         sum_rating_delta: totalDelta,
-        win_pct: null, flag_pct: null, mate_pct: null,
-        variation_count: null, form: [], plan_status: null, color,
-        _children: rareSorted,
+        win_pct:  totalGames   > 0 ? Math.round(1000 * totalWins   / totalGames)   / 10 : null,
+        flag_pct: totalLosses  > 0 ? Math.round(1000 * approxFlags / totalLosses)  / 10 : null,
+        mate_pct: totalLosses  > 0 ? Math.round(1000 * approxMates / totalLosses)  / 10 : null,
+        variation_count: rare.length, form: [], plan_status: null, color,
       };
     }
 
     const table = new Tabulator(tableSelector, {
       data: rareRowData ? [...rows, rareRowData] : rows,
       layout: "fitColumns", maxHeight: "540px",
-      dataTree: true,
-      dataTreeStartExpanded: false,
-      dataTreeElementColumn: "family",
       rowFormatter: row => {
         if (row.getData()._is_rare_header) {
           const el = row.getElement();
@@ -545,15 +546,37 @@
     });
 
     table.on("rowClick", (e, row) => {
-      if (row.getData()._is_rare_header) {
-        if (!e.target.closest(".tabulator-data-tree-control")) row.treeToggle();
+      const d = row.getData();
+      if (d._is_rare_header) {
+        const tableEl = row.getElement().closest(".tabulator");
+        if (tableEl) tableEl.querySelectorAll(".tabulator-row.row-selected").forEach(el => el.classList.remove("row-selected"));
+        row.getElement().classList.add("row-selected");
+        const meta = document.getElementById(metaId);
+        if (meta) {
+          const colorLabel = d.color.charAt(0).toUpperCase() + d.color.slice(1);
+          meta.innerHTML = `
+            <div class="name">Rare Openings</div>
+            <div class="stats">${colorLabel} · ${d.variation_count} families</div>
+            <dl class="detail">
+              <div class="row"><span class="k">Games</span><span class="v">${d.games}</span></div>
+              <div class="row"><span class="k">Win</span><span class="v">${d.win_pct}%</span></div>
+              <div class="row"><span class="k">Flag</span><span class="v">${d.flag_pct}%</span></div>
+              <div class="row"><span class="k">Mate</span><span class="v">${d.mate_pct}%</span></div>
+            </dl>
+            <a class="drill-link" href="opening.html?rare=1&color=${encodeURIComponent(d.color)}">→ View ${d.variation_count} rare families</a>
+          `;
+        }
         return;
       }
       selectFamilyRow(row, boardId, metaId, flip);
     });
     table.on("rowDblClick", (e, row) => {
-      if (row.getData()._is_rare_header) return;
-      drillIntoFamily(row.getData());
+      const d = row.getData();
+      if (d._is_rare_header) {
+        window.location.href = `opening.html?rare=1&color=${encodeURIComponent(d.color)}`;
+        return;
+      }
+      drillIntoFamily(d);
     });
     table.on("tableBuilt", () => {
       const first = table.getRows().find(r => !r.getData()._is_rare_header);
@@ -608,8 +631,44 @@
     const tableEl = document.getElementById("opening-variations-table");
     if (!tableEl) return;
     const params = new URLSearchParams(window.location.search);
-    const family = params.get("family");
     const color = params.get("color");
+
+    // ?rare=1&color=... → show all rare families for this color
+    if (params.get("rare") === "1" && color) {
+      const rareFamilies = (D.opening_families || [])
+        .filter(r => r.is_rare && r.color === color);
+      const colorLabel = color.charAt(0).toUpperCase() + color.slice(1);
+      const title = document.getElementById("opening-title");
+      if (title) title.textContent = `Rare Openings as ${colorLabel} — ${rareFamilies.length} families`;
+      if (rareFamilies.length === 0) {
+        tableEl.innerHTML = `<p style="padding:1rem;color:var(--muted)">No rare openings found for ${color}.</p>`;
+        return;
+      }
+      const flip = color === "black";
+      const rareTable = new Tabulator("#opening-variations-table", {
+        data: rareFamilies, layout: "fitColumns", maxHeight: "540px",
+        columns: [
+          {title: "Opening", field: "family", width: 210, minWidth: 160},
+          {title: "Games", field: "games", width: 68, minWidth: 68, sorter: "number"},
+          {title: "Δ Rating", field: "sum_rating_delta", width: 90, minWidth: 90, sorter: "number", formatter: ratingDeltaCell},
+          {title: "Win%", field: "win_pct", width: 62, minWidth: 62, sorter: "number", formatter: winPctCell},
+          {title: "Flag%", field: "flag_pct", width: 65, minWidth: 65, sorter: "number"},
+          {title: "Mate%", field: "mate_pct", width: 65, minWidth: 65, sorter: "number"},
+          {title: "#Vars", field: "variation_count", width: 65, minWidth: 65, sorter: "number"},
+          {title: "Form", field: "form", width: 88, minWidth: 80, formatter: sparkline, headerSort: false},
+        ],
+        initialSort: [{column: "sum_rating_delta", dir: "asc"}],
+      });
+      rareTable.on("rowClick", (e, row) => selectRareFamilyRow(row, flip));
+      rareTable.on("rowDblClick", (e, row) => drillIntoFamily(row.getData()));
+      rareTable.on("tableBuilt", () => {
+        const first = rareTable.getRows()[0];
+        if (first) selectRareFamilyRow(first, flip);
+      });
+      return;
+    }
+
+    const family = params.get("family");
     if (!family || !color) {
       tableEl.innerHTML = `<p style="padding:1rem;color:var(--muted)">No opening selected. <a href="index.html">Pick one from the repertoire</a>.</p>`;
       return;
@@ -654,6 +713,13 @@
       .forEach(el => el.classList.remove("row-selected"));
     row.getElement().classList.add("row-selected");
     updateOpeningBoard(row.getData(), flip);
+  }
+
+  function selectRareFamilyRow(row, flip) {
+    document.querySelectorAll("#opening-variations-table .tabulator-row.row-selected")
+      .forEach(el => el.classList.remove("row-selected"));
+    row.getElement().classList.add("row-selected");
+    updateFamilyBoard(row.getData(), "opening-board", "opening-board-meta", flip);
   }
 
   function updateOpeningBoard(data, flip) {
