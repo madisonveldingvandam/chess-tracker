@@ -558,9 +558,9 @@
             <div class="stats">${colorLabel} · ${d.variation_count} families</div>
             <dl class="detail">
               <div class="row"><span class="k">Games</span><span class="v">${d.games}</span></div>
-              <div class="row"><span class="k">Win</span><span class="v">${d.win_pct}%</span></div>
-              <div class="row"><span class="k">Flag</span><span class="v">${d.flag_pct}%</span></div>
-              <div class="row"><span class="k">Mate</span><span class="v">${d.mate_pct}%</span></div>
+              <div class="row"><span class="k">Win</span><span class="v">${d.win_pct  != null ? d.win_pct  + "%" : "—"}</span></div>
+              <div class="row"><span class="k">Flag</span><span class="v">${d.flag_pct != null ? d.flag_pct + "%" : "—"}</span></div>
+              <div class="row"><span class="k">Mate</span><span class="v">${d.mate_pct != null ? d.mate_pct + "%" : "—"}</span></div>
             </dl>
             <a class="drill-link" href="opening.html?rare=1&color=${encodeURIComponent(d.color)}">→ View ${d.variation_count} rare families</a>
           `;
