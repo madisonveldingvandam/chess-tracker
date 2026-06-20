@@ -502,7 +502,7 @@
       const approxFlags = rare.reduce((s, r) => s + Math.round((r.flag_pct || 0) / 100 * (r.losses || 0)), 0);
       const approxMates = rare.reduce((s, r) => s + Math.round((r.mate_pct || 0) / 100 * (r.losses || 0)), 0);
       rareRowData = {
-        family: `Rare Openings (${rare.length})`,
+        family: "Rare Openings",
         _is_rare_header: true,
         games: totalGames,
         sum_rating_delta: totalDelta,
@@ -520,7 +520,6 @@
         if (row.getData()._is_rare_header) {
           const el = row.getElement();
           el.style.color = "var(--muted, #888)";
-          el.style.fontStyle = "italic";
           el.style.cursor = "pointer";
           el.style.borderTop = "1px solid rgba(255,255,255,.06)";
         }
