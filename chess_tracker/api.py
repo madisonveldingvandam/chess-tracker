@@ -6,6 +6,7 @@ from pathlib import Path
 
 USER_AGENT = "ChessTracker/0.1 (madisonveldingvandam.artist@gmail.com)"
 BASE = "https://api.chess.com/pub/player"
+LICHESS_BASE = "https://lichess.org/api"
 
 
 def _get_json(url: str) -> dict:
