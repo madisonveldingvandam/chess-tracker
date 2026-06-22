@@ -221,7 +221,7 @@
       }).join("");
       root.innerHTML = cardsHtml;
       // Wire up each card's move-by-move board. State (current ply) lives in
-      // this closure per card; the board reuses boardSquaresHTML by swapping
+      // this closure per card; the board uses Chessground, updated by swapping
       // FENs. Black-defense lines render from Black's perspective.
       ordered.forEach((o, i) => {
         const flip = o.side === "black";
@@ -238,8 +238,15 @@
           const nextEl = document.getElementById(`plan-next-${i}-${j}`);
           if (!boardEl) return;
           let idx = fens.length - 1;  // open on the final position of the line
+          // Initialize Chessground for this board on first paint
+          if (!boardEl._cg) {
+            boardEl._cg = makeBoard(boardEl, {
+              viewOnly: true,
+              orientation: flip ? 'black' : 'white',
+            });
+          }
           const paint = () => {
-            boardEl.innerHTML = boardSquaresHTML(fens[idx], flip);
+            if (boardEl._cg) boardEl._cg.set({ fen: fens[idx] });
             capEl.textContent = idx === 0
               ? "Start position"
               : `after ${labels[idx - 1]} · move ${idx} of ${fens.length - 1}`;
@@ -248,9 +255,6 @@
           };
           prevEl.addEventListener("click", () => { if (idx > 0) { idx--; paint(); } });
           nextEl.addEventListener("click", () => { if (idx < fens.length - 1) { idx++; paint(); } });
-          // Defer the first paint: GLYPH is a `const` declared later in this IIFE,
-          // so drawing synchronously here would hit the temporal dead zone (same
-          // pattern as the puzzle board's deferred select(0)).
           queueMicrotask(paint);
         });
       });
@@ -590,6 +594,12 @@
       }
       drillIntoFamily(d);
     });
+    // Initialize the Chessground board for this side (view-only)
+    const boardEl = document.getElementById(boardId);
+    if (boardEl) boardEl._cg = makeBoard(boardEl, {
+      viewOnly: true,
+      orientation: flip ? 'black' : 'white',
+    });
     table.on("tableBuilt", () => {
       const first = table.getRows().find(r => !r.getData()._is_rare_header);
       if (first) selectFamilyRow(first, boardId, metaId, flip);
@@ -615,7 +625,7 @@
     const board = document.getElementById(boardId);
     const meta = document.getElementById(metaId);
     if (!board || !meta) return;
-    board.innerHTML = boardSquaresHTML(data.canonical_play_signature, flip);
+    if (board._cg) board._cg.set({ fen: data.canonical_play_signature });
     const gap = data.rating_gap;
     const gapStr = gap == null ? "—" : (gap >= 0 ? "+" : "") + gap;
     const qs = `family=${encodeURIComponent(data.family)}&color=${encodeURIComponent(data.color)}`;
@@ -657,6 +667,11 @@
         return;
       }
       const flip = color === "black";
+      const openingBoardEl = document.getElementById("opening-board");
+      if (openingBoardEl) openingBoardEl._cg = makeBoard(openingBoardEl, {
+        viewOnly: true,
+        orientation: flip ? 'black' : 'white',
+      });
       const rareTable = new Tabulator("#opening-variations-table", {
         data: rareFamilies, layout: "fitColumns", maxHeight: "540px",
         columns: [
@@ -698,6 +713,11 @@
       return;
     }
     const flip = color === "black";
+    const openingBoardEl = document.getElementById("opening-board");
+    if (openingBoardEl) openingBoardEl._cg = makeBoard(openingBoardEl, {
+      viewOnly: true,
+      orientation: flip ? 'black' : 'white',
+    });
     const table = new Tabulator("#opening-variations-table", {
       data: rows, layout: "fitColumns", height: "540px",
       columns: [
@@ -738,7 +758,7 @@
     const board = document.getElementById("opening-board");
     const meta = document.getElementById("opening-board-meta");
     if (!board || !meta) return;
-    board.innerHTML = boardSquaresHTML(data.canonical_play_signature, flip);
+    if (board._cg) board._cg.set({ fen: data.canonical_play_signature });
     const gap = data.rating_gap;
     const gapStr = gap == null ? "—" : (gap >= 0 ? "+" : "") + gap;
     const variationLabel = data.variation || "main line";
@@ -857,44 +877,6 @@
     K:"♚", Q:"♛", R:"♜", B:"♝", N:"♞", P:"♟︎",
     k:"♚", q:"♛", r:"♜", b:"♝", n:"♞", p:"♟︎",
   };
-  // Returns just the 64 square <div>s for a FEN. Caller provides the wrapping
-  // grid element and styles its size via CSS. When `flip` is true, the board
-  // renders from Black's perspective (a1 at top-right, h8 at bottom-left) —
-  // achieved by reversing the cells array, which swaps both ranks and files
-  // in one step. Square colors stay correct because a square's color is a
-  // property of its FEN coordinates, not its display position.
-  //
-  // File/rank coordinates are drawn Lichess-style inside the edge squares of
-  // the *displayed* orientation: rank digits down the left column, file letters
-  // along the bottom row. Because labelling keys off display position (post
-  // flip), the a1-corner stays bottom-left for White and top-right for Black.
-  function boardSquaresHTML(fen, flip = false) {
-    if (!fen) return "";
-    const cells = [];  // {r, f, inner} in board order (rank 8 first)
-    let r = 0;
-    for (const row of fen.split(" ")[0].split("/")) {
-      let f = 0;
-      for (const ch of row) {
-        if (ch >= "1" && ch <= "8") {
-          for (let i = 0; i < +ch; i++) { cells.push({ r, f, inner: "" }); f++; }
-        } else {
-          const side = ch === ch.toUpperCase() ? "piece-w" : "piece-b";
-          cells.push({ r, f, inner: `<span class="${side}">${GLYPH[ch] || ""}</span>` });
-          f++;
-        }
-      }
-      r++;
-    }
-    if (flip) cells.reverse();
-    return cells.map((c, idx) => {
-      const sq = (c.r + c.f) % 2 ? "dark" : "light";
-      let inner = c.inner;
-      if (idx % 8 === 0) inner += `<span class="coord rank">${8 - c.r}</span>`;
-      if (idx >= 56) inner += `<span class="coord file">${FILES[c.f]}</span>`;
-      return `<div class="${sq}">${inner}</div>`;
-    }).join("");
-  }
-
   // ---- FEN / move helpers for the puzzle drill --------------------------
   const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
   // FEN piece-placement -> 8x8 grid. grid[0] is rank 8 (top), grid[7] is rank 1.
