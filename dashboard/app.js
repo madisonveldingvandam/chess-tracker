@@ -71,7 +71,7 @@
       : `<div class="kpi kpi-active"><span class="kpi-label">Rating</span>` +
         `<span class="kpi-value">${k.current_rating ?? "—"}</span></div>`;
 
-    strip.insertAdjacentHTML('beforeend', `
+    strip.insertAdjacentHTML('afterbegin', `
       ${ratingHtml}
       <div class="kpi kpi-sep"></div>
       <div class="kpi"><span class="kpi-label">Games</span>
