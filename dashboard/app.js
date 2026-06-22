@@ -25,6 +25,7 @@
     return;
   }
   renderKPI(D);
+  renderLichessKPI(D);
   renderPlanBlock(D.plan_compliance);
   renderMoveQuality(D.move_quality);
   renderMoveQualityByFormat(D.move_quality_by_format, D.format);
@@ -86,6 +87,34 @@
          target="_blank" rel="noopener"
          title="Re-run the deploy workflow on GitHub Actions to rebuild this dashboard now">↻ Refresh</a>
     `);
+  }
+
+  function renderLichessKPI(d) {
+    const strip = document.getElementById("lichess-strip");
+    if (!strip || !d.lichess) return;
+    const L = d.lichess;
+    const FMT_ORDER  = ["bullet", "blitz", "rapid", "classical"];
+    const FMT_LABELS = { bullet: "Bullet", blitz: "Blitz", rapid: "Rapid", classical: "Classical" };
+    const ratingHtml = FMT_ORDER
+      .filter(f => L[f] != null)
+      .map(f =>
+        `<div class="kpi">` +
+        `<span class="kpi-label">${FMT_LABELS[f]}</span>` +
+        `<span class="kpi-value">${L[f]}</span></div>`
+      ).join("");
+    const puzzleHtml = L.puzzle_score != null
+      ? `<div class="kpi"><span class="kpi-label">Puzzles</span>` +
+        `<span class="kpi-value">${L.puzzle_score}</span></div>`
+      : "";
+    const gamesHtml = L.game_count != null
+      ? `<div class="kpi"><span class="kpi-label">Games</span>` +
+        `<span class="kpi-value">${L.game_count}</span></div>`
+      : "";
+    strip.insertAdjacentHTML("beforeend",
+      `<span class="lichess-label">Lichess</span>` +
+      ratingHtml + puzzleHtml + gamesHtml
+    );
+    strip.style.display = "";
   }
 
   // Move quality — engine-derived accuracy/blunders for the current format.
