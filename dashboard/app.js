@@ -256,6 +256,16 @@
           prevEl.addEventListener("click", () => { if (idx > 0) { idx--; paint(); } });
           nextEl.addEventListener("click", () => { if (idx < fens.length - 1) { idx++; paint(); } });
           queueMicrotask(paint);
+          // Force Chessground to re-measure when <details> is first opened
+          const detailsEl = boardEl.closest("details");
+          if (detailsEl) {
+            detailsEl.addEventListener("toggle", function onToggle() {
+              if (detailsEl.open && boardEl._cg) {
+                boardEl._cg.redrawAll();
+                detailsEl.removeEventListener("toggle", onToggle);
+              }
+            });
+          }
         });
       });
     }
