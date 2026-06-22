@@ -1,0 +1,34 @@
+/* Chessground Brown board theme + CBurnett piece images */
+
+/* Board sizing — cg-wrap fills its container.
+   Container divs set the actual size via existing CSS classes. */
+.cg-wrap {
+  position: relative;
+  display: block;
+}
+
+/* Brown board colors */
+cg-board square.light       { background: #f0d9b5; }
+cg-board square.dark        { background: #b58863; }
+cg-board square.last-move   { background: rgba(155, 199, 0, 0.41); }
+cg-board square.selected    { background: rgba(20, 85, 30, 0.5); }
+cg-board square.check       {
+  background: radial-gradient(ellipse at center,
+    rgba(255,0,0,1) 0%, rgba(231,0,0,1) 25%,
+    rgba(169,0,0,0) 89%, rgba(158,0,0,0) 100%);
+}
+cg-board square.move-dest   { background: rgba(20, 85, 30, 0.5); }
+
+/* CBurnett piece images — paths relative to dashboard/chessground-theme.css */
+.cg-wrap piece.pawn.white   { background-image: url('vendor/pieces/cburnett/wP.svg'); }
+.cg-wrap piece.knight.white { background-image: url('vendor/pieces/cburnett/wN.svg'); }
+.cg-wrap piece.bishop.white { background-image: url('vendor/pieces/cburnett/wB.svg'); }
+.cg-wrap piece.rook.white   { background-image: url('vendor/pieces/cburnett/wR.svg'); }
+.cg-wrap piece.queen.white  { background-image: url('vendor/pieces/cburnett/wQ.svg'); }
+.cg-wrap piece.king.white   { background-image: url('vendor/pieces/cburnett/wK.svg'); }
+.cg-wrap piece.pawn.black   { background-image: url('vendor/pieces/cburnett/bP.svg'); }
+.cg-wrap piece.knight.black { background-image: url('vendor/pieces/cburnett/bN.svg'); }
+.cg-wrap piece.bishop.black { background-image: url('vendor/pieces/cburnett/bB.svg'); }
+.cg-wrap piece.rook.black   { background-image: url('vendor/pieces/cburnett/bR.svg'); }
+.cg-wrap piece.queen.black  { background-image: url('vendor/pieces/cburnett/bQ.svg'); }
+.cg-wrap piece.king.black   { background-image: url('vendor/pieces/cburnett/bK.svg'); }
