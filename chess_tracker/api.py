@@ -48,3 +48,17 @@ def fetch_archive(url: str, cache_dir: Path, force: bool = False) -> dict:
 def fetch_player_stats(username: str) -> dict:
     """Return the /stats dict for a player (current ratings across all time classes)."""
     return _get_json(f"{BASE}/{username.lower()}/stats")
+
+
+LICHESS_BASE = "https://lichess.org/api"
+
+
+def fetch_lichess_user(username: str) -> dict:
+    """Fetch public profile + perfs for a Lichess user. Returns {} on any error."""
+    url = f"{LICHESS_BASE}/user/{username.lower()}"
+    try:
+        req = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+        with urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())
+    except Exception:
+        return {}

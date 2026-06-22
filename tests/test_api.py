@@ -60,3 +60,38 @@ def test_fetch_archive_force_bypasses_cache(tmp_path):
         fetch_archive(url, cache_dir=tmp_path, force=True)
 
     assert m.call_count == 2
+
+
+def _mock_urlopen(response_data: dict):
+    """Return a context-manager mock that yields a response with JSON body."""
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = json.dumps(response_data).encode()
+    mock_resp.__enter__ = lambda s: s
+    mock_resp.__exit__ = MagicMock(return_value=False)
+    return mock_resp
+
+
+def test_fetch_lichess_user_returns_perfs():
+    from chess_tracker.api import fetch_lichess_user
+    payload = {
+        "perfs": {
+            "bullet": {"rating": 1234, "games": 50},
+            "blitz":  {"rating": 1345, "games": 200},
+            "rapid":  {"rating": 1456, "games": 30},
+            "classical": {"rating": 1567, "games": 5},
+            "puzzle": {"score": 1678, "runs": 400},
+        },
+        "count": {"all": 285},
+    }
+    with patch("chess_tracker.api.urlopen", return_value=_mock_urlopen(payload)):
+        result = fetch_lichess_user("M_V-v")
+    assert result["perfs"]["bullet"]["rating"] == 1234
+    assert result["perfs"]["puzzle"]["score"] == 1678
+    assert result["count"]["all"] == 285
+
+
+def test_fetch_lichess_user_returns_empty_dict_on_error():
+    from chess_tracker.api import fetch_lichess_user
+    with patch("chess_tracker.api.urlopen", side_effect=Exception("network error")):
+        result = fetch_lichess_user("M_V-v")
+    assert result == {}
