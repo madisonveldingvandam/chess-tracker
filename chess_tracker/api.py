@@ -51,9 +51,6 @@ def fetch_player_stats(username: str) -> dict:
     return _get_json(f"{BASE}/{username.lower()}/stats")
 
 
-LICHESS_BASE = "https://lichess.org/api"
-
-
 def fetch_lichess_user(username: str) -> dict:
     """Fetch public profile + perfs for a Lichess user. Returns {} on any error."""
     url = f"{LICHESS_BASE}/user/{username.lower()}"
