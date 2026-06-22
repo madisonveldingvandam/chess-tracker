@@ -175,7 +175,7 @@ def main(argv=None) -> int:
 
     # Lichess stats (public API, no auth — null on network failure)
     print("[4.7/5] Fetching Lichess profile...")
-    raw_lichess = fetch_lichess_user("M_V-v")
+    raw_lichess = fetch_lichess_user(args.username)
     if raw_lichess:
         perfs = raw_lichess.get("perfs", {})
         payload["lichess"] = {
