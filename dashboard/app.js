@@ -6,6 +6,19 @@
 (function() {
   const escapeAttr = s => String(s).replace(/[&"<>]/g,
     c => ({"&":"&amp;","\"":"&quot;","<":"&lt;",">":"&gt;"}[c]));
+
+  function makeBoard(el, cfg) {
+    const factory = (window.ChessgroundLib || {}).Chessground;
+    if (!factory) { console.error("Chessground not loaded"); return null; }
+    const defaults = {
+      coordinates: true,
+      animation: { enabled: true, duration: 150 },
+      highlight: { lastMove: true, check: true },
+      drawable: { enabled: false, visible: false },
+    };
+    return factory(el, Object.assign({}, defaults, cfg));
+  }
+
   const D = window.DATA;
   if (!D) {
     document.body.innerHTML = "<p style='padding:2rem'>No data. Run refresh.py.</p>";
