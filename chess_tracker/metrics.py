@@ -636,6 +636,18 @@ def compute_opening_variations(records: list[GameRecord]) -> list[dict]:
         eco_top = eco_counts.most_common(1)[0][0] if eco_counts else None
         sig_counts = Counter(r.play_signature for r in recs if r.play_signature)
         canonical_sig = sig_counts.most_common(1)[0][0] if sig_counts else None
+        canonical_fens = None
+        canonical_move_labels = None
+        if canonical_sig:
+            rep = next(
+                (r for r in recs if r.play_signature == canonical_sig and r.first_moves),
+                None,
+            )
+            if rep:
+                _fens, _labels = fens_from_san(rep.first_moves)
+                if len(_fens) > 1:
+                    canonical_fens = _fens
+                    canonical_move_labels = _labels
         out.append({
             "family": family,
             "variation": variation,
@@ -657,6 +669,8 @@ def compute_opening_variations(records: list[GameRecord]) -> list[dict]:
             "rating_gap": int(rating_gap),
             "position_count": len(sig_counts),
             "canonical_play_signature": canonical_sig,
+            "canonical_fens": canonical_fens,
+            "canonical_move_labels": canonical_move_labels,
             "form": [_result_letter(r) for r in recs[-10:]],
         })
     out.sort(key=lambda x: (x["sum_rating_delta"], -x["games"]))

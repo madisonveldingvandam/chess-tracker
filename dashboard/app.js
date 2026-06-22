@@ -772,8 +772,21 @@
   function updateOpeningBoard(data, flip) {
     const board = document.getElementById("opening-board");
     const meta = document.getElementById("opening-board-meta");
+    const stepperEl = document.getElementById("opening-board-stepper");
     if (!board || !meta) return;
-    if (board._cg) board._cg.set({ fen: data.canonical_play_signature });
+
+    const fens = data.canonical_fens || null;
+    const labels = data.canonical_move_labels || [];
+    board._fens = fens;
+    board._labels = labels;
+    board._ply = fens ? fens.length - 1 : 0;
+
+    if (board._cg) {
+      const fen = fens ? fens[board._ply] : data.canonical_play_signature;
+      if (fen) board._cg.set({ fen });
+    }
+    if (stepperEl) _renderOpeningStepper(stepperEl, board);
+
     const gap = data.rating_gap;
     const gapStr = gap == null ? "—" : (gap >= 0 ? "+" : "") + gap;
     const variationLabel = data.variation || "main line";
@@ -793,6 +806,41 @@
         <div class="row"><span class="k">Δ opp</span><span class="v">${gapStr}</span></div>
       </dl>
     `;
+  }
+
+  function _renderOpeningStepper(el, board) {
+    const maxPly = board._fens ? board._fens.length - 1 : 0;
+    if (!board._fens || maxPly < 1) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <button class="step-btn" id="step-prev" ${board._ply <= 0 ? 'disabled' : ''}>&#9664;</button>
+      <span class="step-label" id="step-label"></span>
+      <button class="step-btn" id="step-next" ${board._ply >= maxPly ? 'disabled' : ''}>&#9654;</button>
+    `;
+    _syncStepLabel(el, board._ply, board._labels);
+    el.querySelector('#step-prev').addEventListener('click', () => {
+      if (board._ply > 0) {
+        board._ply--;
+        if (board._cg) board._cg.set({ fen: board._fens[board._ply] });
+        _syncStepLabel(el, board._ply, board._labels);
+        el.querySelector('#step-prev').disabled = board._ply <= 0;
+        el.querySelector('#step-next').disabled = false;
+      }
+    });
+    el.querySelector('#step-next').addEventListener('click', () => {
+      if (board._fens && board._ply < board._fens.length - 1) {
+        board._ply++;
+        if (board._cg) board._cg.set({ fen: board._fens[board._ply] });
+        _syncStepLabel(el, board._ply, board._labels);
+        el.querySelector('#step-prev').disabled = false;
+        el.querySelector('#step-next').disabled = board._ply >= board._fens.length - 1;
+      }
+    });
+  }
+
+  function _syncStepLabel(el, ply, labels) {
+    const span = el.querySelector('#step-label');
+    if (!span) return;
+    span.textContent = ply === 0 ? 'start' : (labels[ply - 1] || `ply ${ply}`);
   }
 
   function renderSessions(rows) {

@@ -248,6 +248,29 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
 .board-large {
   width: 320px; height: 320px;
 }
+.board-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  min-height: 1.6rem;
+}
+.board-stepper:empty { display: none; }
+.step-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 0.45rem;
+  line-height: 1.6;
+  font-size: 0.72rem;
+}
+.step-btn:hover:not(:disabled) { color: var(--text); border-color: var(--text); }
+.step-btn:disabled { opacity: 0.25; cursor: default; }
+.step-label { flex: 1; text-align: center; font-variant-numeric: tabular-nums; }
 .board-meta {
   margin-top: 0.75rem;
   font-size: 0.85rem;
