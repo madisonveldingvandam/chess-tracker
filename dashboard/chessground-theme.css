@@ -7,17 +7,33 @@
   display: block;
 }
 
-/* Brown board colors */
-cg-board square.light       { background: #f0d9b5; }
-cg-board square.dark        { background: #b58863; }
-cg-board square.last-move   { background: rgba(155, 199, 0, 0.41); }
-cg-board square.selected    { background: rgba(20, 85, 30, 0.5); }
-cg-board square.check       {
+/* Brown board grid — cg-board uses background-image, not <square> elements,
+   for the light/dark checkerboard. SVG encodes 32 light squares (#f0d9b5)
+   on a dark background (#b58863), viewBox 0 0 8 8, top-left = a8 (light). */
+cg-board {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Crect width='8' height='8' fill='%23b58863'/%3E%3Cpath d='M0 0h1v1h-1zM2 0h1v1h-1zM4 0h1v1h-1zM6 0h1v1h-1zM1 1h1v1h-1zM3 1h1v1h-1zM5 1h1v1h-1zM7 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM1 3h1v1h-1zM3 3h1v1h-1zM5 3h1v1h-1zM7 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM4 4h1v1h-1zM6 4h1v1h-1zM1 5h1v1h-1zM3 5h1v1h-1zM5 5h1v1h-1zM7 5h1v1h-1zM0 6h1v1h-1zM2 6h1v1h-1zM4 6h1v1h-1zM6 6h1v1h-1zM1 7h1v1h-1zM3 7h1v1h-1zM5 7h1v1h-1zM7 7h1v1h-1z' fill='%23f0d9b5'/%3E%3C/svg%3E");
+}
+
+/* Special-state squares (these DO exist as DOM elements) */
+cg-board square.last-move {
+  background: rgba(155, 199, 0, 0.41);
+}
+cg-board square.selected {
+  background: rgba(20, 85, 30, 0.5);
+}
+cg-board square.check {
   background: radial-gradient(ellipse at center,
     rgba(255,0,0,1) 0%, rgba(231,0,0,1) 25%,
     rgba(169,0,0,0) 89%, rgba(158,0,0,0) 100%);
 }
-cg-board square.move-dest   { background: rgba(20, 85, 30, 0.5); }
+/* Move destination dot (empty square) */
+cg-board square.move-dest {
+  background: radial-gradient(rgba(20,85,0,0.5) 19%, rgba(0,0,0,0) 20%) !important;
+}
+/* Capture ring (occupied square) */
+cg-board square.move-dest.oc {
+  background: radial-gradient(transparent 0%, transparent 79%, rgba(20,85,0,0.5) 80%) !important;
+}
 
 /* CBurnett piece images — paths relative to dashboard/chessground-theme.css */
 .cg-wrap piece.pawn.white   { background-image: url('vendor/pieces/cburnett/wP.svg'); }
