@@ -368,12 +368,14 @@
         fbEl.innerHTML = `<span class="ok">✓ Correct — ${escapeAttr(state.puzzle.best_move_san)} holds the position.</span>`;
       } else {
         // Wrong: reset board to pre-move FEN, draw answer arrow
-        boardEl._cg.set({ fen: state.puzzle.fen_before });
-        boardEl._cg.setShapes([{
-          orig: best.slice(0, 2),
-          dest: best.slice(2, 4),
-          brush: 'green',
-        }]);
+        if (boardEl._cg) {
+          boardEl._cg.set({ fen: state.puzzle.fen_before });
+          boardEl._cg.setShapes([{
+            orig: best.slice(0, 2),
+            dest: best.slice(2, 4),
+            brush: 'green',
+          }]);
+        }
         fbEl.innerHTML =
           `<span class="bad">✗ That's the kind of move that lost the game.</span> ` +
           `The move that holds was <strong>${escapeAttr(state.puzzle.best_move_san)}</strong>.`;
@@ -390,17 +392,19 @@
         `<strong>${p.side === "white" ? "White" : "Black"} to move.</strong> ` +
         `You played <span class="bad">${escapeAttr(p.my_move_san)}</span> here — find the move that holds.`;
       fbEl.innerHTML = "";
-      boardEl._cg.set({
-        fen: p.fen_before,
-        orientation: p.side === "black" ? "black" : "white",
-        movable: {
-          color: p.side,
-          dests: new Map(Object.entries(p.legal_dests || {})),
-        },
-        lastMove: undefined,
-        check: false,
-      });
-      boardEl._cg.setShapes([]);
+      if (boardEl._cg) {
+        boardEl._cg.set({
+          fen: p.fen_before,
+          orientation: p.side === "black" ? "black" : "white",
+          movable: {
+            color: p.side,
+            dests: new Map(Object.entries(p.legal_dests || {})),
+          },
+          lastMove: undefined,
+          check: false,
+        });
+        boardEl._cg.setShapes([]);
+      }
     }
 
     function currentIdx() {
@@ -415,7 +419,7 @@
     document.getElementById("puzzle-show").onclick = () => {
       if (!state.solved && state.puzzle) {
         const best = state.puzzle.best_move_uci;
-        boardEl._cg.setShapes([{
+        if (boardEl._cg) boardEl._cg.setShapes([{
           orig: best.slice(0, 2),
           dest: best.slice(2, 4),
           brush: 'green',
