@@ -8,6 +8,7 @@ from chess_tracker.puzzles import (
     _select_puzzle,
     Puzzle,
     DEFAULT_SWING_CP,
+    _compute_legal_dests,
 )
 
 
@@ -109,3 +110,19 @@ def test_clean_side_yields_no_puzzle_for_the_other_color():
             depth=10,
         )
     assert puzzle is None
+
+
+def test_compute_legal_dests_starting_position():
+    fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    dests = _compute_legal_dests(fen)
+    # 20 legal moves from starting position
+    total = sum(len(v) for v in dests.values())
+    assert total == 20
+    assert "e4" in dests.get("e2", [])
+    assert "a3" in dests.get("a2", [])
+
+
+def test_puzzle_dataclass_has_legal_dests():
+    p = _puzzle(ply=0, cp_before=0, cp_loss=150)
+    assert hasattr(p, "legal_dests")
+    assert isinstance(p.legal_dests, dict)

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import os
 import shutil
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from io import StringIO
 
 import chess
@@ -51,6 +51,7 @@ class Puzzle:
     cp_before: int          # eval (my POV) before my move, best play available
     cp_after: int           # eval (my POV) after my actual move
     cp_loss: int            # cp_before - cp_after; how much my move threw away
+    legal_dests: dict[str, list[str]] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -71,6 +72,22 @@ def find_engine_path() -> str | None:
 def _cp(score: chess.engine.PovScore, color: chess.Color) -> int:
     """Centipawns from ``color``'s point of view, with mate clamped."""
     return score.pov(color).score(mate_score=_MATE_CP)
+
+
+def _compute_legal_dests(fen: str) -> dict[str, list[str]]:
+    """All legal moves from ``fen`` as {from_sq: [to_sq, ...]} with promotion deduped."""
+    board = chess.Board(fen)
+    dests: dict[str, list[str]] = {}
+    seen: set[tuple[str, str]] = set()
+    for move in board.legal_moves:
+        from_sq = chess.square_name(move.from_square)
+        to_sq = chess.square_name(move.to_square)
+        key = (from_sq, to_sq)
+        if key in seen:
+            continue
+        seen.add(key)
+        dests.setdefault(from_sq, []).append(to_sq)
+    return dests
 
 
 def _select_puzzle(candidates: list[Puzzle]) -> Puzzle | None:
@@ -150,6 +167,7 @@ def analyse_game(
                 cp_before=cp_before,
                 cp_after=cp_after,
                 cp_loss=cp_loss,
+                legal_dests=_compute_legal_dests(fen_before),
             ))
 
     return _select_puzzle(candidates)
