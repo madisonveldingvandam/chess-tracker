@@ -48,7 +48,6 @@ header#kpi-strip {
   padding: 0.4rem 1rem;
   background: rgba(0, 0, 0, 0.15);
   border-bottom: 1px solid rgba(255,255,255,0.06);
-  font-size: 0.82rem;
   flex-wrap: wrap;
 }
 .lichess-label {
