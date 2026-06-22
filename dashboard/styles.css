@@ -569,3 +569,48 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
   color: var(--muted);
 }
 
+/* ===== Mobile ===== */
+@media (max-width: 600px) {
+  /* Shrink main padding */
+  main { padding: 0.85rem 0.9rem; }
+
+  /* KPI strip: wrap items and shrink font/gap */
+  header#kpi-strip {
+    flex-wrap: wrap;
+    gap: 0.75rem 1.2rem;
+    padding: 0.75rem 0.9rem;
+  }
+  .kpi-value { font-size: 1.1rem; }
+  .kpi-label { font-size: 0.65rem; }
+
+  /* Tables: horizontal scroll */
+  .tabulator { overflow-x: auto; }
+  .mqf-table { min-width: unset; width: 100%; }
+  #mqf-table { overflow-x: auto; }
+
+  /* Puzzle board: cap at viewport width */
+  .puzzle-board {
+    width: min(400px, calc(100vw - 1.8rem));
+    height: min(400px, calc(100vw - 1.8rem));
+  }
+
+  /* Main board: cap at viewport width */
+  .board-large {
+    width: min(320px, calc(100vw - 1.8rem));
+    height: min(320px, calc(100vw - 1.8rem));
+  }
+
+  /* Plan mini-boards */
+  .plan-board { width: 200px; height: 200px; }
+  .plan-board-controls { width: 200px; }
+
+  /* Drill-in: 2 cols on mobile instead of 4 */
+  .drillin-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Behavior cards: 2 cols */
+  .behavior-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Sections: less vertical breathing room */
+  section { margin-bottom: 1.5rem; }
+}
+
