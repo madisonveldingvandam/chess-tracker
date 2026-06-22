@@ -4,7 +4,7 @@ import json
 import sys
 from pathlib import Path
 
-from chess_tracker.api import fetch_archives_index, fetch_archive, fetch_player_stats
+from chess_tracker.api import fetch_archives_index, fetch_archive, fetch_player_stats, fetch_lichess_user
 from chess_tracker.pgn import parse_game
 from chess_tracker.metrics import compute_all
 from chess_tracker.annotations import load_annotations
@@ -172,6 +172,22 @@ def main(argv=None) -> int:
         payload["engine_coverage"] = bp_result["engine_coverage"]
 
     payload["ratings_by_format"] = ratings_by_format
+
+    # Lichess stats (public API, no auth — null on network failure)
+    print("[4.7/5] Fetching Lichess profile...")
+    raw_lichess = fetch_lichess_user("M_V-v")
+    if raw_lichess:
+        perfs = raw_lichess.get("perfs", {})
+        payload["lichess"] = {
+            "bullet":       perfs.get("bullet",    {}).get("rating"),
+            "blitz":        perfs.get("blitz",     {}).get("rating"),
+            "rapid":        perfs.get("rapid",     {}).get("rating"),
+            "classical":    perfs.get("classical", {}).get("rating"),
+            "puzzle_score": perfs.get("puzzle",    {}).get("score"),
+            "game_count":   raw_lichess.get("count", {}).get("all"),
+        }
+    else:
+        payload["lichess"] = None
 
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "computed.json").write_text(json.dumps(payload, indent=2))
