@@ -7,14 +7,12 @@
   --surface: #2a2824;
   --surface-raised: #312e29;
   --accent-bg: #352d22;
-  --risk-bg: #33251f;
   --text: #f3efe3;
   --muted: #b8b2a6;
   --subtle: #8e887d;
   --border: #403c35;
   --border-strong: #5f574b;
   --accent: #c4a66f;
-  --risk: #c9856b;
   --success: #9eb797;
   --board-light: #d8c694;
   --board-dark: #5a5852;
@@ -156,10 +154,10 @@ section h3 {
   border-left: 3px solid var(--border);
   border-radius: var(--radius);
 }
-.leak.severity-warn { border-left-color: var(--risk); }
+.leak.severity-warn { border-left-color: var(--border-strong); }
 .leak.severity-critical {
-  border-left-color: var(--risk);
-  background: var(--risk-bg);
+  border-left-color: var(--border-strong);
+  background: var(--surface);
 }
 .leak .leak-name { font-weight: 600; }
 .leak .leak-evidence { color: var(--muted); font-size: 0.85rem; margin-top: 0.15rem; }
@@ -183,18 +181,17 @@ section h3 {
   border-radius: var(--radius);
   font-size: 0.85rem;
 }
-/* Uniform card surface; severity is conveyed by the left-border color only,
-   so all plan cards look consistent regardless of their data-driven state. */
+/* Keep negative adherence states visually neutral; text and values carry the signal. */
 .plan-card.severity-green   { border-left-color: var(--accent); }
-.plan-card.severity-yellow  { border-left-color: var(--risk); }
-.plan-card.severity-red     { border-left-color: var(--risk); background: var(--risk-bg); }
+.plan-card.severity-yellow  { border-left-color: var(--border-strong); }
+.plan-card.severity-red     { border-left-color: var(--border-strong); background: var(--surface); }
 .plan-card.severity-neutral { border-left-color: var(--border); }
 
 /* Standalone severity chips (plan-status badges, leak chips, etc.) */
 span.severity-green   { background: var(--accent); color: #1a1a18; }
 span.severity-neutral { background: var(--border);  color: var(--muted); }
-span.severity-yellow  { background: var(--risk);   color: #1a1a18; }
-span.severity-red     { background: var(--risk);   color: #1a1a18; }
+span.severity-yellow  { background: var(--border-strong); color: var(--text); }
+span.severity-red     { background: var(--border-strong); color: var(--text); }
 
 .plan-head {
   display: flex; align-items: baseline; gap: 0.6rem;
@@ -419,7 +416,7 @@ span.severity-red     { background: var(--risk);   color: #1a1a18; }
 .puzzle-feedback { font-size: 0.9rem; min-height: 2.5rem; }
 .puzzle-feedback .ok  { color: var(--success); font-weight: 600; }
 .puzzle-feedback .bad,
-.puzzle-prompt .bad   { color: var(--risk); font-weight: 600; }
+.puzzle-prompt .bad   { color: var(--text); font-weight: 600; }
 .puzzle-controls { margin-top: 1rem; display: flex; gap: 0.5rem; }
 .puzzle-controls button {
   padding: 0.35rem 0.7rem; font: inherit; font-size: 0.82rem;
@@ -619,8 +616,8 @@ span.severity-red     { background: var(--risk);   color: #1a1a18; }
 }
 .drillin-grid .card:hover { background: var(--accent-bg); }
 .drillin-grid .card.alert {
-  border-left-color: var(--risk);
-  background: var(--risk-bg);
+  border-left-color: var(--border-strong);
+  background: var(--surface);
 }
 .drillin-grid .card .label {
   font-size: 0.7rem; color: var(--muted); font-weight: 600;
@@ -654,8 +651,8 @@ span.severity-red     { background: var(--risk);   color: #1a1a18; }
   padding: var(--card-pad);
 }
 .behavior-card.alert {
-  border-color: var(--risk);
-  background: var(--risk-bg);
+  border-color: var(--border);
+  background: var(--surface);
 }
 .behavior-card .bh-label {
   font-size: 0.7rem;

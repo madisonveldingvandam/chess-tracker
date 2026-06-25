@@ -55,7 +55,8 @@ platform-brand colors.
    board is the visual object. Surrounding UI should frame it as analysis, not
    compete with it.
 2. **Color has jobs.** Do not use color for decoration. Use it for selection,
-   confidence, strong stats, risk, and action.
+   confidence, strong stats, and action. Negative states should be carried first
+   by labels, values, sort order, and neutral structure.
 3. **Tables are evidence.** Tables should feel quiet, dense, scannable, and
    reliable. Avoid cardifying every row or adding badges unless they change a
    decision.
@@ -70,7 +71,8 @@ platform-brand colors.
 ## Palette Direction
 
 The current warm-dark palette is close. The next pass should make the layering
-more deliberate and separate "selected/positive" from "risk".
+more deliberate without introducing a dedicated bad-signal hue. The former
+terracotta alert treatment is parked until its meaning is rethought.
 
 | Token | Proposed hex | Role |
 |---|---:|---|
@@ -78,14 +80,12 @@ more deliberate and separate "selected/positive" from "risk".
 | `--surface` | `#2a2824` | Default panel, card, KPI strip, table hover |
 | `--surface-raised` | `#312e29` | Board panel metadata, selected subpanels, open details |
 | `--accent-bg` | `#352d22` | Selected rows and low-volume brass tint |
-| `--risk-bg` | `#33251f` | Critical/warning card tint only |
 | `--text` | `#f3efe3` | Primary ivory text |
 | `--muted` | `#b8b2a6` | Secondary text, table headers, labels |
 | `--subtle` | `#8e887d` | Tertiary text only; avoid for small critical text |
 | `--border` | `#403c35` | Hairlines and ordinary card borders |
 | `--border-strong` | `#5f574b` | Focus, active controls, stronger separators |
 | `--accent` | `#c4a66f` | Brass: selected, strong stat, high confidence, primary action |
-| `--risk` | `#c9856b` | Muted terracotta: true problem/risk emphasis |
 | `--success` | `#9eb797` | Reserved for puzzle "correct" feedback only |
 | `--board-light` | `#d8c694` | Keep current Lichess-compatible warm light square |
 | `--board-dark` | `#5a5852` | Keep current Lichess-compatible dark square |
@@ -101,7 +101,6 @@ Computed against the proposed palette:
 - `--subtle` on `--surface`: 4.18:1, so use only for non-essential tertiary
   text or larger labels.
 - `--accent` on `--surface`: 6.33:1
-- `--risk` on `--surface`: 4.94:1
 
 ## Color Usage Rules
 
@@ -114,16 +113,22 @@ Use **brass** (`--accent`) only for:
 - primary action button
 - active platform/rating state where a selected state matters
 
-Use **risk** (`--risk`, `--risk-bg`) only for:
+Do not use a dedicated color for bad-signal states in this phase. Existing
+`alert` and `severity-*` classes can remain in the markup, but they should map
+to neutral surfaces and borders. Use no color change for weak table stats unless
+there is a strong product need. Shape, labels, values, and sort order should
+carry negative signals.
 
-- critical leak left rule and optional tinted background
-- alert behavior cards
-- puzzle mistake feedback
-- negative phase or process signal when the existing logic already marks it as
-  problematic
+### Parked Color Decision
 
-Use no color change for weak table stats unless there is a strong product need.
-Shape, text, and sort order should carry most negative signals.
+The former terracotta treatment should not return until its product meaning is
+specific enough to avoid reading as a generic "bad" badge. Before reintroducing
+it, decide:
+
+- whether it means urgent action, diagnostic category, user mistake, or trend
+  severity
+- whether it belongs on whole cards, small inline values, or only drill feedback
+- how often it can appear before it stops helping scanning
 
 ## Typography Direction
 
@@ -182,8 +187,9 @@ All summary cards should share:
 - consistent padding
 - label/value/subtitle rhythm
 
-Severity should appear as a left rule and optional tint, not as full-card color.
-Do not add icons for card states in this phase.
+Severity and alert states should remain visually neutral in this phase. A
+neutral left rule can preserve structure, but avoid card tinting for negative
+states. Do not add icons for card states in this phase.
 
 ### Tables
 
@@ -208,8 +214,8 @@ Do not add icons for card states in this phase.
 
 ### Drill And Puzzle Views
 
-- Puzzle feedback can use `--success` and `--risk`, but those colors should not
-  spread into normal dashboard cards.
+- Puzzle feedback can use `--success` for correct feedback. Mistake feedback
+  should use text weight, not a dedicated alert hue.
 - Puzzle list items should share the same card grammar as behavior cards.
 - Keep controls ordinary text buttons; no icon set is needed.
 
@@ -260,7 +266,8 @@ This should be one compact band, not a new hero.
 
 - The dashboard still feels minimal and warm-dark.
 - Text and muted labels remain readable against their surfaces.
-- Accent and risk colors have separate meanings.
+- Accent remains non-negative; no terracotta or generic bad-signal color is
+  active.
 - The first viewport feels more like a chess analysis product than a generic
   admin dashboard.
 - Opening pages keep the board as the dominant visual object.
