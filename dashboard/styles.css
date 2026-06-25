@@ -1,16 +1,22 @@
-/* dashboard/styles.css — minimal warm-dark theme
- * Spec: docs/superpowers/specs/2026-05-26-dashboard-dark-theme-design.md
+/* dashboard/styles.css - minimal warm-dark chess analytics theme
+ * Spec: docs/superpowers/specs/2026-06-25-chess-business-ui-design.md
  */
 
 :root {
-  --bg: #262624;
-  --surface: #2d2d2a;
-  --accent-bg: #332e1f;       /* yellow-tinted dark for accent backgrounds (selected row, card hover) */
-  --text: #f0eee6;            /* primary cream */
-  --muted: #b8b8b0;           /* lightened from #8a8a82 for readability */
-  --border: #3a3a37;
-  --accent: #b09e5e;          /* muted warm yellow-gold (was sage) — chess-board light-square feel */
-  --board-light: #d8c694;     /* pale cream-yellow harmonizing with accent (was warm gray #c0c0b6) */
+  --bg: #211f1c;
+  --surface: #2a2824;
+  --surface-raised: #312e29;
+  --accent-bg: #352d22;
+  --risk-bg: #33251f;
+  --text: #f3efe3;
+  --muted: #b8b2a6;
+  --subtle: #8e887d;
+  --border: #403c35;
+  --border-strong: #5f574b;
+  --accent: #c4a66f;
+  --risk: #c9856b;
+  --success: #9eb797;
+  --board-light: #d8c694;
   --board-dark: #5a5852;
   --piece-fg: #111111;
   --content-max: 1200px;
@@ -58,10 +64,16 @@ header#kpi-strip {
   min-width: max-content;
 }
 .kpi-label {
-  font-size: 0.7rem; color: var(--muted);
+  font-size: 0.68rem; color: var(--muted);
+  font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.05em;
 }
-.kpi-value { font-size: 1.35rem; font-weight: 600; margin-top: 0.12rem; }
+.kpi-value {
+  font-size: 1.25rem;
+  font-weight: 650;
+  margin-top: 0.12rem;
+  font-variant-numeric: tabular-nums;
+}
 .kpi-value.accent { color: var(--accent); }
 .kpi.kpi-active .kpi-label { color: var(--accent); }
 .kpi.kpi-sep {
@@ -122,16 +134,16 @@ section h2 {
   flex-wrap: wrap;
   gap: 0.25rem 0.5rem;
   margin: 0 0 0.75rem;
-  font-size: 1.1rem; font-weight: 600; letter-spacing: 0;
+  font-size: 1.1rem; font-weight: 650; letter-spacing: 0;
   line-height: 1.25;
 }
 section h2 small {
-  color: var(--muted); font-weight: 400; font-size: 0.8rem;
+  color: var(--muted); font-weight: 400; font-size: 0.78rem;
   margin-left: 0;
 }
 section h3 {
   margin: 1rem 0 0.5rem;
-  font-size: 0.8rem; font-weight: 600;
+  font-size: 0.78rem; font-weight: 600;
   color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.05em;
 }
@@ -144,10 +156,10 @@ section h3 {
   border-left: 3px solid var(--border);
   border-radius: var(--radius);
 }
-.leak.severity-warn { border-left-color: var(--text); }
+.leak.severity-warn { border-left-color: var(--risk); }
 .leak.severity-critical {
-  border-left-color: var(--accent);
-  background: var(--accent-bg);
+  border-left-color: var(--risk);
+  background: var(--risk-bg);
 }
 .leak .leak-name { font-weight: 600; }
 .leak .leak-evidence { color: var(--muted); font-size: 0.85rem; margin-top: 0.15rem; }
@@ -174,22 +186,22 @@ section h3 {
 /* Uniform card surface; severity is conveyed by the left-border color only,
    so all plan cards look consistent regardless of their data-driven state. */
 .plan-card.severity-green   { border-left-color: var(--accent); }
-.plan-card.severity-yellow  { border-left-color: var(--text); }
-.plan-card.severity-red     { border-left-color: var(--text); }
+.plan-card.severity-yellow  { border-left-color: var(--risk); }
+.plan-card.severity-red     { border-left-color: var(--risk); background: var(--risk-bg); }
 .plan-card.severity-neutral { border-left-color: var(--border); }
 
 /* Standalone severity chips (plan-status badges, leak chips, etc.) */
 span.severity-green   { background: var(--accent); color: #1a1a18; }
 span.severity-neutral { background: var(--border);  color: var(--muted); }
-span.severity-yellow  { background: #c8880a;        color: #1a1a18; }
-span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
+span.severity-yellow  { background: var(--risk);   color: #1a1a18; }
+span.severity-red     { background: var(--risk);   color: #1a1a18; }
 
 .plan-head {
   display: flex; align-items: baseline; gap: 0.6rem;
   flex-wrap: wrap;
 }
 .plan-head .plan-vs { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; }
-.plan-head .plan-name { font-weight: 600; }
+.plan-head .plan-name { font-weight: 650; }
 .plan-head .plan-adherence {
   margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted);
 }
@@ -229,11 +241,11 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
 }
 .plan-step {
   background: var(--surface); color: var(--text);
-  border: 1px solid var(--border); border-radius: 3px;
+  border: 1px solid var(--border); border-radius: var(--radius);
   padding: 0.1rem 0.5rem; cursor: pointer; font-size: 0.85rem;
   line-height: 1.4;
 }
-.plan-step:hover:not(:disabled) { border-color: var(--text); }
+.plan-step:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text); }
 .plan-step:disabled { opacity: 0.35; cursor: default; }
 .plan-board-cap {
   flex: 1; text-align: center; color: var(--muted);
@@ -252,10 +264,15 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
   border-radius: var(--radius);
 }
 .process-card .pm-label {
-  color: var(--muted); font-size: 0.7rem;
+  color: var(--muted); font-size: 0.7rem; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.05em;
 }
-.process-card .pm-value { font-size: 1.3rem; font-weight: 600; margin-top: 0.2rem; }
+.process-card .pm-value {
+  font-size: 1.25rem;
+  font-weight: 650;
+  margin-top: 0.2rem;
+  font-variant-numeric: tabular-nums;
+}
 
 /* Sparkline */
 .sparkline { display: inline-flex; gap: 2px; align-items: end; height: 14px; }
@@ -277,8 +294,8 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
 #copy-suggestions {
   margin-top: 0.75rem; padding: 0.5rem 1rem;
   background: var(--accent); color: #1a1a18;
-  border: 0; border-radius: 3px;
-  cursor: pointer; font-weight: 400; font-size: 0.85rem;
+  border: 0; border-radius: var(--radius);
+  cursor: pointer; font-weight: 600; font-size: 0.85rem;
 }
 
 /* Play-signatures split layout: table on the left, sticky board on the right.
@@ -310,27 +327,29 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
 .step-btn {
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius);
   color: var(--muted);
   cursor: pointer;
   padding: 0 0.45rem;
   line-height: 1.6;
   font-size: 0.72rem;
 }
-.step-btn:hover:not(:disabled) { color: var(--text); border-color: var(--text); }
+.step-btn:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
 .step-btn:disabled { opacity: 0.25; cursor: default; }
 .step-label { flex: 1; text-align: center; font-variant-numeric: tabular-nums; }
 .board-meta {
   margin-top: 0.75rem;
   font-size: 0.85rem;
 }
-.board-meta .name { font-weight: 600; }
+.board-meta .name { font-size: 0.95rem; font-weight: 650; }
 .board-meta .stats { color: var(--muted); margin-top: 0.25rem; font-size: 0.75rem; }
 .board-meta .empty { color: var(--muted); font-style: italic; }
 .board-meta .detail {
   margin: 0.6rem 0 0;
-  padding: 0.6rem 0 0;
-  border-top: 1px solid var(--border);
+  padding: 0.65rem 0.75rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.25rem;
@@ -351,7 +370,7 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
   color: var(--muted);
   text-decoration: none;
 }
-.board-meta .drill-link:hover { color: var(--text); border-color: var(--text); }
+.board-meta .drill-link:hover { color: var(--text); border-color: var(--border-strong); }
 
 @media (max-width: 900px) {
   .sig-split { grid-template-columns: minmax(0, 1fr); }
@@ -398,16 +417,16 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
 .puzzle-side { flex: 1; min-width: 220px; }
 .puzzle-prompt { font-size: 0.9rem; margin-bottom: 0.75rem; }
 .puzzle-feedback { font-size: 0.9rem; min-height: 2.5rem; }
-.puzzle-feedback .ok  { color: #7ec88b; font-weight: 600; }
+.puzzle-feedback .ok  { color: var(--success); font-weight: 600; }
 .puzzle-feedback .bad,
-.puzzle-prompt .bad   { color: #d98b8b; font-weight: 600; }
+.puzzle-prompt .bad   { color: var(--risk); font-weight: 600; }
 .puzzle-controls { margin-top: 1rem; display: flex; gap: 0.5rem; }
 .puzzle-controls button {
   padding: 0.35rem 0.7rem; font: inherit; font-size: 0.82rem;
   background: var(--surface); color: var(--text);
-  border: 1px solid var(--border); border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer;
 }
-.puzzle-controls button:hover { border-color: var(--accent); }
+.puzzle-controls button:hover { border-color: var(--border-strong); }
 
 @media (max-width: 760px) {
   #puzzle-drill { grid-template-columns: 1fr; }
@@ -435,7 +454,8 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
 .tabulator {
   background: transparent !important;
   border: 0 !important;
-  font-size: 0.85rem;
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
   width: 100%;
 }
 .tabulator .tabulator-tableholder,
@@ -457,7 +477,7 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
 }
 .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title {
   color: var(--muted) !important;
-  font-size: 0.74rem; font-weight: 600;
+  font-size: 0.72rem; font-weight: 600;
   line-height: 1.2;
   white-space: normal !important;
   overflow: visible !important;
@@ -504,12 +524,16 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
 }
 .tabulator .tabulator-row { cursor: pointer; }
 .tabulator .tabulator-header-filter input {
-  background: var(--bg);
+  background: var(--surface-raised);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 2px;
   padding: 0.2rem 0.4rem;
   font-size: 0.8rem;
+}
+.tabulator .tabulator-header-filter input:focus {
+  outline: 1px solid var(--border-strong);
+  border-color: var(--border-strong);
 }
 .tabulator a {
   color: var(--text);
@@ -546,7 +570,7 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.refresh-link:hover { color: var(--text); border-color: var(--muted); }
+.refresh-link:hover { color: var(--text); border-color: var(--border-strong); }
 
 /* Move quality (landing): cards reuse .behavior-card; only the empty state is new */
 .mq-empty { color: var(--muted); font-style: italic; }
@@ -571,7 +595,7 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
 }
 .mqf-table th, .mqf-table td { text-align: right; padding: 0.4rem 1rem; border-bottom: 1px solid var(--border); }
 .mqf-table th:first-child, .mqf-table td:first-child { text-align: left; text-transform: capitalize; }
-.mqf-table th { color: var(--muted); font-weight: 400; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.mqf-table th { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .mqf-current { background: var(--accent-bg); }
 .mqf-current td:first-child { color: var(--accent); }
 /* Opponent openings: move notation must preserve case (e4 ≠ E4) */
@@ -594,14 +618,18 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
   display: block;
 }
 .drillin-grid .card:hover { background: var(--accent-bg); }
-.drillin-grid .card.alert { border-left-color: var(--text); }
+.drillin-grid .card.alert {
+  border-left-color: var(--risk);
+  background: var(--risk-bg);
+}
 .drillin-grid .card .label {
-  font-size: 0.65rem; color: var(--muted);
+  font-size: 0.7rem; color: var(--muted); font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.05em;
 }
 .drillin-grid .card .headline {
-  font-size: 1rem; font-weight: 600;
+  font-size: 1.25rem; font-weight: 650;
   margin: 0.15rem 0;
+  font-variant-numeric: tabular-nums;
 }
 .drillin-grid .card.alert .headline { color: var(--text); }
 .drillin-grid .card .sub {
@@ -626,19 +654,22 @@ span.severity-red     { background: #b03a2e;        color: #f0ebe0; }
   padding: var(--card-pad);
 }
 .behavior-card.alert {
-  border-color: var(--accent);
+  border-color: var(--risk);
+  background: var(--risk-bg);
 }
 .behavior-card .bh-label {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
+  font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .behavior-card .bh-value {
-  font-size: 1.35rem;
-  font-weight: 600;
+  font-size: 1.25rem;
+  font-weight: 650;
   margin: 0.25rem 0;
   color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 .behavior-card .bh-sub {
   font-size: 0.85rem;
