@@ -13,16 +13,12 @@
 <body>
   <header id="kpi-strip">
     <a class="home-link" href="index.html">← repertoire</a>
-    <div class="platform-links">
-      <a class="platform-link" href="https://www.chess.com/member/M_V-V" target="_blank" rel="noopener">Chess.com</a>
-      <a class="platform-link" href="https://lichess.org/@/M_V-v" target="_blank" rel="noopener">Lichess</a>
-    </div>
   </header>
   <main>
     <section id="opening-block">
       <h2 id="opening-title">Opening</h2>
       <div class="sig-split">
-        <div id="opening-variations-table"></div>
+        <div class="table-scroll"><div id="opening-variations-table"></div></div>
         <aside class="board-panel">
           <div class="board-large" id="opening-board"></div>
           <nav class="board-stepper" id="opening-board-stepper"></nav>
@@ -32,12 +28,12 @@
     </section>
     <section id="opponent-openings-block" style="display:none">
       <h2>What opponents open with (your losses)</h2>
-      <div id="opponent-openings-table"></div>
+      <div id="opponent-openings-table" class="table-scroll"></div>
       <p id="opponent-openings-audit" class="audit-note"></p>
     </section>
     <section id="trap-exposures-block" style="display:none">
       <h2>Known opening traps encountered</h2>
-      <div id="trap-exposures-table"></div>
+      <div id="trap-exposures-table" class="table-scroll"></div>
       <p id="trap-exposures-audit" class="audit-note"></p>
     </section>
   </main>

@@ -13,10 +13,6 @@
 <body>
   <header id="kpi-strip">
     <a class="home-link" href="index.html">← repertoire</a>
-    <div class="platform-links">
-      <a class="platform-link" href="https://www.chess.com/member/M_V-V" target="_blank" rel="noopener">Chess.com</a>
-      <a class="platform-link" href="https://lichess.org/@/M_V-v" target="_blank" rel="noopener">Lichess</a>
-    </div>
   </header>
   <main>
     <section id="review-picks">
@@ -27,11 +23,11 @@
       <h2>Loss summary</h2>
       <div id="loss-summary-cards" class="behavior-grid"></div>
       <h3 style="margin-top:1rem">Fast-mate buckets</h3>
-      <div id="mate-buckets"></div>
+      <div class="table-scroll"><div id="mate-buckets"></div></div>
     </section>
     <section id="blunder-phases-block" style="display:none">
       <h2>Early blunders by phase</h2>
-      <div id="blunder-phases-table"></div>
+      <div id="blunder-phases-table" class="table-scroll"></div>
       <p id="blunder-phases-coverage" class="audit-note"></p>
     </section>
     <section id="puzzle-drill-section">
@@ -42,10 +38,10 @@
     </section>
     <section id="losses-section">
       <h2>Recent losses → error log</h2>
-      <div id="losses-table"></div>
+      <div class="table-scroll"><div id="losses-table"></div></div>
       <button id="copy-suggestions">Copy starter entries</button>
       <h3>Error log</h3>
-      <div id="error-log-table"></div>
+      <div class="table-scroll"><div id="error-log-table"></div></div>
     </section>
   </main>
   <script src="vendor/tabulator.min.js"></script>

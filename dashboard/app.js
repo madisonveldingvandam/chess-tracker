@@ -71,7 +71,15 @@
       : `<div class="kpi kpi-active"><span class="kpi-label">Rating</span>` +
         `<span class="kpi-value">${k.current_rating ?? "—"}</span></div>`;
 
-    strip.insertAdjacentHTML('afterbegin', `
+    const hasDedicatedLichessStrip = document.getElementById("lichess-strip") != null;
+    const profileLinks = `
+      <div class="strip-profile-links">
+        <a class="strip-platform-label" href="https://www.chess.com/member/M_V-V" target="_blank" rel="noopener">Chess.com</a>
+        ${hasDedicatedLichessStrip ? "" : `<a class="strip-platform-label" href="https://lichess.org/@/M_V-v" target="_blank" rel="noopener">Lichess</a>`}
+      </div>`;
+    const kpiHtml = `
+      ${profileLinks}
+      <div class="kpi kpi-sep"></div>
       ${ratingHtml}
       <div class="kpi kpi-sep"></div>
       <div class="kpi"><span class="kpi-label">Games</span>
@@ -86,7 +94,9 @@
          href="https://github.com/madisonveldingvandam/chess-tracker/actions/workflows/deploy.yml"
          target="_blank" rel="noopener"
          title="Re-run the deploy workflow on GitHub Actions to rebuild this dashboard now">↻ Refresh</a>
-    `);
+    `;
+    const homeLink = strip.querySelector(".home-link");
+    (homeLink || strip).insertAdjacentHTML(homeLink ? "afterend" : "afterbegin", kpiHtml);
   }
 
   function renderLichessKPI(d) {
@@ -111,7 +121,8 @@
         `<span class="kpi-value">${L.game_count}</span></div>`
       : "";
     strip.insertAdjacentHTML("beforeend",
-      `<span class="lichess-label">Lichess</span>` +
+      `<a class="lichess-label" href="https://lichess.org/@/M_V-v" target="_blank" rel="noopener">Lichess</a>` +
+      `<div class="kpi kpi-sep"></div>` +
       ratingHtml + puzzleHtml + gamesHtml
     );
     strip.style.display = "";
@@ -548,6 +559,7 @@
     const table = new Tabulator(tableSelector, {
       data: rareRowData ? [...rows, rareRowData] : rows,
       layout: "fitColumns", maxHeight: "540px",
+      headerWordWrap: true,
       rowFormatter: row => {
         if (row.getData()._is_rare_header) {
           const el = row.getElement();
@@ -558,13 +570,6 @@
       },
       columns: [
         {title: "Opening", field: "family", width: 210, minWidth: 160},
-        {title: "Plan", field: "plan_status", width: 55, minWidth: 55, headerSort: false,
-         formatter: c => {
-           const v = c.getValue();
-           if (!v) return "";
-           const cls = v === "active" ? "severity-green" : "severity-neutral";
-           return `<span class="${cls}" style="font-size:0.75rem;padding:1px 5px;border-radius:3px;">${v}</span>`;
-         }},
         {title: "Games", field: "games", width: 68, minWidth: 68, sorter: "number"},
         {title: "Δ Rating", field: "sum_rating_delta", width: 90, minWidth: 90, sorter: "number", formatter: ratingDeltaCell},
         {title: "Win%", field: "win_pct", width: 62, minWidth: 62, sorter: "number", formatter: winPctCell},
@@ -689,6 +694,7 @@
       });
       const rareTable = new Tabulator("#opening-variations-table", {
         data: rareFamilies, layout: "fitColumns", maxHeight: "540px",
+        headerWordWrap: true,
         columns: [
           {title: "Opening", field: "family", width: 210, minWidth: 160},
           {title: "Games", field: "games", width: 68, minWidth: 68, sorter: "number"},
@@ -735,6 +741,7 @@
     });
     const table = new Tabulator("#opening-variations-table", {
       data: rows, layout: "fitColumns", height: "540px",
+      headerWordWrap: true,
       columns: [
         {title: "Variation", field: "variation", headerFilter: "input", minWidth: 220,
          formatter: c => c.getValue() || `<span class="ind-off">main line</span>`},
