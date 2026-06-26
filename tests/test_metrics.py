@@ -1,6 +1,12 @@
 """Tests for metric computations."""
 from tests.fixtures.sample_records import RECORDS, CLOCK_RECORDS, OUTLASTED_THEN_FLAG_RECORD, LONG_OUTLAST_RECORD, BLITZ_CLOCK_RECORDS
-from chess_tracker.metrics import compute_kpis, compute_sessions, compute_process_metrics, compute_session_decay
+from chess_tracker.metrics import (
+    compute_kpis,
+    compute_sessions,
+    compute_process_metrics,
+    compute_session_decay,
+    compute_study_recommendations,
+)
 
 
 def test_compute_kpis_current_rating_is_last_games():
@@ -377,6 +383,84 @@ def test_recent_losses_includes_suggested_entry():
         assert {"title", "pattern", "game_refs"} <= set(L["suggested_entry"].keys())
 
 
+def test_compute_study_recommendations_returns_deterministic_cards():
+    cards = compute_study_recommendations(
+        opening_families=[
+            {
+                "family": "Italian Game",
+                "color": "white",
+                "games": 24,
+                "win_pct": 55.0,
+                "sum_rating_delta": -15,
+                "sample_strength": "weak",
+                "priority": 1.5,
+            },
+            {
+                "family": "Pirc Defense",
+                "color": "black",
+                "games": 14,
+                "win_pct": 28.6,
+                "sum_rating_delta": -42,
+                "sample_strength": "weak",
+                "priority": 3.75,
+            },
+        ],
+        leak_summary=[{
+            "name": "time_burn_opening",
+            "severity": "critical",
+            "evidence": "median 16.2s on my first 8 moves (target <8s)",
+            "suggested_action": "Move 8 with >=50s left.",
+        }],
+        recent_losses=[],
+        review_picks=[{
+            "kind": "biggest_loss",
+            "url": "https://chess.com/game/1",
+            "moves": 31,
+            "loss_type": "timeout",
+            "rating_delta": -22,
+            "question": "What single move made the position lost? Mark the ply.",
+        }],
+        process_metrics={"opening_velocity_median": 16.2},
+    )
+    assert [card["title"] for card in cards] == [
+        "Study Pirc Defense as Black",
+        "Tighten opening clock process",
+        "Review the biggest recent loss",
+    ]
+    assert cards[0] == {
+        "title": "Study Pirc Defense as Black",
+        "reason": "14 games, 28.6% win rate, -42 rating delta.",
+        "action": "Review the recurring line and choose one default response.",
+        "severity": "red",
+        "href": "opening.html?family=Pirc+Defense&color=black",
+    }
+    assert cards[1]["reason"] == "median 16.2s on my first 8 moves (target <8s)"
+    assert cards[1]["action"] == "Move 8 with >=50s left."
+    assert cards[1]["severity"] == "red"
+    assert cards[1]["href"] == "process.html"
+    assert cards[2]["reason"] == "timeout loss, 31 moves, -22 rating delta."
+    assert cards[2]["href"] == "losses.html"
+
+
+def test_compute_study_recommendations_empty_data_does_not_crash():
+    cards = compute_study_recommendations(
+        opening_families=[{
+            "family": "Italian Game",
+            "color": "white",
+            "games": 9,
+            "win_pct": 77.8,
+            "sum_rating_delta": 18,
+            "sample_strength": "ignore",
+            "priority": 0.0,
+        }],
+        leak_summary=[],
+        recent_losses=[],
+        review_picks=[],
+        process_metrics={},
+    )
+    assert cards == []
+
+
 from chess_tracker.metrics import compute_all
 
 
@@ -391,10 +475,11 @@ def test_compute_all_has_new_panel_keys():
     expected = {
         "username", "format", "generated_at",
         "kpis", "leak_summary",
-        "recent_losses", "process_metrics",
+        "recent_losses", "study_recommendations", "process_metrics",
         "play_signatures", "sessions", "error_log",
     }
     assert expected <= set(payload.keys())
+    assert isinstance(payload["study_recommendations"], list)
 
 
 def test_compute_all_play_signatures_has_low_confidence_flag():

@@ -2,6 +2,7 @@
 from collections import Counter
 from datetime import datetime
 import statistics
+from urllib.parse import urlencode
 from chess_tracker.pgn import GameRecord, opening_family, opening_variation, parse_time_control
 from chess_tracker.enrich import enrich_with_deltas, enrich_with_sessions
 from chess_tracker.behavior import (
@@ -841,6 +842,148 @@ def compute_plan_compliance(records: list[GameRecord], plan: dict,
     }
 
 
+def _severity_for_recommendation(value: str | None) -> str:
+    mapping = {
+        "critical": "red",
+        "warn": "yellow",
+        "info": "neutral",
+        "green": "green",
+        "yellow": "yellow",
+        "red": "red",
+        "neutral": "neutral",
+    }
+    return mapping.get(value or "", "neutral")
+
+
+def _signed_rating_delta(value) -> str:
+    if value is None:
+        return "0"
+    return f"{value:+g}"
+
+
+def _opening_recommendation(opening_families: list[dict]) -> dict | None:
+    meaningful = [
+        row for row in (opening_families or [])
+        if row.get("games", 0) >= 10
+        or (row.get("sample_strength") is not None and row.get("sample_strength") != "ignore")
+    ]
+    candidates = [
+        row for row in meaningful
+        if row.get("priority", 0) > 0 or row.get("sum_rating_delta", 0) < 0
+    ]
+    if not candidates:
+        return None
+
+    row = max(
+        candidates,
+        key=lambda r: (
+            r.get("priority", 0),
+            -r.get("sum_rating_delta", 0),
+            r.get("games", 0),
+            r.get("family", ""),
+            r.get("color", ""),
+        ),
+    )
+    delta = _signed_rating_delta(row.get("sum_rating_delta"))
+    family = row.get("family") or "opening"
+    color = row.get("color") or "unknown"
+    severity = (
+        "red"
+        if row.get("sum_rating_delta", 0) <= -30 or row.get("win_pct", 100) < 40
+        else "yellow"
+    )
+    query = urlencode({"family": family, "color": color})
+    return {
+        "title": f"Study {family} as {str(color).title()}",
+        "reason": (
+            f"{row.get('games', 0)} games, {row.get('win_pct', 0)}% win rate, "
+            f"{delta} rating delta."
+        ),
+        "action": "Review the recurring line and choose one default response.",
+        "severity": severity,
+        "href": f"opening.html?{query}",
+    }
+
+
+def _leak_recommendation(leak_summary: list[dict]) -> dict | None:
+    leak = next(
+        (row for row in (leak_summary or [])
+         if row.get("severity") in {"critical", "warn"}),
+        None,
+    )
+    if leak is None:
+        return None
+
+    titles = {
+        "time_burn_opening": "Tighten opening clock process",
+        "flag_loss_dominant": "Reduce flag losses",
+        "mate_loss_dominant": "Run a safety review",
+        "outlasted_but_flagged": "Convert clock leads",
+        "abandonment": "Use the stop signal",
+        "post_peak_decay": "Cap session length",
+        "tilt_session": "Enforce the stop rule",
+    }
+    process_names = {
+        "time_burn_opening",
+        "flag_loss_dominant",
+        "outlasted_but_flagged",
+        "post_peak_decay",
+        "tilt_session",
+    }
+    name = leak.get("name", "process")
+    return {
+        "title": titles.get(name, f"Fix {name.replace('_', ' ')}"),
+        "reason": leak.get("evidence", ""),
+        "action": leak.get("suggested_action", ""),
+        "severity": _severity_for_recommendation(leak.get("severity")),
+        "href": "process.html" if name in process_names else "leaks.html",
+    }
+
+
+def _review_pick_recommendation(review_picks: list[dict]) -> dict | None:
+    if not review_picks:
+        return None
+    pick = review_picks[0]
+    kind_title = {
+        "biggest_loss": "Review the biggest recent loss",
+        "timeout": "Review a clock loss",
+        "fast_mate": "Review a fast mate",
+    }
+    parts = [
+        f"{pick.get('loss_type', 'loss')} loss",
+        f"{pick.get('moves', 0)} moves",
+    ]
+    if pick.get("rating_delta") is not None:
+        parts.append(f"{_signed_rating_delta(pick.get('rating_delta'))} rating delta")
+    rating_delta = pick.get("rating_delta")
+    severity = "red" if rating_delta is not None and rating_delta <= -20 else "yellow"
+    return {
+        "title": kind_title.get(pick.get("kind"), "Review a recent loss"),
+        "reason": ", ".join(parts) + ".",
+        "action": pick.get("question", ""),
+        "severity": severity,
+        "href": "losses.html",
+    }
+
+
+def compute_study_recommendations(
+    opening_families: list[dict] | None = None,
+    leak_summary: list[dict] | None = None,
+    recent_losses: list[dict] | None = None,
+    review_picks: list[dict] | None = None,
+    process_metrics: dict | None = None,
+    limit: int = 3,
+) -> list[dict]:
+    """Return concise coach-style next-study cards from existing metrics."""
+    del recent_losses, process_metrics  # Inputs kept for stable helper shape.
+    cards = [
+        _opening_recommendation(opening_families or []),
+        _leak_recommendation(leak_summary or []),
+        _review_pick_recommendation(review_picks or []),
+    ]
+    return [card for card in cards if card is not None][:limit]
+
+
 def compute_all(records: list[GameRecord], annotations: dict,
                 username: str, format: str = "bullet",
                 low_confidence_threshold: int = 15,
@@ -864,19 +1007,33 @@ def compute_all(records: list[GameRecord], annotations: dict,
         row["note"] = ann.get("note", "")
         row["low_confidence"] = row["games"] < low_confidence_threshold
 
+    leak_summary = detect_leaks(records)
+    recent_losses = recent_losses_with_suggestions(records)
+    review_picks = compute_review_picks(records)
+    process_metrics = {
+        **compute_process_metrics(records),
+        "session_decay": compute_session_decay(records),
+    }
+    opening_families = compute_opening_families(records, plan=plan or {})
+    study_recommendations = compute_study_recommendations(
+        opening_families=opening_families,
+        leak_summary=leak_summary,
+        recent_losses=recent_losses,
+        review_picks=review_picks,
+        process_metrics=process_metrics,
+    )
+
     return {
         "username": username,
         "format": format,
         "generated_at": datetime.now().astimezone().isoformat(),
         "kpis": compute_kpis(records),
-        "leak_summary": detect_leaks(records),
-        "recent_losses": recent_losses_with_suggestions(records),
-        "review_picks": compute_review_picks(records),
-        "process_metrics": {
-            **compute_process_metrics(records),
-            "session_decay": compute_session_decay(records),
-        },
-        "opening_families": compute_opening_families(records, plan=plan or {}),
+        "leak_summary": leak_summary,
+        "recent_losses": recent_losses,
+        "review_picks": review_picks,
+        "study_recommendations": study_recommendations,
+        "process_metrics": process_metrics,
+        "opening_families": opening_families,
         "opening_variations": compute_opening_variations(records),
         "play_signatures": play_signatures,
         "sessions": compute_sessions(records),

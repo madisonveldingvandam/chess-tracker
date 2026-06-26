@@ -22,6 +22,7 @@ _MINIMAL_PAYLOAD = {
         "tilt": "yellow",
     },
     "leak_summary": [],
+    "study_recommendations": [],
     "next_session_rule": None,
     "recent_losses": [],
     "review_picks": [],
@@ -99,7 +100,7 @@ def test_render_dashboard_required_keys_present_in_embedded_data():
     raw = content[start:end].replace("\\/", "/")
     data = json.loads(raw)
     for key in ("kpis", "leak_summary", "recent_losses",
-                "process_metrics", "opening_families", "sessions",
+                "study_recommendations", "process_metrics", "opening_families", "sessions",
                 "opponent_openings", "trap_exposures", "blunder_phases",
                 "ratings_by_format", "lichess"):
         assert key in data, f"Missing required key: {key}"

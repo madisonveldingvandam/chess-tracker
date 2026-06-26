@@ -27,6 +27,7 @@
   renderKPI(D);
   renderLichessKPI(D);
   renderPlanBlock(D.plan_compliance);
+  renderStudyRecommendations(D.study_recommendations);
   renderMoveQuality(D.move_quality);
   renderMoveQualityByFormat(D.move_quality_by_format, D.format);
   renderFamilyBlock(D.opening_families, "white",
@@ -309,6 +310,36 @@
         });
       });
     }
+  }
+
+  function renderStudyRecommendations(recommendations) {
+    const root = document.getElementById("study-next-cards");
+    if (!root) return;
+    const rows = recommendations || [];
+    if (rows.length === 0) {
+      root.innerHTML = `<p style="color:var(--muted)">No urgent study item.</p>`;
+      return;
+    }
+    const severityClass = s => {
+      const v = String(s || "neutral");
+      return ["green", "yellow", "red", "neutral"].includes(v) ? v : "neutral";
+    };
+    root.innerHTML = rows.map(r => {
+      const href = r.href
+        ? `<a class="drill-link" href="${escapeAttr(r.href)}">Open drill-in</a>`
+        : "";
+      return `
+        <div class="plan-card severity-${severityClass(r.severity)}">
+          <div class="plan-head">
+            <span class="plan-vs">Coach pick</span>
+            <span class="plan-name">${escapeAttr(r.title || "Study item")}</span>
+          </div>
+          <div class="plan-counts">${escapeAttr(r.reason || "")}</div>
+          <p class="plan-plan">${escapeAttr(r.action || "")}</p>
+          ${href ? `<div class="plan-counts">${href}</div>` : ""}
+        </div>
+      `;
+    }).join("");
   }
 
   function renderLeaks(leaks) {
