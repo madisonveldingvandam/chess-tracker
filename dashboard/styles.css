@@ -215,6 +215,11 @@ span.severity-red     { background: var(--border-strong); color: var(--text); }
 .plan-winrates { margin-top: 0.4rem; font-size: 0.82rem; }
 .plan-winrates strong { font-variant-numeric: tabular-nums; }
 .plan-delta { color: var(--muted); font-size: 0.78rem; }
+.plan-card .drill-link {
+  color: var(--muted);
+  text-decoration-color: var(--border-strong);
+}
+.plan-card .drill-link:hover { color: var(--text); }
 .plan-detail { margin-top: 0.5rem; font-size: 0.8rem; }
 .plan-detail summary { cursor: pointer; color: var(--muted); }
 .plan-detail summary:hover { color: var(--text); }
