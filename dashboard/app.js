@@ -1316,7 +1316,7 @@
         emptyEl.style.display = "";
         emptyEl.textContent = "Run refresh.py with Stockfish analysis to build blunder categories.";
       }
-      ["blunder-review-table", "blunder-category-table", "blunder-phase-table", "blunder-opening-table"]
+      ["blunder-review-table"]
         .forEach(id => {
           const el = document.getElementById(id);
           if (el) el.innerHTML = "";
@@ -1347,9 +1347,6 @@
     }
 
     renderBlunderReview(analysis);
-    renderBlunderCategoryTable(analysis.categories || []);
-    renderBlunderPhaseTable(analysis.phase_breakdown || []);
-    renderBlunderOpeningTable(analysis.affected_openings || []);
   }
 
   function renderBlunderReview(analysis) {
@@ -1358,7 +1355,9 @@
     const metaEl = document.getElementById("blunder-board-meta");
     if (!tableEl) return;
 
-    const rows = analysis.blunders || analysis.examples || [];
+    const blunderById = {};
+    (analysis.blunders || []).forEach(b => { if (b.id) blunderById[b.id] = b; });
+    const rows = analysis.impact_rows || analysis.blunders || analysis.examples || [];
     if (rows.length === 0) {
       tableEl.innerHTML = `<p class="mq-empty">No blunders in the analyzed games.</p>`;
       if (metaEl) metaEl.innerHTML = `<div class="empty">No position selected.</div>`;
@@ -1379,40 +1378,86 @@
       layout: "fitColumns",
       height: "560px",
       headerWordWrap: true,
+      dataTree: true,
+      dataTreeChildField: "_children",
+      dataTreeStartExpanded: false,
+      rowFormatter: row => {
+        const d = row.getData();
+        const el = row.getElement();
+        el.classList.toggle("blunder-impact-row", d.row_type === "category");
+        el.classList.toggle("blunder-detail-row", d.row_type === "blunder");
+      },
       columns: [
-        {title: "Move", field: "move_label", minWidth: 92},
-        {title: "cp loss", field: "cp_loss", width: 82, sorter: "number"},
-        {title: "Category", field: "primary_category_label", minWidth: 150},
-        {title: "Phase", field: "phase_bucket", width: 116,
-         formatter: c => phaseLabel(c.getValue())},
-        {title: "Opening", field: "opening_label", minWidth: 180},
-        {title: "Played", field: "played_move_san", width: 90,
-         formatter: c => escapeAttr(c.getValue() || "—")},
-        {title: "Best", field: "best_move_san", width: 90,
-         formatter: c => `<span class="cell-strong">${escapeAttr(c.getValue() || "—")}</span>`},
+        {title: "Category / blunder", field: "label", minWidth: 240,
+         formatter: c => blunderImpactNameCell(c.getData())},
+        {title: "Focus", field: "focus_area", width: 128,
+         formatter: c => blunderImpactFocusCell(c.getData())},
+        {title: "Blunders", field: "count", width: 88, sorter: "number",
+         formatter: c => c.getData().row_type === "category" ? c.getValue() : ""},
+        {title: "%", field: "pct", width: 70, sorter: "number",
+         formatter: c => c.getData().row_type === "category" ? `${c.getValue()}%` : ""},
+        {title: "Total cp", field: "total_cp_loss", width: 92, sorter: "number",
+         formatter: c => c.getData().row_type === "category" ? c.getValue() : c.getData().cp_loss},
+        {title: "Avg cp", field: "avg_cp_loss", width: 82, sorter: "number",
+         formatter: c => c.getData().row_type === "category" ? c.getValue() : ""},
+        {title: "Worst cp", field: "worst_cp_loss", width: 90, sorter: "number",
+         formatter: c => c.getData().row_type === "category" ? c.getValue() : ""},
+        {title: "Main phase", field: "top_phase_label", minWidth: 130,
+         formatter: c => c.getData().row_type === "category"
+           ? `${escapeAttr(c.getValue() || "—")} (${c.getData().top_phase_count || 0})`
+           : escapeAttr(c.getData().phase_label || "—")},
+        {title: "Top opening", field: "top_opening_label", minWidth: 170,
+         formatter: c => c.getData().row_type === "category"
+           ? `${escapeAttr(c.getValue() || "—")} (${c.getData().top_opening_count || 0})`
+           : escapeAttr(c.getData().opening_label || "—")},
       ],
-      initialSort: [{column: "cp_loss", dir: "desc"}],
+      initialSort: [{column: "total_cp_loss", dir: "desc"}],
     });
-    table.on("rowClick", (e, row) => selectBlunderRow(row, labels));
+    table.on("rowClick", (e, row) => selectBlunderRow(row, labels, blunderById));
     table.on("rowDblClick", (e, row) => {
-      const d = row.getData();
+      const d = resolveBlunderForRow(row.getData(), blunderById);
       const url = d.position_url || d.game_url;
       if (url) window.open(url, "_blank", "noopener");
     });
     table.on("tableBuilt", () => {
       const first = table.getRows()[0];
-      if (first) selectBlunderRow(first, labels);
+      if (first) selectBlunderRow(first, labels, blunderById);
     });
   }
 
-  function selectBlunderRow(row, labels) {
+  function blunderImpactNameCell(data) {
+    if (data.row_type === "category") {
+      return `<span class="blunder-label">${escapeAttr(data.label || "Category")}</span>` +
+        `<div class="table-sub">${escapeAttr(data.description || "")}</div>`;
+    }
+    return `<span>${escapeAttr(data.move_label || "Blunder")}</span>` +
+      `<div class="table-sub">${escapeAttr(data.played_move_san || "—")} → ${escapeAttr(data.best_move_san || "—")}</div>`;
+  }
+
+  function blunderImpactFocusCell(data) {
+    if (data.row_type === "category") return escapeAttr(data.focus_area || "—");
+    return `<span class="table-sub">${escapeAttr(data.category_key || "").replace(/_/g, " ")}</span>`;
+  }
+
+  function resolveBlunderForRow(data, blunderById) {
+    if (data.row_type === "category") {
+      return blunderById[data.representative_blunder_id] || {};
+    }
+    if (data.row_type === "blunder") {
+      return blunderById[data.blunder_id] || {};
+    }
+    return data || {};
+  }
+
+  function selectBlunderRow(row, labels, blunderById) {
     document.querySelectorAll("#blunder-review-table .tabulator-row.row-selected")
       .forEach(el => el.classList.remove("row-selected"));
     row.getElement().classList.add("row-selected");
-    updateBlunderBoard(row.getData(), labels);
+    const rowData = row.getData();
+    updateBlunderBoard(resolveBlunderForRow(rowData, blunderById), labels, rowData);
   }
 
-  function updateBlunderBoard(data, labels) {
+  function updateBlunderBoard(data, labels, rowContext) {
     const boardEl = document.getElementById("blunder-board");
     const metaEl = document.getElementById("blunder-board-meta");
     if (!boardEl || !metaEl) return;
@@ -1457,11 +1502,22 @@
     const clock = data.clock_after_seconds != null
       ? `<div class="row"><span class="k">Clock</span><span class="v">${data.clock_after_seconds}s</span></div>`
       : "";
+    const contextTitle = rowContext && rowContext.row_type === "category"
+      ? rowContext.label
+      : (data.move_label || "Blunder");
+    const contextStats = rowContext && rowContext.row_type === "category"
+      ? `${rowContext.count} blunders · ${rowContext.total_cp_loss} total cp lost · worst example`
+      : `${data.opening_label || "Unknown opening"} · ${phaseLabel(data.phase_bucket || data.phase)}`;
+    const contextDetail = rowContext && rowContext.row_type === "category"
+      ? `<div class="row"><span class="k">Top opening</span><span class="v">${escapeAttr(rowContext.top_opening_label || "—")}</span></div>
+         <div class="row"><span class="k">Main phase</span><span class="v">${escapeAttr(rowContext.top_phase_label || "—")}</span></div>`
+      : "";
     metaEl.innerHTML = `
-      <div class="name">${escapeAttr(data.move_label || "Blunder")}</div>
-      <div class="stats">${escapeAttr(data.opening_label || "Unknown opening")} · ${escapeAttr(phaseLabel(data.phase_bucket || data.phase))}</div>
+      <div class="name">${escapeAttr(contextTitle)}</div>
+      <div class="stats">${escapeAttr(contextStats)}</div>
       <div class="blunder-tags blunder-meta-tags">${blunderTagList(data.categories, labels)}</div>
       <dl class="detail">
+        ${contextDetail}
         <div class="row"><span class="k">Played</span><span class="v">${escapeAttr(data.played_move_san || data.played_move_uci || "—")}</span></div>
         <div class="row"><span class="k">Best</span><span class="v cell-strong">${escapeAttr(data.best_move_san || data.best_move_uci || "—")}</span></div>
         ${reply}

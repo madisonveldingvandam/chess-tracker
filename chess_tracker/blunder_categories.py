@@ -31,12 +31,28 @@ CATEGORY_DESCRIPTIONS: dict[str, str] = {
     "conversion_error": "You were clearly better before the move and the advantage collapsed.",
 }
 
+CATEGORY_FOCUS_AREAS: dict[str, str] = {
+    "material_loss": "Tactical/material",
+    "missed_capture_or_recapture": "Tactical opportunity",
+    "mate_threat_or_mate_allowed": "King safety",
+    "conversion_error": "Conversion",
+    "time_pressure_blunder": "Clock/process",
+    "large_eval_swing": "Severity",
+    "opening_phase_blunder": "Phase context",
+    "early_middlegame_blunder": "Phase context",
+    "endgame_blunder": "Phase context",
+}
+
 PHASE_LABELS: dict[str, str] = {
     "opening": "Opening (moves 1-8)",
     "early_middlegame": "Early middlegame (moves 9-20)",
     "middlegame": "Middlegame (moves 21+)",
     "endgame": "Endgame",
 }
+
+
+def _phase_label(phase: str | None) -> str:
+    return PHASE_LABELS.get(phase or "", phase or "Unknown")
 
 
 @dataclass
@@ -207,6 +223,79 @@ def compute_blunder_analysis(
             )
 
     examples = blunders_sorted[:max_examples]
+    category_blunders: dict[str, list[dict]] = defaultdict(list)
+    for blunder in blunders_sorted:
+        for category in blunder.get("categories", []) or []:
+            category_blunders[category].append(blunder)
+
+    impact_rows = []
+    for category, rows in category_blunders.items():
+        total_cp_loss = sum(int(b.get("cp_loss") or 0) for b in rows)
+        worst = max(rows, key=lambda b: int(b.get("cp_loss") or 0))
+
+        phase_counts: dict[str, int] = defaultdict(int)
+        opening_counts: dict[tuple[str, str], int] = defaultdict(int)
+        for blunder in rows:
+            phase = blunder.get("phase_bucket") or blunder.get("phase") or "unknown"
+            phase_counts[phase] += 1
+            opening = blunder.get("opening_label") or "Unknown opening"
+            side = blunder.get("game_side") or blunder.get("side") or "unknown"
+            opening_counts[(opening, side)] += 1
+
+        top_phase, top_phase_count = max(
+            phase_counts.items(),
+            key=lambda item: (item[1], item[0]),
+        )
+        (top_opening, top_side), top_opening_count = max(
+            opening_counts.items(),
+            key=lambda item: (item[1], item[0][0]),
+        )
+
+        impact_rows.append({
+            "row_type": "category",
+            "key": category,
+            "id": f"category-{category}",
+            "label": CATEGORY_LABELS.get(category, category.replace("_", " ").title()),
+            "description": CATEGORY_DESCRIPTIONS.get(category, ""),
+            "focus_area": CATEGORY_FOCUS_AREAS.get(category, "Evidence"),
+            "count": len(rows),
+            "pct": round(100.0 * len(rows) / total_blunders, 1) if total_blunders else 0.0,
+            "total_cp_loss": total_cp_loss,
+            "avg_cp_loss": round(total_cp_loss / len(rows)) if rows else None,
+            "worst_cp_loss": int(worst.get("cp_loss") or 0),
+            "top_phase": top_phase,
+            "top_phase_label": _phase_label(top_phase),
+            "top_phase_count": top_phase_count,
+            "top_opening_label": top_opening,
+            "top_opening_side": top_side,
+            "top_opening_count": top_opening_count,
+            "representative_blunder_id": worst["id"],
+            "_children": [
+                {
+                    "row_type": "blunder",
+                    "id": f"{category}-{blunder['id']}",
+                    "category_key": category,
+                    "blunder_id": blunder["id"],
+                    "move_label": blunder.get("move_label"),
+                    "opening_label": blunder.get("opening_label"),
+                    "phase_label": _phase_label(
+                        blunder.get("phase_bucket") or blunder.get("phase")
+                    ),
+                    "cp_loss": int(blunder.get("cp_loss") or 0),
+                    "played_move_san": blunder.get("played_move_san"),
+                    "best_move_san": blunder.get("best_move_san"),
+                }
+                for blunder in rows
+            ],
+        })
+    impact_rows.sort(
+        key=lambda row: (
+            -row["total_cp_loss"],
+            -row["count"],
+            -row["worst_cp_loss"],
+            row["label"],
+        )
+    )
 
     return {
         "cache_version": ANALYSIS_CACHE_VERSION,
@@ -224,5 +313,6 @@ def compute_blunder_analysis(
         "phase_breakdown": phase_breakdown,
         "affected_openings": affected_openings[:max_openings],
         "blunders": blunders_sorted,
+        "impact_rows": impact_rows,
         "examples": examples,
     }

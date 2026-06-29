@@ -88,6 +88,18 @@ def test_compute_blunder_analysis_aggregates_categories_phases_and_openings():
     assert blunders[0]["primary_category_label"] == "Material loss"
     assert blunders[0]["position_url"].startswith("https://lichess.org/analysis/standard/")
 
+    impact = {row["key"]: row for row in result["impact_rows"]}
+    material = impact["material_loss"]
+    assert material["row_type"] == "category"
+    assert material["focus_area"] == "Tactical/material"
+    assert material["count"] == 1
+    assert material["total_cp_loss"] == 620
+    assert material["top_phase_label"] == "Opening (moves 1-8)"
+    assert material["top_opening_label"] == "Italian Game"
+    assert material["representative_blunder_id"] == "blunder-1"
+    assert material["_children"][0]["row_type"] == "blunder"
+    assert material["_children"][0]["blunder_id"] == "blunder-1"
+
 
 def test_compute_blunder_analysis_examples_are_worst_first_and_capped():
     summaries = [_summary("g1"), _summary("g2")]
@@ -105,3 +117,4 @@ def test_compute_blunder_analysis_examples_are_worst_first_and_capped():
     assert [e["cp_loss"] for e in examples] == [620, 620]
     assert {e["opening"] for e in examples} == {"Italian Game", "Sicilian Defense"}
     assert len(result["blunders"]) == 4
+    assert result["impact_rows"][0]["total_cp_loss"] >= result["impact_rows"][1]["total_cp_loss"]
