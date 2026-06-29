@@ -257,3 +257,50 @@ def test_accept_game_rejects_unrated_variants_and_other_classes():
     assert accept_game(_game(rated=False), "bullet") is False
     assert accept_game(_game(rules="kingofthehill"), "bullet") is False
     assert accept_game(_game(time_class="blitz"), "bullet") is False
+
+
+def test_time_control_labels_are_user_facing():
+    from refresh import _time_control_label
+    assert _time_control_label("60") == "1min"
+    assert _time_control_label("180") == "3min"
+    assert _time_control_label("300") == "5min"
+    assert _time_control_label("600") == "10min"
+    assert _time_control_label("120+1") == "2min+1s"
+    assert _time_control_label("1/86400") == "1 day"
+    assert _time_control_label("1/259200") == "3 days"
+
+
+def test_compute_ratings_by_time_control_uses_latest_rating_per_control():
+    from refresh import compute_ratings_by_time_control
+
+    def g(url, end_time, time_class, time_control, rating):
+        return {
+            "url": url,
+            "end_time": end_time,
+            "time_class": time_class,
+            "time_control": time_control,
+            "rated": True,
+            "rules": "chess",
+            "white": {"username": "me", "rating": rating, "result": "win"},
+            "black": {"username": "opp", "rating": 500, "result": "checkmated"},
+        }
+
+    entries = compute_ratings_by_time_control([
+        g("old-3", 10, "blitz", "180", 700),
+        g("new-3", 30, "blitz", "180", 725),
+        g("five", 20, "blitz", "300", 650),
+        g("bullet", 40, "bullet", "60", 525),
+        g("rapid", 50, "rapid", "600", 900),
+        g("daily", 60, "daily", "1/259200", 1100),
+        {**g("unrated", 70, "blitz", "180", 999), "rated": False},
+        {**g("variant", 80, "blitz", "180", 999), "rules": "kingofthehill"},
+    ], "me")
+
+    assert [(e["label"], e["rating"]) for e in entries] == [
+        ("Bullet (1min)", 525),
+        ("Blitz (3min)", 725),
+        ("Blitz (5min)", 650),
+        ("Rapid (10min)", 900),
+        ("Daily (3 days)", 1100),
+    ]
+    assert entries[1]["key"] == "blitz:180"

@@ -61,9 +61,18 @@
 
     const FMT_ORDER  = ["bullet", "blitz", "rapid", "daily"];
     const FMT_LABELS = {bullet: "Bullet", blitz: "Blitz", rapid: "Rapid", daily: "Daily"};
+    const byControl = Array.isArray(d.ratings_by_time_control)
+      ? d.ratings_by_time_control.filter(item => item && item.label && item.rating != null)
+      : [];
     const byFmt = d.ratings_by_format || {};
     const avail = FMT_ORDER.filter(f => byFmt[f] != null);
-    const ratingHtml = avail.length
+    const ratingHtml = byControl.length
+      ? byControl.map(item =>
+          `<div class="kpi${item.format === d.format ? " kpi-active" : ""}">` +
+          `<span class="kpi-label kpi-rating-label">${escapeAttr(item.label)}</span>` +
+          `<span class="kpi-value">${escapeAttr(item.rating)}</span></div>`
+        ).join('')
+      : avail.length
       ? avail.map(f =>
           `<div class="kpi${f === d.format ? " kpi-active" : ""}">` +
           `<span class="kpi-label">${FMT_LABELS[f]}</span>` +

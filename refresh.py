@@ -18,6 +18,10 @@ from chess_tracker.blunder_phases import compute_blunder_phases
 from chess_tracker.render import render_all_pages, DEFAULT_TEMPLATE_DIR
 
 
+_FORMAT_ORDER = {"bullet": 0, "blitz": 1, "rapid": 2, "daily": 3}
+_FORMAT_LABELS = {"bullet": "Bullet", "blitz": "Blitz", "rapid": "Rapid", "daily": "Daily"}
+
+
 def accept_game(game: dict, time_class: str, time_control: str | None = None) -> bool:
     """True if a Chess.com game dict is a rated standard-chess game in the
     requested time class.
@@ -30,6 +34,111 @@ def accept_game(game: dict, time_class: str, time_control: str | None = None) ->
     if time_control is not None and str(game.get("time_control")) != str(time_control):
         return False
     return game.get("rated") is True and game.get("rules") == "chess"
+
+
+def _seconds_control_label(seconds: int) -> str:
+    if seconds >= 60 and seconds % 60 == 0:
+        return f"{seconds // 60}min"
+    return f"{seconds}s"
+
+
+def _time_control_label(time_control: str) -> str:
+    raw = str(time_control or "").strip()
+    if not raw:
+        return "unknown"
+
+    if "/" in raw:
+        parts = raw.split("/", 1)
+        try:
+            seconds = int(parts[1])
+        except (IndexError, ValueError):
+            return raw
+        if seconds % 86_400 == 0:
+            days = seconds // 86_400
+            return f"{days} day" if days == 1 else f"{days} days"
+        return raw
+
+    base, _, inc = raw.partition("+")
+    try:
+        base_seconds = int(base)
+    except ValueError:
+        return raw
+
+    label = _seconds_control_label(base_seconds)
+    if inc and inc != "0":
+        label += f"+{inc}s"
+    return label
+
+
+def _time_control_sort_key(time_control: str) -> tuple[int, int, str]:
+    raw = str(time_control or "")
+    if "/" in raw:
+        try:
+            return (int(raw.split("/", 1)[1]), 0, raw)
+        except (IndexError, ValueError):
+            return (999_999_999, 0, raw)
+
+    base, _, inc = raw.partition("+")
+    try:
+        base_seconds = int(base)
+    except ValueError:
+        base_seconds = 999_999_999
+    try:
+        increment_seconds = int(inc) if inc else 0
+    except ValueError:
+        increment_seconds = 999_999_999
+    return (base_seconds, increment_seconds, raw)
+
+
+def _player_rating(game: dict, username: str) -> int | None:
+    target = username.lower()
+    for color in ("white", "black"):
+        player = game.get(color, {})
+        if player.get("username", "").lower() == target:
+            return player.get("rating")
+    return None
+
+
+def compute_ratings_by_time_control(games: list[dict], username: str) -> list[dict]:
+    """Latest observed rating for each exact Chess.com time control.
+
+    Chess.com ratings are stored by broad pool, but each archived game carries
+    the user's post-game rating and exact TimeControl. This reports the latest
+    rating observed after a game in each control, e.g. Blitz (3min) vs Blitz
+    (5min), so the top strip no longer collapses them into one label.
+    """
+    latest_by_control: dict[tuple[str, str], dict] = {}
+
+    for game in games:
+        fmt = game.get("time_class")
+        if fmt not in _FORMAT_ORDER or not accept_game(game, fmt):
+            continue
+        time_control = str(game.get("time_control", "")).strip()
+        if not time_control:
+            continue
+        rating = _player_rating(game, username)
+        if rating is None:
+            continue
+        end_time = int(game.get("end_time") or 0)
+        key = (fmt, time_control)
+        current = latest_by_control.get(key)
+        if current is None or end_time >= current["latest_end_time"]:
+            latest_by_control[key] = {
+                "key": f"{fmt}:{time_control}",
+                "format": fmt,
+                "time_control": time_control,
+                "label": f"{_FORMAT_LABELS[fmt]} ({_time_control_label(time_control)})",
+                "rating": rating,
+                "latest_end_time": end_time,
+            }
+
+    return sorted(
+        latest_by_control.values(),
+        key=lambda item: (
+            _FORMAT_ORDER[item["format"]],
+            *_time_control_sort_key(item["time_control"]),
+        ),
+    )
 
 
 def main(argv=None) -> int:
@@ -94,6 +203,12 @@ def main(argv=None) -> int:
         data = fetch_archive(url, cache_dir=raw_dir, force=force_this)
         all_games.extend(data.get("games", []))
     print(f"      {len(all_games)} games total")
+    ratings_by_time_control = compute_ratings_by_time_control(all_games, args.username)
+    if ratings_by_time_control:
+        ratings_by_control_print = {
+            item["label"]: item["rating"] for item in ratings_by_time_control
+        }
+        print(f"      ratings by time control: {ratings_by_control_print}")
 
     tc_label = args.time_control or "all controls"
     print(f"[3/5] Filtering to rated standard {args.format} games ({tc_label})...")
@@ -172,6 +287,7 @@ def main(argv=None) -> int:
         payload["engine_coverage"] = bp_result["engine_coverage"]
 
     payload["ratings_by_format"] = ratings_by_format
+    payload["ratings_by_time_control"] = ratings_by_time_control
 
     # Lichess stats (public API, no auth — null on network failure)
     print("[4.7/5] Fetching Lichess profile...")
