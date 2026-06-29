@@ -29,7 +29,7 @@
   renderPlanBlock(D.plan_compliance);
   renderStudyRecommendations(D.study_recommendations);
   renderMoveQuality(D.move_quality);
-  renderMoveQualityByFormat(D.move_quality_by_format, D.format);
+  renderMoveQualityByFormat(D.move_quality_by_format, D.format, D.move_quality_by_time_control);
   renderFamilyBlock(D.opening_families, "white",
     "#white-families-table", "white-board", "white-board-meta", false);
   renderFamilyBlock(D.opening_families, "black",
@@ -175,10 +175,31 @@
   // Cross-format comparison — one row per time class that has data. Hidden
   // when fewer than two formats are available (nothing to compare). Values are
   // server-computed numbers; current format is highlighted.
-  function renderMoveQualityByFormat(byFmt, currentFmt) {
+  function renderMoveQualityByFormat(byFmt, currentFmt, byControl) {
     const section = document.getElementById("move-quality-by-format");
     const root = document.getElementById("mqf-table");
     if (!section || !root) return;
+    const controlRows = Array.isArray(byControl)
+      ? byControl.filter(row => row && row.label && row.summary)
+      : [];
+    if (controlRows.length >= 2) {
+      const body = controlRows.map(row => {
+        const m = row.summary;
+        const cur = row.format === currentFmt;
+        return `<tr${cur ? ' class="mqf-current"' : ""}>
+          <td>${escapeAttr(row.label)}${cur ? " ◂" : ""}</td>
+          <td>${m.accuracy}%</td>
+          <td>${m.blunders_per_100_moves}</td>
+          <td>${m.avg_cp_loss}</td>
+          <td>${m.games_analyzed}</td></tr>`;
+      }).join("");
+      root.innerHTML = `<table class="mqf-table">
+        <thead><tr><th>Format</th><th>Accuracy</th><th>Blunders/100</th>
+          <th>Avg cp lost</th><th>Games</th></tr></thead>
+        <tbody>${body}</tbody></table>`;
+      return;
+    }
+
     const order = ["bullet", "blitz", "rapid", "daily"];
     const rows = order.filter(f => byFmt && byFmt[f]);
     if (rows.length < 2) { section.style.display = "none"; return; }

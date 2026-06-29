@@ -142,6 +142,26 @@ def compute_ratings_by_time_control(games: list[dict], username: str) -> list[di
     )
 
 
+def build_move_quality_by_time_control(
+    controls: list[dict],
+    quality_by_control: dict,
+) -> list[dict]:
+    """Attach move-quality summaries to ordered time-control metadata."""
+    rows = []
+    for control in controls:
+        summary = quality_by_control.get(control["key"])
+        if not summary:
+            continue
+        rows.append({
+            "key": control["key"],
+            "format": control["format"],
+            "time_control": control["time_control"],
+            "label": control["label"],
+            "summary": summary,
+        })
+    return rows
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Refresh chess tracker dashboard.")
     ap.add_argument("--username", default="M_V-V")
@@ -248,6 +268,7 @@ def main(argv=None) -> int:
     if args.no_analysis or find_engine_path() is None:
         payload["move_quality"] = None
         payload["move_quality_by_format"] = None
+        payload["move_quality_by_time_control"] = None
         payload["blunder_analysis"] = None
         why = "--no-analysis" if args.no_analysis else "no Stockfish found"
         print(f"[4.6/5] Move-quality analysis skipped ({why}).")
@@ -275,16 +296,37 @@ def main(argv=None) -> int:
         compare = sorted(set(args.compare_formats) | {args.format})
         games_by_format = {fmt: [g for g in all_games if accept_game(g, fmt)]
                            for fmt in compare}
-        side_all = {g["url"]: _side(g) for gs in games_by_format.values()
-                    for g in gs if g.get("url")}
+        side_all = {
+            g["url"]: _side(g)
+            for g in all_games
+            if g.get("url")
+            and g.get("time_class") in _FORMAT_ORDER
+            and accept_game(g, g.get("time_class"))
+        }
         payload["move_quality_by_format"] = run_move_quality_by_format(
             games_by_format, side_all, cache,
             depth=args.analysis_depth, max_games=args.analysis_max_games)
+        games_by_time_control = {
+            item["key"]: [
+                g for g in all_games
+                if accept_game(g, item["format"], item["time_control"])
+            ]
+            for item in ratings_by_time_control
+        }
+        quality_by_time_control = run_move_quality_by_format(
+            games_by_time_control, side_all, cache,
+            depth=args.analysis_depth, max_games=args.analysis_max_games)
+        payload["move_quality_by_time_control"] = build_move_quality_by_time_control(
+            ratings_by_time_control,
+            quality_by_time_control,
+        )
 
         save_quality_cache(analysis_cache_path, cache)
         nfmt = sum(1 for v in payload["move_quality_by_format"].values() if v)
+        ntc = len(payload["move_quality_by_time_control"])
         print(f"[4.6/5] Move-quality: {len(summaries)} {args.format} games "
-              f"+ {nfmt} format(s) compared (depth {args.analysis_depth}).")
+              f"+ {nfmt} format(s) / {ntc} control(s) compared "
+              f"(depth {args.analysis_depth}).")
 
         # Recompute with blunder_phases now that quality data is available.
         all_summaries = [v["summary"] for v in cache.values()

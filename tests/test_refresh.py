@@ -140,6 +140,7 @@ def test_refresh_no_analysis_flag_sets_move_quality_none(tmp_path, monkeypatch):
     payload = json.loads((tmp_path / "data" / "computed.json").read_text())
     assert payload["move_quality"] is None
     assert payload["move_quality_by_format"] is None
+    assert payload["move_quality_by_time_control"] is None
 
 
 @pytest.mark.skipif(find_engine_path() is None, reason="Stockfish not installed")
@@ -304,3 +305,27 @@ def test_compute_ratings_by_time_control_uses_latest_rating_per_control():
         ("Daily (3 days)", 1100),
     ]
     assert entries[1]["key"] == "blitz:180"
+
+
+def test_build_move_quality_by_time_control_preserves_labels_and_order():
+    from refresh import build_move_quality_by_time_control
+
+    controls = [
+        {"key": "bullet:60", "format": "bullet", "time_control": "60",
+         "label": "Bullet (1min)", "rating": 600},
+        {"key": "blitz:180", "format": "blitz", "time_control": "180",
+         "label": "Blitz (3min)", "rating": 464},
+        {"key": "blitz:300", "format": "blitz", "time_control": "300",
+         "label": "Blitz (5min)", "rating": 494},
+    ]
+    summaries = {
+        "bullet:60": {"accuracy": 82.9, "games_analyzed": 200},
+        "blitz:300": {"accuracy": 85.4, "games_analyzed": 30},
+    }
+
+    rows = build_move_quality_by_time_control(controls, summaries)
+
+    assert [(r["label"], r["summary"]["accuracy"]) for r in rows] == [
+        ("Bullet (1min)", 82.9),
+        ("Blitz (5min)", 85.4),
+    ]
