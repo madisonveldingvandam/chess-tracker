@@ -20,6 +20,16 @@
       <div id="blunder-coverage-cards" class="behavior-grid"></div>
       <p id="blunder-analysis-empty" class="mq-empty" style="display:none"></p>
     </section>
+    <section id="blunder-review-block">
+      <h2>Blunder table <small>click a row to see the position</small></h2>
+      <div class="sig-split">
+        <div class="table-scroll"><div id="blunder-review-table"></div></div>
+        <aside class="board-panel">
+          <div class="board-large" id="blunder-board"></div>
+          <div class="board-meta" id="blunder-board-meta"></div>
+        </aside>
+      </div>
+    </section>
     <section id="blunder-categories-block">
       <h2>Top categories <small>one blunder can appear in multiple categories</small></h2>
       <div id="blunder-category-table" class="table-scroll"></div>
@@ -31,10 +41,6 @@
     <section id="blunder-openings-block">
       <h2>Affected openings <small>grouped by opening family when available</small></h2>
       <div id="blunder-opening-table" class="table-scroll"></div>
-    </section>
-    <section id="blunder-examples-block">
-      <h2>Representative examples <small>worst Stockfish losses first</small></h2>
-      <div id="blunder-examples-table" class="table-scroll"></div>
     </section>
   </main>
   <script src="vendor/tabulator.min.js"></script>

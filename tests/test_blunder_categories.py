@@ -80,6 +80,14 @@ def test_compute_blunder_analysis_aggregates_categories_phases_and_openings():
     assert openings[0]["count"] == 2
     assert openings[0]["affected_games"] == 1
 
+    blunders = result["blunders"]
+    assert len(blunders) == 2
+    assert blunders[0]["id"] == "blunder-1"
+    assert blunders[0]["move_label"] == "6. Qxe5"
+    assert blunders[0]["opening_label"] == "Italian Game"
+    assert blunders[0]["primary_category_label"] == "Material loss"
+    assert blunders[0]["position_url"].startswith("https://lichess.org/analysis/standard/")
+
 
 def test_compute_blunder_analysis_examples_are_worst_first_and_capped():
     summaries = [_summary("g1"), _summary("g2")]
@@ -96,3 +104,4 @@ def test_compute_blunder_analysis_examples_are_worst_first_and_capped():
     assert len(examples) == 2
     assert [e["cp_loss"] for e in examples] == [620, 620]
     assert {e["opening"] for e in examples} == {"Italian Game", "Sicilian Defense"}
+    assert len(result["blunders"]) == 4

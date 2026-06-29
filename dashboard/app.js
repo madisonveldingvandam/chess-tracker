@@ -1316,11 +1316,13 @@
         emptyEl.style.display = "";
         emptyEl.textContent = "Run refresh.py with Stockfish analysis to build blunder categories.";
       }
-      ["blunder-category-table", "blunder-phase-table", "blunder-opening-table", "blunder-examples-table"]
+      ["blunder-review-table", "blunder-category-table", "blunder-phase-table", "blunder-opening-table"]
         .forEach(id => {
           const el = document.getElementById(id);
           if (el) el.innerHTML = "";
         });
+      const meta = document.getElementById("blunder-board-meta");
+      if (meta) meta.innerHTML = `<div class="empty">No blunders to review.</div>`;
       return;
     }
     if (emptyEl) emptyEl.style.display = "none";
@@ -1344,10 +1346,148 @@
       ].join("");
     }
 
+    renderBlunderReview(analysis);
     renderBlunderCategoryTable(analysis.categories || []);
     renderBlunderPhaseTable(analysis.phase_breakdown || []);
     renderBlunderOpeningTable(analysis.affected_openings || []);
-    renderBlunderExamples(analysis);
+  }
+
+  function renderBlunderReview(analysis) {
+    const tableEl = document.getElementById("blunder-review-table");
+    const boardEl = document.getElementById("blunder-board");
+    const metaEl = document.getElementById("blunder-board-meta");
+    if (!tableEl) return;
+
+    const rows = analysis.blunders || analysis.examples || [];
+    if (rows.length === 0) {
+      tableEl.innerHTML = `<p class="mq-empty">No blunders in the analyzed games.</p>`;
+      if (metaEl) metaEl.innerHTML = `<div class="empty">No position selected.</div>`;
+      return;
+    }
+
+    if (boardEl && !boardEl._cg) {
+      boardEl._cg = makeBoard(boardEl, {
+        viewOnly: true,
+        orientation: "white",
+        drawable: { enabled: true, visible: true },
+      });
+    }
+
+    const labels = analysis.category_labels || {};
+    const table = new Tabulator("#blunder-review-table", {
+      data: rows,
+      layout: "fitColumns",
+      height: "560px",
+      headerWordWrap: true,
+      columns: [
+        {title: "Move", field: "move_label", minWidth: 92},
+        {title: "cp loss", field: "cp_loss", width: 82, sorter: "number"},
+        {title: "Category", field: "primary_category_label", minWidth: 150},
+        {title: "Phase", field: "phase_bucket", width: 116,
+         formatter: c => phaseLabel(c.getValue())},
+        {title: "Opening", field: "opening_label", minWidth: 180},
+        {title: "Played", field: "played_move_san", width: 90,
+         formatter: c => escapeAttr(c.getValue() || "—")},
+        {title: "Best", field: "best_move_san", width: 90,
+         formatter: c => `<span class="cell-strong">${escapeAttr(c.getValue() || "—")}</span>`},
+      ],
+      initialSort: [{column: "cp_loss", dir: "desc"}],
+    });
+    table.on("rowClick", (e, row) => selectBlunderRow(row, labels));
+    table.on("rowDblClick", (e, row) => {
+      const d = row.getData();
+      const url = d.position_url || d.game_url;
+      if (url) window.open(url, "_blank", "noopener");
+    });
+    table.on("tableBuilt", () => {
+      const first = table.getRows()[0];
+      if (first) selectBlunderRow(first, labels);
+    });
+  }
+
+  function selectBlunderRow(row, labels) {
+    document.querySelectorAll("#blunder-review-table .tabulator-row.row-selected")
+      .forEach(el => el.classList.remove("row-selected"));
+    row.getElement().classList.add("row-selected");
+    updateBlunderBoard(row.getData(), labels);
+  }
+
+  function updateBlunderBoard(data, labels) {
+    const boardEl = document.getElementById("blunder-board");
+    const metaEl = document.getElementById("blunder-board-meta");
+    if (!boardEl || !metaEl) return;
+
+    const orientation = (data.game_side || data.side) === "black" ? "black" : "white";
+    if (boardEl._cg && data.fen_before) {
+      boardEl._cg.set({
+        fen: data.fen_before,
+        orientation,
+        lastMove: undefined,
+        check: false,
+      });
+      const shapes = [];
+      if (data.played_move_uci && data.played_move_uci.length >= 4) {
+        shapes.push({
+          orig: data.played_move_uci.slice(0, 2),
+          dest: data.played_move_uci.slice(2, 4),
+          brush: "red",
+        });
+      }
+      if (data.best_move_uci && data.best_move_uci.length >= 4) {
+        shapes.push({
+          orig: data.best_move_uci.slice(0, 2),
+          dest: data.best_move_uci.slice(2, 4),
+          brush: "green",
+        });
+      }
+      boardEl._cg.setShapes(shapes);
+    }
+
+    const links = [
+      data.game_url
+        ? `<a class="drill-link" href="${escapeAttr(data.game_url)}" target="_blank" rel="noopener">Open game</a>`
+        : "",
+      data.position_url
+        ? `<a class="drill-link" href="${escapeAttr(data.position_url)}" target="_blank" rel="noopener">Open position</a>`
+        : "",
+    ].filter(Boolean).join("");
+    const reply = data.opponent_best_reply_san
+      ? `<div class="row"><span class="k">Reply</span><span class="v">${escapeAttr(data.opponent_best_reply_san)}</span></div>`
+      : "";
+    const clock = data.clock_after_seconds != null
+      ? `<div class="row"><span class="k">Clock</span><span class="v">${data.clock_after_seconds}s</span></div>`
+      : "";
+    metaEl.innerHTML = `
+      <div class="name">${escapeAttr(data.move_label || "Blunder")}</div>
+      <div class="stats">${escapeAttr(data.opening_label || "Unknown opening")} · ${escapeAttr(phaseLabel(data.phase_bucket || data.phase))}</div>
+      <div class="blunder-tags blunder-meta-tags">${blunderTagList(data.categories, labels)}</div>
+      <dl class="detail">
+        <div class="row"><span class="k">Played</span><span class="v">${escapeAttr(data.played_move_san || data.played_move_uci || "—")}</span></div>
+        <div class="row"><span class="k">Best</span><span class="v cell-strong">${escapeAttr(data.best_move_san || data.best_move_uci || "—")}</span></div>
+        ${reply}
+        <div class="row"><span class="k">cp before</span><span class="v">${data.cp_before ?? "—"}</span></div>
+        <div class="row"><span class="k">cp after</span><span class="v">${data.cp_after ?? "—"}</span></div>
+        <div class="row"><span class="k">cp loss</span><span class="v">${data.cp_loss ?? "—"}</span></div>
+        ${clock}
+      </dl>
+      <div class="blunder-links">${links}</div>
+    `;
+  }
+
+  function phaseLabel(value) {
+    const labels = {
+      opening: "Opening",
+      early_middlegame: "Early middlegame",
+      middlegame: "Middlegame",
+      endgame: "Endgame",
+    };
+    return labels[value] || value || "—";
+  }
+
+  function blunderTagList(cats, labels) {
+    return (cats || []).map(c =>
+      `<span class="blunder-chip">${escapeAttr(labels[c] || c.replace(/_/g, " "))}</span>`
+    ).join("");
   }
 
   function renderBlunderCategoryTable(rows) {
@@ -1406,43 +1546,6 @@
     </tr>`).join("");
     el.innerHTML = `<table class="mqf-table blunder-table">
       <thead><tr><th>Opening family</th><th>Side</th><th>Blunders</th><th>Games</th><th>Avg cp</th><th>Worst cp</th></tr></thead>
-      <tbody>${body}</tbody></table>`;
-  }
-
-  function renderBlunderExamples(analysis) {
-    const el = document.getElementById("blunder-examples-table");
-    if (!el) return;
-    const rows = analysis.examples || [];
-    if (rows.length === 0) {
-      el.innerHTML = `<p class="mq-empty">No representative examples yet.</p>`;
-      return;
-    }
-    const labels = analysis.category_labels || {};
-    const tagList = cats => (cats || []).map(c =>
-      `<span class="blunder-chip">${escapeAttr(labels[c] || c.replace(/_/g, " "))}</span>`
-    ).join("");
-    const fenLink = fen => {
-      if (!fen) return "";
-      const href = `https://lichess.org/analysis/standard/${encodeURIComponent(fen)}`;
-      return `<a href="${escapeAttr(href)}" target="_blank" rel="noopener">position</a>`;
-    };
-    const body = rows.map(r => {
-      const move = `${r.fullmove || "?"}.${r.side === "black" ? "..." : ""} ${escapeAttr(r.played_move_san || r.played_move_uci || "—")}`;
-      const gameLink = r.game_url
-        ? `<a href="${escapeAttr(r.game_url)}" target="_blank" rel="noopener">game</a>`
-        : "";
-      const links = [gameLink, fenLink(r.fen_before)].filter(Boolean).join(" · ");
-      return `<tr>
-        <td>${move}</td>
-        <td><div class="blunder-tags">${tagList(r.categories)}</div></td>
-        <td>${r.cp_loss}</td>
-        <td>${escapeAttr(r.opening || r.family || "Unknown opening")}</td>
-        <td>${escapeAttr(r.best_move_san || r.best_move_uci || "—")}</td>
-        <td>${links || "—"}</td>
-      </tr>`;
-    }).join("");
-    el.innerHTML = `<table class="mqf-table blunder-table blunder-examples">
-      <thead><tr><th>Move</th><th>Categories</th><th>cp loss</th><th>Opening</th><th>Best</th><th>Links</th></tr></thead>
       <tbody>${body}</tbody></table>`;
   }
 

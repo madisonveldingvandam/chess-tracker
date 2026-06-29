@@ -591,10 +591,10 @@ span.severity-red     { background: var(--border-strong); color: var(--text); }
 #opponent-openings-table,
 #trap-exposures-table,
 #blunder-phases-table,
+#blunder-review-table,
 #blunder-category-table,
 #blunder-phase-table,
-#blunder-opening-table,
-#blunder-examples-table {
+#blunder-opening-table {
   overflow-x: auto;
 }
 .mqf-table {
@@ -642,14 +642,14 @@ span.severity-red     { background: var(--border-strong); color: var(--text); }
   line-height: 1.35;
   white-space: nowrap;
 }
-.blunder-examples {
-  min-width: 54rem;
+.blunder-meta-tags {
+  margin-top: 0.5rem;
 }
-.blunder-examples a {
-  color: var(--text);
-  text-decoration: none;
+.blunder-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
-.blunder-examples a:hover { text-decoration: underline; }
 .audit-note {
   color: var(--muted);
   font-size: 0.82rem;

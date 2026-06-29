@@ -168,14 +168,45 @@ def compute_blunder_analysis(
         key=lambda row: (-row["count"], -row["worst_cp_loss"], row["label"])
     )
 
-    examples = sorted(
+    blunders_sorted = sorted(
         blunders,
         key=lambda b: (
             int(b.get("cp_loss") or 0),
             int(b.get("end_time") or 0),
         ),
         reverse=True,
-    )[:max_examples]
+    )
+    for idx, blunder in enumerate(blunders_sorted, start=1):
+        side = blunder.get("side")
+        move_prefix = f"{blunder.get('fullmove') or '?'}."
+        if side == "black":
+            move_prefix += ".."
+        category_keys = blunder.get("categories") or []
+        primary = category_keys[0] if category_keys else None
+        blunder["id"] = f"blunder-{idx}"
+        blunder["move_label"] = (
+            f"{move_prefix} "
+            f"{blunder.get('played_move_san') or blunder.get('played_move_uci') or 'unknown'}"
+        )
+        blunder["primary_category"] = primary
+        blunder["primary_category_label"] = (
+            CATEGORY_LABELS.get(primary, primary.replace("_", " ").title())
+            if primary else "Uncategorized"
+        )
+        blunder["categories_label"] = ", ".join(
+            CATEGORY_LABELS.get(category, category.replace("_", " ").title())
+            for category in category_keys
+        )
+        blunder["opening_label"] = (
+            blunder.get("opening") or blunder.get("family") or "Unknown opening"
+        )
+        if blunder.get("fen_before"):
+            blunder["position_url"] = (
+                "https://lichess.org/analysis/standard/"
+                + blunder["fen_before"].replace(" ", "_")
+            )
+
+    examples = blunders_sorted[:max_examples]
 
     return {
         "cache_version": ANALYSIS_CACHE_VERSION,
@@ -192,5 +223,6 @@ def compute_blunder_analysis(
         "categories": categories,
         "phase_breakdown": phase_breakdown,
         "affected_openings": affected_openings[:max_openings],
+        "blunders": blunders_sorted,
         "examples": examples,
     }
