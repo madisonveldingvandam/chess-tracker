@@ -12,6 +12,7 @@ metrics, surfaces leaks, and proposes a next-session rule.
 
     uv run refresh.py                       # default: bullet, user M_V-V
     uv run refresh.py --force               # re-fetch all months
+    uv run refresh.py --analysis-max-games 20  # quick local smoke refresh
 
 Browsers block `file://` subresources, so view via a local HTTP server:
 
@@ -25,6 +26,9 @@ between those ticks — e.g. right after a session — use the **↻ Refresh** l
 the dashboard's KPI strip (or open the
 [deploy workflow](https://github.com/madisonveldingvandam/chess-tracker/actions/workflows/deploy.yml)
 directly) and click **Run workflow**. The rebuild takes ~1 minute.
+
+Engine analysis defaults to the full available game set. Use
+`--analysis-max-games N` only when you want a deliberately bounded local run.
 
 ## What you'll see
 

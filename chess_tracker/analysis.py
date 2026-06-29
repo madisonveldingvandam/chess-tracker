@@ -517,8 +517,9 @@ def aggregate_by_format(games_by_format, side_by_url, cache, *, analyze_fn,
                         depth, max_games) -> dict:
     """Move-quality aggregate per time class: ``{fmt: aggregate|None}``.
 
-    Each format's most-recent ``max_games`` are analyzed (cache shared across
-    formats, so a game counted under its class is analyzed once). A format with
+    Each format's games are analyzed, optionally bounded to its most-recent
+    ``max_games`` when max_games is positive. The cache is shared across
+    formats, so a game counted under its class is analyzed once. A format with
     no games maps to ``None``.
     """
     out = {}
@@ -532,7 +533,7 @@ def aggregate_by_format(games_by_format, side_by_url, cache, *, analyze_fn,
 
 def run_move_quality_by_format(games_by_format, side_by_url, cache, *,
                                engine_path=None, depth: int = DEFAULT_DEPTH,
-                               max_games: int = 200) -> dict:
+                               max_games: int = 0) -> dict:
     """Open one Stockfish process and aggregate move quality for each format.
 
     Returns ``{fmt: None}`` for every format when no engine is available.

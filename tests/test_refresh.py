@@ -6,6 +6,10 @@ import refresh
 from chess_tracker.puzzles import find_engine_path
 
 
+def test_default_analysis_max_games_is_unlimited():
+    assert refresh.DEFAULT_ANALYSIS_MAX_GAMES == 0
+
+
 def test_refresh_main_writes_computed_and_dashboard(tmp_path, monkeypatch):
     archives_index = {"archives": [
         "https://api.chess.com/pub/player/m_v-v/games/2026/05"

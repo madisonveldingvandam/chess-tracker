@@ -21,6 +21,7 @@ from chess_tracker.render import render_all_pages, DEFAULT_TEMPLATE_DIR
 
 _FORMAT_ORDER = {"bullet": 0, "blitz": 1, "rapid": 2, "daily": 3}
 _FORMAT_LABELS = {"bullet": "Bullet", "blitz": "Blitz", "rapid": "Rapid", "daily": "Daily"}
+DEFAULT_ANALYSIS_MAX_GAMES = 0
 
 
 def accept_game(game: dict, time_class: str, time_control: str | None = None) -> bool:
@@ -175,12 +176,13 @@ def main(argv=None) -> int:
     ap.add_argument("--no-puzzles", action="store_true",
                     help="Skip the Stockfish pass that attaches a puzzle to each recent loss.")
     ap.add_argument("--no-analysis", action="store_true",
-                    help="Skip the Stockfish move-quality pass (accuracy%, blunders, cp-loss).")
+                    help="Skip the Stockfish move-quality pass (accuracy%%, blunders, cp-loss).")
     ap.add_argument("--analysis-depth", type=int, default=12,
                     help="Search depth for the move-quality pass (default 12).")
-    ap.add_argument("--analysis-max-games", type=int, default=200,
-                    help="Analyze only the N most recent games (default 200; "
-                         "<=0 = no limit). Bounds first-run cost; the cache fills "
+    ap.add_argument("--analysis-max-games", type=int, default=DEFAULT_ANALYSIS_MAX_GAMES,
+                    help="Analyze the N most recent games. Default: 0, meaning "
+                         "no limit / all games. Use a positive value for a "
+                         "bounded local smoke refresh; the cache fills "
                          "incrementally across refreshes.")
     ap.add_argument("--compare-formats", nargs="+",
                     default=["bullet", "blitz", "rapid", "daily"],
