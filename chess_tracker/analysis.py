@@ -40,6 +40,10 @@ from chess_tracker.puzzles import find_engine_path, DEFAULT_DEPTH
 # Mate scores collapse to this bound so they compare as plain integers.
 MATE_CP = 10_000
 
+# Bump when cached per-game analysis summaries no longer contain enough fields
+# for current dashboard features.
+ANALYSIS_CACHE_VERSION = 2
+
 # Lichess win-probability constant (logistic steepness over centipawns).
 _WIN_K = 0.00368208
 
@@ -56,7 +60,21 @@ BLUNDER = 30.0
 # Opening lasts through this full-move number; endgame begins at/below this many
 # non-pawn, non-king pieces remaining on the board.
 OPENING_LAST_FULLMOVE = 8
+EARLY_MIDDLEGAME_LAST_FULLMOVE = 20
 ENDGAME_NON_PAWN_PIECES = 6
+
+LARGE_EVAL_SWING_CP = 500
+CONVERSION_FAVORABLE_CP = 300
+CONVERSION_AFTER_CEILING_CP = 150
+TIME_PRESSURE_SECONDS = 10.0
+
+_PIECE_VALUES = {
+    chess.PAWN: 100,
+    chess.KNIGHT: 300,
+    chess.BISHOP: 300,
+    chess.ROOK: 500,
+    chess.QUEEN: 900,
+}
 
 
 def win_pct(cp: int | float) -> float:
@@ -98,6 +116,60 @@ def game_phase(fullmove: int, non_pawn_pieces: int) -> str:
     if non_pawn_pieces <= ENDGAME_NON_PAWN_PIECES:
         return "endgame"
     return "middlegame"
+
+
+def blunder_phase_bucket(fullmove: int, phase: str) -> str:
+    """V1 display bucket for a blunder's position."""
+    if phase == "endgame":
+        return "endgame"
+    if fullmove <= OPENING_LAST_FULLMOVE:
+        return "opening"
+    if fullmove <= EARLY_MIDDLEGAME_LAST_FULLMOVE:
+        return "early_middlegame"
+    return "middlegame"
+
+
+def classify_blunder_categories(
+    *,
+    fullmove: int,
+    phase: str,
+    cp_before: int,
+    cp_after: int,
+    cp_loss: int,
+    best_move_is_capture: bool = False,
+    played_move_is_capture: bool = False,
+    opponent_best_reply_captures_material: bool = False,
+    forced_mate_after: bool = False,
+    clock_after_seconds: float | None = None,
+) -> list[str]:
+    """Deterministic V1 blunder categories from engine/board evidence."""
+    categories: list[str] = []
+    if opponent_best_reply_captures_material:
+        categories.append("material_loss")
+    if best_move_is_capture and not played_move_is_capture:
+        categories.append("missed_capture_or_recapture")
+    if forced_mate_after:
+        categories.append("mate_threat_or_mate_allowed")
+    if fullmove <= OPENING_LAST_FULLMOVE:
+        categories.append("opening_phase_blunder")
+    elif fullmove <= EARLY_MIDDLEGAME_LAST_FULLMOVE:
+        categories.append("early_middlegame_blunder")
+    if phase == "endgame":
+        categories.append("endgame_blunder")
+    if (
+        clock_after_seconds is not None
+        and clock_after_seconds <= TIME_PRESSURE_SECONDS
+    ):
+        categories.append("time_pressure_blunder")
+    if cp_loss >= LARGE_EVAL_SWING_CP:
+        categories.append("large_eval_swing")
+    if (
+        cp_before >= CONVERSION_FAVORABLE_CP
+        and cp_loss >= CONVERSION_FAVORABLE_CP
+        and cp_after < CONVERSION_AFTER_CEILING_CP
+    ):
+        categories.append("conversion_error")
+    return categories
 
 
 @dataclass
@@ -180,6 +252,52 @@ def _non_pawn_pieces(board: chess.Board) -> int:
                if p.piece_type not in (chess.KING, chess.PAWN))
 
 
+def _pv_first_move(info: dict) -> chess.Move | None:
+    pv = info.get("pv") or []
+    return pv[0] if pv else None
+
+
+def _safe_san(board: chess.Board, move: chess.Move | None) -> str | None:
+    if move is None:
+        return None
+    try:
+        return board.san(move)
+    except (AssertionError, ValueError):
+        return None
+
+
+def _captured_material_value(board: chess.Board, move: chess.Move | None) -> int:
+    if move is None or not board.is_capture(move):
+        return 0
+    if board.is_en_passant(move):
+        return _PIECE_VALUES[chess.PAWN]
+    captured = board.piece_at(move.to_square)
+    if captured is None:
+        return 0
+    return _PIECE_VALUES.get(captured.piece_type, 0)
+
+
+def _is_recapture(board: chess.Board, move: chess.Move | None) -> bool:
+    if move is None or not board.move_stack or not board.is_capture(move):
+        return False
+    return move.to_square == board.peek().to_square
+
+
+def _forced_mate_against(score: chess.engine.PovScore, color: chess.Color) -> bool:
+    mate = score.pov(color).mate()
+    return mate is not None and mate < 0
+
+
+def _node_clock_seconds(node: chess.pgn.GameNode | None) -> float | None:
+    if node is None:
+        return None
+    try:
+        clock = node.clock()
+    except AttributeError:
+        return None
+    return clock if clock is not None else None
+
+
 def analyze_move_quality(
     pgn: str,
     side: str,
@@ -209,10 +327,14 @@ def analyze_move_quality(
     limit = chess.engine.Limit(depth=depth)
     board = game.board()
     moves: list[MoveEval] = []
+    blunder_evidence: list[dict] = []
+    node: chess.pgn.GameNode | None = game
 
     for move in game.mainline_moves():
+        next_node = node.variation(0) if node and node.variations else None
         if board.turn != my_color:
             board.push(move)
+            node = next_node
             continue
 
         info_before = engine.analyse(board, limit)
@@ -220,17 +342,77 @@ def analyze_move_quality(
         phase = game_phase(board.fullmove_number, _non_pawn_pieces(board))
         ply = board.ply()
         fullmove = board.fullmove_number
+        fen_before = board.fen()
+        played_san = _safe_san(board, move)
+        played_is_capture = board.is_capture(move)
+        best_move = _pv_first_move(info_before)
+        best_san = _safe_san(board, best_move)
+        best_is_capture = bool(best_move and board.is_capture(best_move))
+        best_is_recapture = _is_recapture(board, best_move)
 
         board.push(move)
+        clock_after = _node_clock_seconds(next_node)
         info_after = engine.analyse(board, limit)
         cp_after = _cp(info_after["score"], my_color)
+        opponent_best_reply = _pv_first_move(info_after)
+        opponent_reply_san = _safe_san(board, opponent_best_reply)
+        opponent_reply_capture_value = _captured_material_value(
+            board, opponent_best_reply
+        )
 
-        moves.append(MoveEval.from_evals(ply=ply, fullmove=fullmove,
-                                         cp_before=cp_before, cp_after=cp_after,
-                                         phase=phase))
+        move_eval = MoveEval.from_evals(
+            ply=ply, fullmove=fullmove, cp_before=cp_before,
+            cp_after=cp_after, phase=phase,
+        )
+        moves.append(move_eval)
+        if move_eval.label == "blunder":
+            categories = classify_blunder_categories(
+                fullmove=fullmove,
+                phase=phase,
+                cp_before=cp_before,
+                cp_after=cp_after,
+                cp_loss=move_eval.cp_loss,
+                best_move_is_capture=best_is_capture,
+                played_move_is_capture=played_is_capture,
+                opponent_best_reply_captures_material=opponent_reply_capture_value > 0,
+                forced_mate_after=_forced_mate_against(info_after["score"], my_color),
+                clock_after_seconds=clock_after,
+            )
+            blunder_evidence.append({
+                "ply": ply,
+                "fullmove": fullmove,
+                "side": side,
+                "phase": phase,
+                "phase_bucket": blunder_phase_bucket(fullmove, phase),
+                "cp_before": cp_before,
+                "cp_after": cp_after,
+                "cp_loss": move_eval.cp_loss,
+                "wp_loss": round(move_eval.wp_loss, 2),
+                "played_move_uci": move.uci(),
+                "played_move_san": played_san,
+                "best_move_uci": best_move.uci() if best_move else None,
+                "best_move_san": best_san,
+                "opponent_best_reply_uci": (
+                    opponent_best_reply.uci() if opponent_best_reply else None
+                ),
+                "opponent_best_reply_san": opponent_reply_san,
+                "opponent_reply_capture_value": opponent_reply_capture_value,
+                "best_move_is_capture": best_is_capture,
+                "best_move_is_recapture": best_is_recapture,
+                "played_move_is_capture": played_is_capture,
+                "forced_mate_after": _forced_mate_against(info_after["score"], my_color),
+                "clock_after_seconds": (
+                    round(clock_after, 2) if clock_after is not None else None
+                ),
+                "fen_before": fen_before,
+                "categories": categories,
+            })
+        node = next_node
 
     summary = summarize(moves)
     summary["side"] = side
+    summary["analysis_version"] = ANALYSIS_CACHE_VERSION
+    summary["blunder_evidence"] = blunder_evidence
     return summary
 
 
@@ -263,13 +445,22 @@ def attach_move_quality(games, side_by_url, cache, *, depth, analyze_fn) -> list
         if not url or not pgn or not side:
             continue
         entry = cache.get(url)
-        if entry and entry.get("depth") == depth:
+        if (
+            entry
+            and entry.get("depth") == depth
+            and entry.get("version") == ANALYSIS_CACHE_VERSION
+        ):
             summaries.append(entry["summary"])
             continue
         summary = analyze_fn(pgn, side, depth)
         if summary is None:
             continue
-        cache[url] = {"depth": depth, "summary": summary}
+        summary["game_url"] = url
+        cache[url] = {
+            "version": ANALYSIS_CACHE_VERSION,
+            "depth": depth,
+            "summary": summary,
+        }
         summaries.append(summary)
     return summaries
 

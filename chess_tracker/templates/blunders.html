@@ -1,0 +1,47 @@
+<!-- chess_tracker/templates/blunders.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess Tracker — Blunder Analysis — {{USERNAME}}</title>
+  <link rel="stylesheet" href="vendor/tabulator.min.css">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="vendor/chessground.base.css">
+  <link rel="stylesheet" href="chessground-theme.css">
+</head>
+<body>
+  <header id="kpi-strip">
+    <a class="home-link" href="index.html">← repertoire</a>
+  </header>
+  <main>
+    <section id="blunder-analysis-block">
+      <h2>Blunder Analysis <small>Stockfish-derived categories from analyzed games</small></h2>
+      <div id="blunder-coverage-cards" class="behavior-grid"></div>
+      <p id="blunder-analysis-empty" class="mq-empty" style="display:none"></p>
+    </section>
+    <section id="blunder-categories-block">
+      <h2>Top categories <small>one blunder can appear in multiple categories</small></h2>
+      <div id="blunder-category-table" class="table-scroll"></div>
+    </section>
+    <section id="blunder-phase-breakdown-block">
+      <h2>Phase breakdown</h2>
+      <div id="blunder-phase-table" class="table-scroll"></div>
+    </section>
+    <section id="blunder-openings-block">
+      <h2>Affected openings <small>grouped by opening family when available</small></h2>
+      <div id="blunder-opening-table" class="table-scroll"></div>
+    </section>
+    <section id="blunder-examples-block">
+      <h2>Representative examples <small>worst Stockfish losses first</small></h2>
+      <div id="blunder-examples-table" class="table-scroll"></div>
+    </section>
+  </main>
+  <script src="vendor/tabulator.min.js"></script>
+  <script src="vendor/chessground.min.js"></script>
+  <script>
+    /* DATA_INJECTION_POINT */
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>

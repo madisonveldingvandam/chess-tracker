@@ -15,6 +15,7 @@ from chess_tracker.analysis import (
     load_quality_cache, save_quality_cache, select_recent_games,
 )
 from chess_tracker.blunder_phases import compute_blunder_phases
+from chess_tracker.blunder_categories import compute_blunder_analysis
 from chess_tracker.render import render_all_pages, DEFAULT_TEMPLATE_DIR
 
 
@@ -247,6 +248,7 @@ def main(argv=None) -> int:
     if args.no_analysis or find_engine_path() is None:
         payload["move_quality"] = None
         payload["move_quality_by_format"] = None
+        payload["blunder_analysis"] = None
         why = "--no-analysis" if args.no_analysis else "no Stockfish found"
         print(f"[4.6/5] Move-quality analysis skipped ({why}).")
     else:
@@ -258,6 +260,11 @@ def main(argv=None) -> int:
         summaries = run_move_quality_pass(to_analyze, side_by_url, cache,
                                           depth=args.analysis_depth)
         payload["move_quality"] = aggregate_move_quality(summaries)
+        payload["blunder_analysis"] = compute_blunder_analysis(
+            summaries,
+            records,
+            eligible_games=len(records),
+        )
 
         # Cross-format comparison — whole time class per format, current format
         # always included. Shares the URL cache, so games analyzed above are

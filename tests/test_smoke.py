@@ -56,6 +56,7 @@ _MINIMAL_PAYLOAD = {
     "trap_exposure_audit": {},
     "blunder_phases": None,
     "engine_coverage": None,
+    "blunder_analysis": None,
     "lichess": None,
 }
 
@@ -103,7 +104,7 @@ def test_render_dashboard_required_keys_present_in_embedded_data():
     for key in ("kpis", "leak_summary", "recent_losses",
                 "study_recommendations", "process_metrics", "opening_families", "sessions",
                 "opponent_openings", "trap_exposures", "blunder_phases",
-                "ratings_by_format", "ratings_by_time_control", "lichess"):
+                "blunder_analysis", "ratings_by_format", "ratings_by_time_control", "lichess"):
         assert key in data, f"Missing required key: {key}"
     out.unlink()
 

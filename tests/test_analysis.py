@@ -47,6 +47,30 @@ def test_game_phase_buckets():
     assert game_phase(fullmove=40, non_pawn_pieces=4) == "endgame"
 
 
+def test_classify_blunder_categories_uses_deterministic_evidence():
+    from chess_tracker.analysis import classify_blunder_categories
+    cats = classify_blunder_categories(
+        fullmove=7,
+        phase="opening",
+        cp_before=350,
+        cp_after=-250,
+        cp_loss=600,
+        best_move_is_capture=True,
+        played_move_is_capture=False,
+        opponent_best_reply_captures_material=True,
+        forced_mate_after=False,
+        clock_after_seconds=8.0,
+    )
+    assert cats == [
+        "material_loss",
+        "missed_capture_or_recapture",
+        "opening_phase_blunder",
+        "time_pressure_blunder",
+        "large_eval_swing",
+        "conversion_error",
+    ]
+
+
 def test_move_eval_from_evals_computes_loss_and_label():
     from chess_tracker.analysis import MoveEval
     # Hanging the queen: eval crashes from slightly better to lost.
@@ -100,14 +124,18 @@ def test_summarize_reports_moves_per_phase():
 
 
 def test_attach_move_quality_serves_cache_and_analyzes_only_new():
-    from chess_tracker.analysis import attach_move_quality
+    from chess_tracker.analysis import ANALYSIS_CACHE_VERSION, attach_move_quality
     calls = []
     def fake(pgn, side, depth):
         calls.append((pgn, side, depth))
         return _summary(acc=90.0)
     games = [{"url": "g1", "pgn": "p1"}, {"url": "g2", "pgn": "p2"}]
     side_by_url = {"g1": "white", "g2": "black"}
-    cache = {"g1": {"depth": 12, "summary": _summary(acc=50.0)}}
+    cache = {"g1": {
+        "version": ANALYSIS_CACHE_VERSION,
+        "depth": 12,
+        "summary": _summary(acc=50.0),
+    }}
 
     summaries = attach_move_quality(games, side_by_url, cache,
                                     depth=12, analyze_fn=fake)
@@ -118,19 +146,40 @@ def test_attach_move_quality_serves_cache_and_analyzes_only_new():
 
 
 def test_attach_move_quality_reanalyzes_when_depth_differs():
-    from chess_tracker.analysis import attach_move_quality
+    from chess_tracker.analysis import ANALYSIS_CACHE_VERSION, attach_move_quality
     calls = []
     def fake(pgn, side, depth):
         calls.append(depth)
         return _summary(acc=90.0)
     games = [{"url": "g1", "pgn": "p1"}]
-    cache = {"g1": {"depth": 8, "summary": _summary(acc=50.0)}}
+    cache = {"g1": {
+        "version": ANALYSIS_CACHE_VERSION,
+        "depth": 8,
+        "summary": _summary(acc=50.0),
+    }}
 
     summaries = attach_move_quality(games, {"g1": "white"}, cache,
                                     depth=12, analyze_fn=fake)
     assert calls == [12]
     assert summaries[0]["accuracy"] == 90.0
     assert cache["g1"]["depth"] == 12
+
+
+def test_attach_move_quality_reanalyzes_when_cache_version_differs():
+    from chess_tracker.analysis import ANALYSIS_CACHE_VERSION, attach_move_quality
+    calls = []
+
+    def fake(pgn, side, depth):
+        calls.append((pgn, side, depth))
+        return _summary(acc=88.0)
+
+    games = [{"url": "g1", "pgn": "p1"}]
+    cache = {"g1": {"depth": 12, "summary": _summary(acc=50.0)}}
+    summaries = attach_move_quality(games, {"g1": "white"}, cache,
+                                    depth=12, analyze_fn=fake)
+    assert calls == [("p1", "white", 12)]
+    assert summaries[0]["accuracy"] == 88.0
+    assert cache["g1"]["version"] == ANALYSIS_CACHE_VERSION
 
 
 def test_aggregate_move_quality_weights_and_buckets():

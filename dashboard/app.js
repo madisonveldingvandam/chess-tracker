@@ -47,6 +47,7 @@
   renderOpponentOpenings(D.opponent_openings);
   renderTrapExposures(D.trap_exposures, D.trap_exposure_audit);
   renderBlunderPhases(D.blunder_phases, D.engine_coverage);
+  renderBlunderAnalysis(D.blunder_analysis);
   renderSessions(D.sessions);
   renderDrillinCards(D);
 
@@ -961,9 +962,32 @@
     root.innerHTML = [
       card("Leaks", `${leaks.length} active`, leaksSub, "leaks.html", leaksAlert),
       card("Recent losses", `${losses.length}`, lossesSub, "losses.html", lossesAlert),
+      card("Blunder Analysis", blunderHeadline(D), blunderSub(D), "blunders.html", blunderAlert(D)),
       card("Process", processHeadline, processSub, "process.html", processAlert),
       card("Sessions", `${sessionCount} total`, sessionsSub, "sessions.html", sessionsAlert),
     ].join("");
+  }
+
+  function blunderHeadline(D) {
+    const ba = D.blunder_analysis;
+    const cov = (ba && ba.engine_coverage) || {};
+    if (!ba) return "—";
+    return `${cov.blunders_analyzed || 0}`;
+  }
+
+  function blunderSub(D) {
+    const ba = D.blunder_analysis;
+    if (!ba) return "run engine analysis";
+    const cats = ba.categories || [];
+    if (cats.length === 0) return "no categorized blunders";
+    return `Top: ${cats[0].label} (${cats[0].count})`;
+  }
+
+  function blunderAlert(D) {
+    const ba = D.blunder_analysis;
+    if (!ba) return false;
+    const cov = ba.engine_coverage || {};
+    return (cov.blunders_analyzed || 0) >= 10;
   }
 
   function card(label, headline, sub, href, alert) {
@@ -1257,6 +1281,148 @@
 
     const covEl = document.getElementById("blunder-phases-coverage");
     if (covEl) covEl.textContent = `Engine coverage: ${analyzed} / ${eligible} games analyzed.`;
+  }
+
+  function renderBlunderAnalysis(analysis) {
+    const root = document.getElementById("blunder-analysis-block");
+    if (!root) return;
+
+    const cardsEl = document.getElementById("blunder-coverage-cards");
+    const emptyEl = document.getElementById("blunder-analysis-empty");
+    if (!analysis) {
+      if (cardsEl) cardsEl.innerHTML = "";
+      if (emptyEl) {
+        emptyEl.style.display = "";
+        emptyEl.textContent = "Run refresh.py with Stockfish analysis to build blunder categories.";
+      }
+      ["blunder-category-table", "blunder-phase-table", "blunder-opening-table", "blunder-examples-table"]
+        .forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.innerHTML = "";
+        });
+      return;
+    }
+    if (emptyEl) emptyEl.style.display = "none";
+
+    const cov = analysis.engine_coverage || {};
+    const cell = (label, value, sub, alert = false) =>
+      `<div class="behavior-card${alert ? " alert" : ""}">
+         <div class="bh-label">${label}</div>
+         <div class="bh-value">${value}</div>
+         <div class="bh-sub">${sub}</div>
+       </div>`;
+    if (cardsEl) {
+      cardsEl.innerHTML = [
+        cell("Engine coverage", `${cov.analyzed_games || 0} / ${cov.eligible_games || 0}`,
+          "games analyzed"),
+        cell("Blunders analyzed", `${cov.blunders_analyzed || 0}`,
+          `${cov.games_with_blunders || 0} games with blunders`,
+          (cov.blunders_analyzed || 0) >= 10),
+        cell("Categorized", `${cov.categorized_blunders || 0}`,
+          `${cov.uncategorized_blunders || 0} uncategorized`),
+      ].join("");
+    }
+
+    renderBlunderCategoryTable(analysis.categories || []);
+    renderBlunderPhaseTable(analysis.phase_breakdown || []);
+    renderBlunderOpeningTable(analysis.affected_openings || []);
+    renderBlunderExamples(analysis);
+  }
+
+  function renderBlunderCategoryTable(rows) {
+    const el = document.getElementById("blunder-category-table");
+    if (!el) return;
+    if (rows.length === 0) {
+      el.innerHTML = `<p class="mq-empty">No categorized blunders in the analyzed window.</p>`;
+      return;
+    }
+    const body = rows.map(r => `<tr>
+      <td><span class="blunder-label">${escapeAttr(r.label)}</span>
+        <div class="table-sub">${escapeAttr(r.description || "")}</div></td>
+      <td>${r.count}</td>
+      <td>${r.pct}%</td>
+      <td>${r.avg_cp_loss ?? "—"}</td>
+      <td>${r.worst_cp_loss ?? "—"}</td>
+    </tr>`).join("");
+    el.innerHTML = `<table class="mqf-table blunder-table">
+      <thead><tr><th>Category</th><th>Count</th><th>%</th><th>Avg cp</th><th>Worst cp</th></tr></thead>
+      <tbody>${body}</tbody></table>`;
+  }
+
+  function renderBlunderPhaseTable(rows) {
+    const el = document.getElementById("blunder-phase-table");
+    if (!el) return;
+    if (rows.length === 0) {
+      el.innerHTML = `<p class="mq-empty">No blunders available for phase breakdown.</p>`;
+      return;
+    }
+    const body = rows.map(r => `<tr>
+      <td>${escapeAttr(r.label)}</td>
+      <td>${r.count}</td>
+      <td>${r.pct}%</td>
+      <td>${r.avg_cp_loss ?? "—"}</td>
+      <td>${r.worst_cp_loss ?? "—"}</td>
+    </tr>`).join("");
+    el.innerHTML = `<table class="mqf-table blunder-table">
+      <thead><tr><th>Phase</th><th>Blunders</th><th>%</th><th>Avg cp</th><th>Worst cp</th></tr></thead>
+      <tbody>${body}</tbody></table>`;
+  }
+
+  function renderBlunderOpeningTable(rows) {
+    const el = document.getElementById("blunder-opening-table");
+    if (!el) return;
+    if (rows.length === 0) {
+      el.innerHTML = `<p class="mq-empty">No affected openings in the analyzed window.</p>`;
+      return;
+    }
+    const body = rows.map(r => `<tr>
+      <td>${escapeAttr(r.label)}</td>
+      <td>${escapeAttr(r.side || "—")}</td>
+      <td>${r.count}</td>
+      <td>${r.affected_games}</td>
+      <td>${r.avg_cp_loss ?? "—"}</td>
+      <td>${r.worst_cp_loss ?? "—"}</td>
+    </tr>`).join("");
+    el.innerHTML = `<table class="mqf-table blunder-table">
+      <thead><tr><th>Opening family</th><th>Side</th><th>Blunders</th><th>Games</th><th>Avg cp</th><th>Worst cp</th></tr></thead>
+      <tbody>${body}</tbody></table>`;
+  }
+
+  function renderBlunderExamples(analysis) {
+    const el = document.getElementById("blunder-examples-table");
+    if (!el) return;
+    const rows = analysis.examples || [];
+    if (rows.length === 0) {
+      el.innerHTML = `<p class="mq-empty">No representative examples yet.</p>`;
+      return;
+    }
+    const labels = analysis.category_labels || {};
+    const tagList = cats => (cats || []).map(c =>
+      `<span class="blunder-chip">${escapeAttr(labels[c] || c.replace(/_/g, " "))}</span>`
+    ).join("");
+    const fenLink = fen => {
+      if (!fen) return "";
+      const href = `https://lichess.org/analysis/standard/${encodeURIComponent(fen)}`;
+      return `<a href="${escapeAttr(href)}" target="_blank" rel="noopener">position</a>`;
+    };
+    const body = rows.map(r => {
+      const move = `${r.fullmove || "?"}.${r.side === "black" ? "..." : ""} ${escapeAttr(r.played_move_san || r.played_move_uci || "—")}`;
+      const gameLink = r.game_url
+        ? `<a href="${escapeAttr(r.game_url)}" target="_blank" rel="noopener">game</a>`
+        : "";
+      const links = [gameLink, fenLink(r.fen_before)].filter(Boolean).join(" · ");
+      return `<tr>
+        <td>${move}</td>
+        <td><div class="blunder-tags">${tagList(r.categories)}</div></td>
+        <td>${r.cp_loss}</td>
+        <td>${escapeAttr(r.opening || r.family || "Unknown opening")}</td>
+        <td>${escapeAttr(r.best_move_san || r.best_move_uci || "—")}</td>
+        <td>${links || "—"}</td>
+      </tr>`;
+    }).join("");
+    el.innerHTML = `<table class="mqf-table blunder-table blunder-examples">
+      <thead><tr><th>Move</th><th>Categories</th><th>cp loss</th><th>Opening</th><th>Best</th><th>Links</th></tr></thead>
+      <tbody>${body}</tbody></table>`;
   }
 
   function winPctCell(cell) {

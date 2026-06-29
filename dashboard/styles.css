@@ -590,7 +590,11 @@ span.severity-red     { background: var(--border-strong); color: var(--text); }
 #mqf-table,
 #opponent-openings-table,
 #trap-exposures-table,
-#blunder-phases-table {
+#blunder-phases-table,
+#blunder-category-table,
+#blunder-phase-table,
+#blunder-opening-table,
+#blunder-examples-table {
   overflow-x: auto;
 }
 .mqf-table {
@@ -607,10 +611,54 @@ span.severity-red     { background: var(--border-strong); color: var(--text); }
 /* Opponent openings: move notation must preserve case (e4 ≠ E4) */
 .opp-openings-table td:first-child { text-transform: none; }
 
+/* Blunder Analysis page */
+.blunder-table td:first-child { text-transform: none; }
+.blunder-table th:first-child,
+.blunder-table td:first-child {
+  min-width: 14rem;
+}
+.table-sub {
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+.blunder-label {
+  font-weight: 650;
+}
+.blunder-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-width: 22rem;
+}
+.blunder-chip {
+  display: inline-block;
+  padding: 0.08rem 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.blunder-examples {
+  min-width: 54rem;
+}
+.blunder-examples a {
+  color: var(--text);
+  text-decoration: none;
+}
+.blunder-examples a:hover { text-decoration: underline; }
+.audit-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 /* Drill-in cards (landing only) */
 .drillin-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 0.6rem;
 }
 .drillin-grid .card {

@@ -989,7 +989,8 @@ def compute_all(records: list[GameRecord], annotations: dict,
                 low_confidence_threshold: int = 15,
                 plan: dict | None = None,
                 blunder_phases: dict | None = None,
-                engine_coverage: dict | None = None) -> dict:
+                engine_coverage: dict | None = None,
+                blunder_analysis: dict | None = None) -> dict:
     """Top-level dashboard payload. All panel data merged + annotations applied."""
     blocked = set(annotations.get("blocked_dates", []))
     if blocked:
@@ -1057,4 +1058,5 @@ def compute_all(records: list[GameRecord], annotations: dict,
                                  "affected_game_pct": 0.0, "avg_loss_cp": None, "worst_single_loss_cp": None},
         },
         "engine_coverage": engine_coverage or {"analyzed_games": 0, "eligible_games": len(records)},
+        "blunder_analysis": blunder_analysis,
     }
