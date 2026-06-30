@@ -623,6 +623,12 @@ span.severity-red     { background: var(--border-strong); color: var(--text); }
 #blunder-review-table .tabulator-row.blunder-impact-row .tabulator-cell {
   font-weight: 600;
 }
+#blunder-review-table .tabulator-row.blunder-pattern-row {
+  background-color: rgba(217, 184, 116, 0.05) !important;
+}
+#blunder-review-table .tabulator-row.blunder-pattern-row .tabulator-cell {
+  font-weight: 550;
+}
 #blunder-review-table .tabulator-row.blunder-detail-row .tabulator-cell {
   font-size: 0.86rem;
 }
@@ -637,6 +643,9 @@ span.severity-red     { background: var(--border-strong); color: var(--text); }
 }
 .blunder-label {
   font-weight: 650;
+}
+.blunder-pattern-label {
+  font-weight: 600;
 }
 .blunder-tags {
   display: flex;

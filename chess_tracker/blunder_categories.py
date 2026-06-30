@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+import re
 
 from chess_tracker.analysis import ANALYSIS_CACHE_VERSION
 
@@ -53,6 +54,158 @@ PHASE_LABELS: dict[str, str] = {
 
 def _phase_label(phase: str | None) -> str:
     return PHASE_LABELS.get(phase or "", phase or "Unknown")
+
+
+def _phase_key(blunder: dict) -> str:
+    return blunder.get("phase_bucket") or blunder.get("phase") or "unknown"
+
+
+def _opening_label(blunder: dict) -> str:
+    return blunder.get("opening_label") or blunder.get("opening") or blunder.get("family") or "Unknown opening"
+
+
+def _safe_id(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "unknown"
+
+
+def _side_label(side: str | None) -> str:
+    return side or "unknown"
+
+
+def _material_value_label(value: int | None) -> tuple[str, str]:
+    value = int(value or 0)
+    if value >= 900:
+        return "queen", "Queen loss"
+    if value >= 500:
+        return "rook", "Rook loss"
+    if value >= 300:
+        return "minor", "Minor-piece loss"
+    if value >= 100:
+        return "pawn", "Pawn loss"
+    return "material", "Material loss"
+
+
+def _severity_band(cp_loss: int) -> tuple[str, str, str]:
+    if cp_loss >= 10_000:
+        return (
+            "mate-level",
+            "Mate-level swing",
+            "The swing reached Stockfish's forced-mate score range.",
+        )
+    if cp_loss >= 1_000:
+        return (
+            "decisive",
+            "Decisive swing",
+            "The position moved by at least 1000 centipawns.",
+        )
+    return (
+        "major",
+        "Major swing",
+        "The position moved by 500-999 centipawns.",
+    )
+
+
+def _clock_band(seconds: float | int | None) -> tuple[str, str, str]:
+    if seconds is None:
+        return "clock-unknown", "Clock unknown", "No clock value was available."
+    if seconds <= 5:
+        return "under-5s", "Under 5 seconds", "The move was made with five seconds or less."
+    return "under-10s", "5-10 seconds", "The move was made with ten seconds or less."
+
+
+def _overlap_label(category: str, blunder: dict) -> tuple[str, str]:
+    overlaps = [c for c in blunder.get("categories", []) if c != category]
+    priority = [
+        "mate_threat_or_mate_allowed",
+        "conversion_error",
+        "material_loss",
+        "missed_capture_or_recapture",
+        "time_pressure_blunder",
+        "large_eval_swing",
+    ]
+    for key in priority:
+        if key in overlaps:
+            return key, CATEGORY_LABELS.get(key, key.replace("_", " ").title())
+    return "other", "Other evidence"
+
+
+def _pattern_for(category: str, blunder: dict) -> tuple[str, str, str]:
+    """Deterministic subgroup used between category rows and exact blunders."""
+    phase = _phase_key(blunder)
+    phase_label = _phase_label(phase)
+    opening = _opening_label(blunder)
+    side = _side_label(blunder.get("game_side") or blunder.get("side"))
+    cp_loss = int(blunder.get("cp_loss") or 0)
+
+    if category == "large_eval_swing":
+        band_key, band_label, desc = _severity_band(cp_loss)
+        return f"{band_key}|{phase}", f"{band_label} · {phase_label}", desc
+
+    if category == "material_loss":
+        value_key, value_label = _material_value_label(
+            blunder.get("opponent_reply_capture_value")
+        )
+        return (
+            f"{value_key}|{phase}",
+            f"{value_label} · {phase_label}",
+            "The opponent's best reply wins this class of material.",
+        )
+
+    if category == "missed_capture_or_recapture":
+        if blunder.get("best_move_is_recapture"):
+            return (
+                f"recapture|{phase}",
+                f"Missed recapture · {phase_label}",
+                "Stockfish's best move recaptured material and the played move did not.",
+            )
+        return (
+            f"capture|{phase}",
+            f"Missed capture · {phase_label}",
+            "Stockfish's best move captured material and the played move did not.",
+        )
+
+    if category == "mate_threat_or_mate_allowed":
+        reply = blunder.get("opponent_best_reply_san") or ""
+        if "#" in reply:
+            return (
+                f"mate-in-reply|{phase}",
+                f"Mate in reply · {phase_label}",
+                "The opponent's best reply is checkmate.",
+            )
+        return (
+            f"forced-mate|{phase}",
+            f"Forced mate allowed · {phase_label}",
+            "The post-move position is a forced mate against you.",
+        )
+
+    if category == "time_pressure_blunder":
+        band_key, band_label, desc = _clock_band(blunder.get("clock_after_seconds"))
+        return f"{band_key}|{phase}", f"{band_label} · {phase_label}", desc
+
+    if category == "conversion_error":
+        return (
+            f"{phase}|{opening}|{side}",
+            f"Conversion collapse · {phase_label} · {opening} · {side}",
+            "Grouped by phase and opening context.",
+        )
+
+    if category in {
+        "opening_phase_blunder",
+        "early_middlegame_blunder",
+        "endgame_blunder",
+    }:
+        return (
+            f"{opening}|{side}",
+            f"{opening} · {side}",
+            "Repeated in this opening family and side.",
+        )
+
+    overlap_key, overlap = _overlap_label(category, blunder)
+    return (
+        f"{overlap_key}|{phase}|{opening}|{side}",
+        f"{overlap} · {phase_label}",
+        "Grouped by overlapping engine evidence and position context.",
+    )
 
 
 @dataclass
@@ -236,9 +389,9 @@ def compute_blunder_analysis(
         phase_counts: dict[str, int] = defaultdict(int)
         opening_counts: dict[tuple[str, str], int] = defaultdict(int)
         for blunder in rows:
-            phase = blunder.get("phase_bucket") or blunder.get("phase") or "unknown"
+            phase = _phase_key(blunder)
             phase_counts[phase] += 1
-            opening = blunder.get("opening_label") or "Unknown opening"
+            opening = _opening_label(blunder)
             side = blunder.get("game_side") or blunder.get("side") or "unknown"
             opening_counts[(opening, side)] += 1
 
@@ -249,6 +402,95 @@ def compute_blunder_analysis(
         (top_opening, top_side), top_opening_count = max(
             opening_counts.items(),
             key=lambda item: (item[1], item[0][0]),
+        )
+
+        pattern_groups: dict[str, dict] = {}
+        for blunder in rows:
+            pattern_key, pattern_label, pattern_description = _pattern_for(
+                category, blunder
+            )
+            if pattern_key not in pattern_groups:
+                pattern_groups[pattern_key] = {
+                    "key": pattern_key,
+                    "label": pattern_label,
+                    "description": pattern_description,
+                    "rows": [],
+                }
+            pattern_groups[pattern_key]["rows"].append(blunder)
+
+        pattern_rows = []
+        for pattern in pattern_groups.values():
+            pattern_blunders = pattern["rows"]
+            pattern_total_cp = sum(int(b.get("cp_loss") or 0) for b in pattern_blunders)
+            pattern_worst = max(
+                pattern_blunders,
+                key=lambda b: int(b.get("cp_loss") or 0),
+            )
+            pattern_phase_counts: dict[str, int] = defaultdict(int)
+            pattern_opening_counts: dict[tuple[str, str], int] = defaultdict(int)
+            for blunder in pattern_blunders:
+                pattern_phase_counts[_phase_key(blunder)] += 1
+                pattern_opening_counts[(
+                    _opening_label(blunder),
+                    blunder.get("game_side") or blunder.get("side") or "unknown",
+                )] += 1
+            pattern_top_phase, pattern_top_phase_count = max(
+                pattern_phase_counts.items(),
+                key=lambda item: (item[1], item[0]),
+            )
+            (pattern_top_opening, pattern_top_side), pattern_top_opening_count = max(
+                pattern_opening_counts.items(),
+                key=lambda item: (item[1], item[0][0]),
+            )
+            pattern_rows.append({
+                "row_type": "pattern",
+                "key": pattern["key"],
+                "id": f"pattern-{category}-{_safe_id(pattern['key'])}",
+                "category_key": category,
+                "label": pattern["label"],
+                "description": pattern["description"],
+                "focus_area": "Repeated pattern",
+                "count": len(pattern_blunders),
+                "pct": round(100.0 * len(pattern_blunders) / len(rows), 1)
+                if rows else 0.0,
+                "total_cp_loss": pattern_total_cp,
+                "avg_cp_loss": round(pattern_total_cp / len(pattern_blunders))
+                if pattern_blunders else None,
+                "worst_cp_loss": int(pattern_worst.get("cp_loss") or 0),
+                "top_phase": pattern_top_phase,
+                "top_phase_label": _phase_label(pattern_top_phase),
+                "top_phase_count": pattern_top_phase_count,
+                "top_opening_label": pattern_top_opening,
+                "top_opening_side": pattern_top_side,
+                "top_opening_count": pattern_top_opening_count,
+                "representative_blunder_id": pattern_worst["id"],
+                "_children": [
+                    {
+                        "row_type": "blunder",
+                        "id": f"{category}-{_safe_id(pattern['key'])}-{blunder['id']}",
+                        "category_key": category,
+                        "pattern_key": pattern["key"],
+                        "blunder_id": blunder["id"],
+                        "move_label": blunder.get("move_label"),
+                        "opening_label": _opening_label(blunder),
+                        "phase_label": _phase_label(_phase_key(blunder)),
+                        "cp_loss": int(blunder.get("cp_loss") or 0),
+                        "total_cp_loss": int(blunder.get("cp_loss") or 0),
+                        "played_move_san": blunder.get("played_move_san"),
+                        "best_move_san": blunder.get("best_move_san"),
+                        "game_url": blunder.get("game_url"),
+                        "position_url": blunder.get("position_url"),
+                    }
+                    for blunder in pattern_blunders
+                ],
+            })
+        pattern_rows.sort(
+            key=lambda row: (
+                -row["total_cp_loss"],
+                -row["count"],
+                -row["worst_cp_loss"],
+                row["label"],
+            )
         )
 
         impact_rows.append({
@@ -270,23 +512,8 @@ def compute_blunder_analysis(
             "top_opening_side": top_side,
             "top_opening_count": top_opening_count,
             "representative_blunder_id": worst["id"],
-            "_children": [
-                {
-                    "row_type": "blunder",
-                    "id": f"{category}-{blunder['id']}",
-                    "category_key": category,
-                    "blunder_id": blunder["id"],
-                    "move_label": blunder.get("move_label"),
-                    "opening_label": blunder.get("opening_label"),
-                    "phase_label": _phase_label(
-                        blunder.get("phase_bucket") or blunder.get("phase")
-                    ),
-                    "cp_loss": int(blunder.get("cp_loss") or 0),
-                    "played_move_san": blunder.get("played_move_san"),
-                    "best_move_san": blunder.get("best_move_san"),
-                }
-                for blunder in rows
-            ],
+            "pattern_count": len(pattern_rows),
+            "_children": pattern_rows,
         })
     impact_rows.sort(
         key=lambda row: (

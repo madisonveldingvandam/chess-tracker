@@ -97,8 +97,17 @@ def test_compute_blunder_analysis_aggregates_categories_phases_and_openings():
     assert material["top_phase_label"] == "Opening (moves 1-8)"
     assert material["top_opening_label"] == "Italian Game"
     assert material["representative_blunder_id"] == "blunder-1"
-    assert material["_children"][0]["row_type"] == "blunder"
-    assert material["_children"][0]["blunder_id"] == "blunder-1"
+    assert material["pattern_count"] == 1
+    pattern = material["_children"][0]
+    assert pattern["row_type"] == "pattern"
+    assert pattern["label"] == "Material loss · Opening (moves 1-8)"
+    assert pattern["count"] == 1
+    assert pattern["pct"] == 100.0
+    assert pattern["representative_blunder_id"] == "blunder-1"
+    assert pattern["_children"][0]["row_type"] == "blunder"
+    assert pattern["_children"][0]["blunder_id"] == "blunder-1"
+    missed = impact["missed_capture_or_recapture"]["_children"][0]
+    assert missed["label"] == "Missed capture · Early middlegame (moves 9-20)"
 
 
 def test_compute_blunder_analysis_examples_are_worst_first_and_capped():

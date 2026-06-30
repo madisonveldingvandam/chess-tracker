@@ -1385,6 +1385,7 @@
         const d = row.getData();
         const el = row.getElement();
         el.classList.toggle("blunder-impact-row", d.row_type === "category");
+        el.classList.toggle("blunder-pattern-row", d.row_type === "pattern");
         el.classList.toggle("blunder-detail-row", d.row_type === "blunder");
       },
       columns: [
@@ -1393,27 +1394,29 @@
         {title: "Focus", field: "focus_area", width: 128,
          formatter: c => blunderImpactFocusCell(c.getData())},
         {title: "Blunders", field: "count", width: 88, sorter: "number",
-         formatter: c => c.getData().row_type === "category" ? c.getValue() : ""},
+         formatter: c => isBlunderAggregateRow(c.getData()) ? formatNumber(c.getValue()) : ""},
         {title: "%", field: "pct", width: 70, sorter: "number",
-         formatter: c => c.getData().row_type === "category" ? `${c.getValue()}%` : ""},
+         formatter: c => isBlunderAggregateRow(c.getData()) ? `${c.getValue()}%` : ""},
         {title: "Total cp", field: "total_cp_loss", width: 92, sorter: "number",
-         formatter: c => c.getData().row_type === "category" ? c.getValue() : c.getData().cp_loss},
+         formatter: c => isBlunderAggregateRow(c.getData())
+           ? formatNumber(c.getValue())
+           : formatNumber(c.getData().cp_loss)},
         {title: "Avg cp", field: "avg_cp_loss", width: 82, sorter: "number",
-         formatter: c => c.getData().row_type === "category" ? c.getValue() : ""},
+         formatter: c => isBlunderAggregateRow(c.getData()) ? formatNumber(c.getValue()) : ""},
         {title: "Worst cp", field: "worst_cp_loss", width: 90, sorter: "number",
-         formatter: c => c.getData().row_type === "category" ? c.getValue() : ""},
+         formatter: c => isBlunderAggregateRow(c.getData()) ? formatNumber(c.getValue()) : ""},
         {title: "Main phase", field: "top_phase_label", minWidth: 130,
-         formatter: c => c.getData().row_type === "category"
-           ? `${escapeAttr(c.getValue() || "—")} (${c.getData().top_phase_count || 0})`
+         formatter: c => isBlunderAggregateRow(c.getData())
+           ? `${escapeAttr(c.getValue() || "—")} (${formatNumber(c.getData().top_phase_count || 0)})`
            : escapeAttr(c.getData().phase_label || "—")},
         {title: "Top opening", field: "top_opening_label", minWidth: 170,
-         formatter: c => c.getData().row_type === "category"
-           ? `${escapeAttr(c.getValue() || "—")} (${c.getData().top_opening_count || 0})`
+         formatter: c => isBlunderAggregateRow(c.getData())
+           ? `${escapeAttr(c.getValue() || "—")} (${formatNumber(c.getData().top_opening_count || 0)})`
            : escapeAttr(c.getData().opening_label || "—")},
       ],
       initialSort: [{column: "total_cp_loss", dir: "desc"}],
     });
-    table.on("rowClick", (e, row) => selectBlunderRow(row, labels, blunderById));
+    table.on("rowClick", (e, row) => selectBlunderRow(e, row, labels, blunderById));
     table.on("rowDblClick", (e, row) => {
       const d = resolveBlunderForRow(row.getData(), blunderById);
       const url = d.position_url || d.game_url;
@@ -1421,7 +1424,7 @@
     });
     table.on("tableBuilt", () => {
       const first = table.getRows()[0];
-      if (first) selectBlunderRow(first, labels, blunderById);
+      if (first) selectBlunderRow(null, first, labels, blunderById);
     });
   }
 
@@ -1430,17 +1433,22 @@
       return `<span class="blunder-label">${escapeAttr(data.label || "Category")}</span>` +
         `<div class="table-sub">${escapeAttr(data.description || "")}</div>`;
     }
+    if (data.row_type === "pattern") {
+      return `<span class="blunder-pattern-label">${escapeAttr(data.label || "Pattern")}</span>` +
+        `<div class="table-sub">${escapeAttr(data.description || "")}</div>`;
+    }
     return `<span>${escapeAttr(data.move_label || "Blunder")}</span>` +
       `<div class="table-sub">${escapeAttr(data.played_move_san || "—")} → ${escapeAttr(data.best_move_san || "—")}</div>`;
   }
 
   function blunderImpactFocusCell(data) {
     if (data.row_type === "category") return escapeAttr(data.focus_area || "—");
-    return `<span class="table-sub">${escapeAttr(data.category_key || "").replace(/_/g, " ")}</span>`;
+    if (data.row_type === "pattern") return escapeAttr(data.focus_area || "Pattern");
+    return `<span class="table-sub">${escapeAttr(data.phase_label || "Exact blunder")}</span>`;
   }
 
   function resolveBlunderForRow(data, blunderById) {
-    if (data.row_type === "category") {
+    if (isBlunderAggregateRow(data)) {
       return blunderById[data.representative_blunder_id] || {};
     }
     if (data.row_type === "blunder") {
@@ -1449,11 +1457,23 @@
     return data || {};
   }
 
-  function selectBlunderRow(row, labels, blunderById) {
+  function isBlunderAggregateRow(data) {
+    return data && (data.row_type === "category" || data.row_type === "pattern");
+  }
+
+  function selectBlunderRow(event, row, labels, blunderById) {
     document.querySelectorAll("#blunder-review-table .tabulator-row.row-selected")
       .forEach(el => el.classList.remove("row-selected"));
     row.getElement().classList.add("row-selected");
     const rowData = row.getData();
+    if (isBlunderAggregateRow(rowData)) {
+      const clickedTreeControl = event && event.target
+        && event.target.closest
+        && event.target.closest(".tabulator-data-tree-control");
+      if (!clickedTreeControl && typeof row.treeToggle === "function") {
+        row.treeToggle();
+      }
+    }
     updateBlunderBoard(resolveBlunderForRow(rowData, blunderById), labels, rowData);
   }
 
@@ -1502,15 +1522,24 @@
     const clock = data.clock_after_seconds != null
       ? `<div class="row"><span class="k">Clock</span><span class="v">${data.clock_after_seconds}s</span></div>`
       : "";
-    const contextTitle = rowContext && rowContext.row_type === "category"
+    const isAggregate = rowContext && isBlunderAggregateRow(rowContext);
+    const contextTitle = isAggregate
       ? rowContext.label
       : (data.move_label || "Blunder");
-    const contextStats = rowContext && rowContext.row_type === "category"
-      ? `${rowContext.count} blunders · ${rowContext.total_cp_loss} total cp lost · worst example`
+    const contextStats = isAggregate
+      ? `${formatNumber(rowContext.count)} blunders · ${formatNumber(rowContext.total_cp_loss)} total cp lost · representative example shown`
       : `${data.opening_label || "Unknown opening"} · ${phaseLabel(data.phase_bucket || data.phase)}`;
-    const contextDetail = rowContext && rowContext.row_type === "category"
-      ? `<div class="row"><span class="k">Top opening</span><span class="v">${escapeAttr(rowContext.top_opening_label || "—")}</span></div>
-         <div class="row"><span class="k">Main phase</span><span class="v">${escapeAttr(rowContext.top_phase_label || "—")}</span></div>`
+    const categoryDetail = isAggregate && rowContext.row_type === "pattern"
+      ? `<div class="row"><span class="k">Category</span><span class="v">${escapeAttr(labels[rowContext.category_key] || rowContext.category_key || "—")}</span></div>`
+      : "";
+    const patternCountDetail = isAggregate && rowContext.row_type === "category"
+      ? `<div class="row"><span class="k">Patterns</span><span class="v">${formatNumber(rowContext.pattern_count)}</span></div>`
+      : "";
+    const contextDetail = isAggregate
+      ? `${categoryDetail}
+         <div class="row"><span class="k">Top opening</span><span class="v">${escapeAttr(rowContext.top_opening_label || "—")}</span></div>
+         <div class="row"><span class="k">Main phase</span><span class="v">${escapeAttr(rowContext.top_phase_label || "—")}</span></div>
+         ${patternCountDetail}`
       : "";
     metaEl.innerHTML = `
       <div class="name">${escapeAttr(contextTitle)}</div>
@@ -1521,9 +1550,9 @@
         <div class="row"><span class="k">Played</span><span class="v">${escapeAttr(data.played_move_san || data.played_move_uci || "—")}</span></div>
         <div class="row"><span class="k">Best</span><span class="v cell-strong">${escapeAttr(data.best_move_san || data.best_move_uci || "—")}</span></div>
         ${reply}
-        <div class="row"><span class="k">cp before</span><span class="v">${data.cp_before ?? "—"}</span></div>
-        <div class="row"><span class="k">cp after</span><span class="v">${data.cp_after ?? "—"}</span></div>
-        <div class="row"><span class="k">cp loss</span><span class="v">${data.cp_loss ?? "—"}</span></div>
+        <div class="row"><span class="k">cp before</span><span class="v">${formatNumber(data.cp_before)}</span></div>
+        <div class="row"><span class="k">cp after</span><span class="v">${formatNumber(data.cp_after)}</span></div>
+        <div class="row"><span class="k">cp loss</span><span class="v">${formatNumber(data.cp_loss)}</span></div>
         ${clock}
       </dl>
       <div class="blunder-links">${links}</div>
@@ -1538,6 +1567,12 @@
       endgame: "Endgame",
     };
     return labels[value] || value || "—";
+  }
+
+  function formatNumber(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toLocaleString("en-US") : String(value);
   }
 
   function blunderTagList(cats, labels) {
