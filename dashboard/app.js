@@ -983,32 +983,9 @@
     root.innerHTML = [
       card("Leaks", `${leaks.length} active`, leaksSub, "leaks.html", leaksAlert),
       card("Recent losses", `${losses.length}`, lossesSub, "losses.html", lossesAlert),
-      card("Blunder Analysis", blunderHeadline(D), blunderSub(D), "blunders.html", blunderAlert(D)),
       card("Process", processHeadline, processSub, "process.html", processAlert),
       card("Sessions", `${sessionCount} total`, sessionsSub, "sessions.html", sessionsAlert),
     ].join("");
-  }
-
-  function blunderHeadline(D) {
-    const ba = D.blunder_analysis;
-    const cov = (ba && ba.engine_coverage) || {};
-    if (!ba) return "—";
-    return `${cov.blunders_analyzed || 0}`;
-  }
-
-  function blunderSub(D) {
-    const ba = D.blunder_analysis;
-    if (!ba) return "run engine analysis";
-    const cats = ba.categories || [];
-    if (cats.length === 0) return "no categorized blunders";
-    return `Top: ${cats[0].label} (${cats[0].count})`;
-  }
-
-  function blunderAlert(D) {
-    const ba = D.blunder_analysis;
-    if (!ba) return false;
-    const cov = ba.engine_coverage || {};
-    return (cov.blunders_analyzed || 0) >= 10;
   }
 
   function card(label, headline, sub, href, alert) {
